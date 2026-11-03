@@ -1,0 +1,50 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+id_ecdsa*
+*.vault-pass
+.vault_pass*
+vault-password*
+master.key
+
+# Internal infrastructure details (sanitized versions live in docs/)
+docs/local/
+
+# Semaphore backups and dumps
+backups/
+*.sql
+*.sql.gz
+*.dump
+*.bolt
+*.boltdb
+database.boltdb*
+
+# Build output
+/bin/
+/dist/
+/build/
+*.exe
+*.test
+*.out
+coverage.*
+
+# Frontend
+node_modules/
+.svelte-kit/
+web/build/
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Claude Code local settings
+.claude/settings.local.json
