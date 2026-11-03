@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -33,7 +34,8 @@ type Pinger interface {
 // Router builds the HTTP handler.
 func Router(log *slog.Logger, db Pinger, static fs.FS) http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.RealIP, middleware.Recoverer, accessLog(log))
+	// Note: no RealIP middleware; trusted proxy handling is added explicitly later.
+	r.Use(middleware.Recoverer, accessLog(log))
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 		_, _ = w.Write([]byte("ok\n"))
@@ -124,7 +126,9 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger, db Pinger) er
 	}
 	httpHandler := handler
 	if cfg.TLSEnabled() {
-		httpHandler = redirectExceptOps(handler, cfg.HTTPSAddr)
+		if strings.HasPrefix(cfg.PublicURL, "https://") {
+			httpHandler = redirectExceptOps(handler, cfg.PublicURL)
+		}
 		start(&http.Server{Addr: cfg.HTTPSAddr, Handler: handler, ReadHeaderTimeout: 10 * time.Second,
 			TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12}}, true)
 		log.Info("https listening", "addr", cfg.HTTPSAddr)
@@ -145,27 +149,20 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger, db Pinger) er
 	return nil
 }
 
-func redirectExceptOps(next http.Handler, httpsAddr string) http.Handler {
-	port := httpsAddr
-	for i := len(httpsAddr) - 1; i >= 0; i-- {
-		if httpsAddr[i] == ':' {
-			port = httpsAddr[i+1:]
-			break
-		}
-	}
+// redirectExceptOps keeps /healthz, /readyz and /metrics on plain HTTP and
+// redirects everything else to the configured public HTTPS URL. The target
+// host never comes from the request, which prevents open redirects.
+func redirectExceptOps(next http.Handler, publicURL string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/healthz", "/readyz", "/metrics":
 			next.ServeHTTP(w, r)
 			return
 		}
-		host := r.Host
-		for i := len(host) - 1; i >= 0; i-- {
-			if host[i] == ':' {
-				host = host[:i]
-				break
-			}
+		target := publicURL + "/" + strings.TrimLeft(r.URL.Path, "/")
+		if r.URL.RawQuery != "" {
+			target += "?" + r.URL.RawQuery
 		}
-		http.Redirect(w, r, "https://"+host+":"+port+r.URL.RequestURI(), http.StatusMovedPermanently)
+		http.Redirect(w, r, target, http.StatusMovedPermanently) //nolint:gosec // host is fixed by configuration
 	})
 }

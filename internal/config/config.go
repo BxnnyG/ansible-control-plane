@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +22,9 @@ type Config struct {
 	WorkerPoll    time.Duration
 	MasterKeyFile string
 	ShutdownGrace time.Duration
+	// PublicURL is the external base URL users reach the app on
+	// (e.g. https://acp.example.com:8443). Used for HTTPS redirects and OIDC.
+	PublicURL string
 }
 
 // TLSEnabled reports whether both certificate and key are configured.
@@ -44,6 +48,7 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 		AppURL:        get("APP_URL", "http://app:8080"),
 		WorkerAddr:    get("WORKER_ADDR", ":8081"),
 		MasterKeyFile: get("MASTER_KEY_FILE", ""),
+		PublicURL:     strings.TrimRight(get("PUBLIC_URL", ""), "/"),
 	}
 	var err error
 	if c.WorkerPoll, err = parseDur(get("WORKER_POLL_INTERVAL", "15s")); err != nil {
@@ -71,6 +76,12 @@ func (c Config) validate() error {
 	case "debug", "info", "warn", "error":
 	default:
 		return fmt.Errorf("ACP_LOG_LEVEL: invalid level %q", c.LogLevel)
+	}
+	if c.PublicURL != "" {
+		u, err := url.Parse(c.PublicURL)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.User != nil {
+			return fmt.Errorf("ACP_PUBLIC_URL: must be an absolute http(s) URL without path, query or credentials")
+		}
 	}
 	if (c.TLSCertFile == "") != (c.TLSKeyFile == "") {
 		return fmt.Errorf("ACP_TLS_CERT_FILE and ACP_TLS_KEY_FILE must be set together")

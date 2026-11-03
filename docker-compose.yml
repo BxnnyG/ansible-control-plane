@@ -33,6 +33,7 @@ services:
       ACP_LOG_LEVEL: ${ACP_LOG_LEVEL:-info}
       ACP_MASTER_KEY_FILE: /run/secrets/master_key
       ACP_DATABASE_URL: postgres://acp:${ACP_DB_PASSWORD}@postgres:5432/acp?sslmode=disable
+      ACP_PUBLIC_URL: ${ACP_PUBLIC_URL:-}
       ACP_TLS_CERT_FILE: ${ACP_TLS_CERT_FILE:-}
       ACP_TLS_KEY_FILE: ${ACP_TLS_KEY_FILE:-}
     secrets: [master_key, tls_cert, tls_key]

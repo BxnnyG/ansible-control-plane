@@ -37,7 +37,7 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 		return fmt.Errorf("set dialect: %w", err)
 	}
 	sqlDB := stdlib.OpenDBFromPool(pool)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 	if err := goose.UpContext(ctx, sqlDB, "migrations"); err != nil {
 		return fmt.Errorf("goose up: %w", err)
 	}
