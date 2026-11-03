@@ -67,6 +67,7 @@ Self-hosted web platform to run, organize and monitor Ansible; replacement for t
 - No Go/Node on the host: everything runs in containers. `make` may be missing on the host – the Makefile targets are thin docker wrappers and can be run by hand.
 - `make init` – create `.env` (random DB password), `secrets/master.key`, enable git hooks (`core.hooksPath scripts/hooks`).
 - `make test` – `go vet` + `go test` for `./cmd/... ./internal/...` (never `./...`: `web/node_modules` contains stray Go files).
+- `make test-db` (`scripts/test-db.sh`) – DB-backed tests (db, auth, admin, server) against a throwaway Postgres, one database per package, cleaned up on exit.
 - `make lint` – golangci-lint; web: `docker run --rm -v $PWD/web:/app -w /app node:24-alpine sh -c 'npm ci && npm run lint && npm run check && npm test -- --run && npm run build'`.
 - `make up` / `make down` – compose stack (`docker compose up -d --build`); ports from `.env` (`ACP_HTTP_PORT`, `ACP_HTTPS_PORT`).
 - Full-history secret scan: `docker run --rm -v $PWD:/repo ghcr.io/gitleaks/gitleaks:v8.21.2 git /repo --redact --config /repo/.gitleaks.toml`.

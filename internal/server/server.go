@@ -16,7 +16,9 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/BxnnyG/ansible-control-plane/internal/auth"
 	"github.com/BxnnyG/ansible-control-plane/internal/config"
+	"github.com/BxnnyG/ansible-control-plane/internal/policy"
 	"github.com/BxnnyG/ansible-control-plane/internal/version"
 )
 
@@ -31,8 +33,24 @@ type Pinger interface {
 	Ping(ctx context.Context) error
 }
 
+// Option customizes the router.
+type Option func(*routerOpts)
+
+type routerOpts struct {
+	auth  *auth.Service
+	az    *policy.Authorizer
+	store APIStore
+}
+
+// WithAuth mounts the OIDC/session endpoints (/api/auth/*, /api/v1/me).
+func WithAuth(a *auth.Service) Option { return func(o *routerOpts) { o.auth = a } }
+
 // Router builds the HTTP handler.
-func Router(log *slog.Logger, db Pinger, static fs.FS) http.Handler {
+func Router(log *slog.Logger, db Pinger, static fs.FS, opts ...Option) http.Handler {
+	var ro routerOpts
+	for _, o := range opts {
+		o(&ro)
+	}
 	r := chi.NewRouter()
 	// Note: no RealIP middleware; trusted proxy handling is added explicitly later.
 	r.Use(middleware.Recoverer, accessLog(log))
@@ -51,6 +69,20 @@ func Router(log *slog.Logger, db Pinger, static fs.FS) http.Handler {
 		_, _ = w.Write([]byte("ok\n"))
 	})
 	r.Handle("/metrics", promhttp.Handler())
+	if ro.auth != nil {
+		ro.auth.Routes(r)
+	}
+	if ro.az != nil {
+		var info AuthInfo
+		if ro.auth != nil {
+			info = ro.auth
+		}
+		apiRoutes(r, ro.az, ro.store, info, log)
+	}
+	// Unknown API paths must not fall through to the SPA.
+	r.HandleFunc("/api/*", func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "not found", http.StatusNotFound)
+	})
 	r.Handle("/*", spa(static))
 	return r
 }
@@ -105,8 +137,8 @@ func accessLog(log *slog.Logger) func(http.Handler) http.Handler {
 // Run serves HTTP (and HTTPS when configured) until ctx is cancelled.
 // With TLS enabled, the plain HTTP port keeps serving /healthz, /readyz and
 // /metrics and redirects everything else to HTTPS.
-func Run(ctx context.Context, cfg config.Config, log *slog.Logger, db Pinger) error {
-	handler := Router(log, db, DefaultStatic())
+func Run(ctx context.Context, cfg config.Config, log *slog.Logger, db Pinger, opts ...Option) error {
+	handler := Router(log, db, DefaultStatic(), opts...)
 	errc := make(chan error, 2)
 	var servers []*http.Server
 

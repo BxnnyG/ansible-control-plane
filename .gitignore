@@ -21,6 +21,7 @@ docs/local/
 backups/
 *.sql
 !internal/db/migrations/*.sql
+!internal/db/queries/*.sql
 *.sql.gz
 *.dump
 *.bolt
@@ -51,4 +52,4 @@ web/build/
 .claude/settings.local.json
 
 # Local secrets (API keys, TLS, deploy keys)
-secrets/
+/secrets/

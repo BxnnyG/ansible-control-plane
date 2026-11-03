@@ -3,10 +3,16 @@ module github.com/BxnnyG/ansible-control-plane
 go 1.27
 
 require (
+	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/go-chi/chi/v5 v5.5.0
+	github.com/go-jose/go-jose/v4 v4.1.8
+	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.12.0
 	github.com/pressly/goose/v3 v3.29.0
 	github.com/prometheus/client_golang v1.25.0
+	golang.org/x/crypto v0.58.0
+	golang.org/x/oauth2 v0.37.0
+	golang.org/x/term v0.47.0
 )
 
 require (

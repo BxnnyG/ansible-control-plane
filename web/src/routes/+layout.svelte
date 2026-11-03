@@ -1,7 +1,12 @@
 <script lang="ts">
   import '../app.css';
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   import { page } from '$app/state';
+  import { safeReturnTo } from '$lib/returnTo';
+  import { session } from '$lib/session.svelte';
+  import UserMenu from '$lib/components/UserMenu.svelte';
+  import WorkspaceSwitcher from '$lib/components/WorkspaceSwitcher.svelte';
   import { NAV_ITEMS } from '$lib/nav';
   import { theme } from '$lib/theme.svelte';
   import CommandPalette from '$lib/components/CommandPalette.svelte';
@@ -11,18 +16,35 @@
 
   let paletteOpen = $state(false);
   let menuOpen = $state(false);
-  let userOpen = $state(false);
+  let setupOffered = false;
 
   const bare = $derived(page.url.pathname.startsWith('/login'));
 
-  onMount(() => theme.init());
+  onMount(() => {
+    theme.init();
+    void session.load();
+  });
+
+  // Route guard: anonymous users go to /login, signed-in users leave it.
+  $effect(() => {
+    if (session.status === 'anonymous' && !bare) {
+      const here = page.url.pathname + page.url.search;
+      void goto(here === '/' ? '/login' : `/login?return_to=${encodeURIComponent(here)}`, {
+        replaceState: true,
+      });
+    } else if (session.status === 'ready' && session.needsSetup && !setupOffered) {
+      setupOffered = true; // offer the wizard once per page load, never trap the user
+      void goto('/setup', { replaceState: true });
+    } else if (session.status === 'ready' && bare) {
+      void goto(safeReturnTo(page.url.searchParams.get('return_to'), '/'), { replaceState: true });
+    }
+  });
 
   function onwindowkeydown(e: KeyboardEvent) {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
       e.preventDefault();
       paletteOpen = !paletteOpen;
     } else if (e.key === 'Escape') {
-      userOpen = false;
       menuOpen = false;
     }
   }
@@ -31,7 +53,6 @@
     // Close the mobile menu after navigation.
     void page.url.pathname;
     menuOpen = false;
-    userOpen = false;
   });
 </script>
 
@@ -101,14 +122,7 @@
           >
         </button>
 
-        <button
-          type="button"
-          class="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-surface-2"
-          aria-label="Workspace switcher (placeholder)"
-          disabled
-        >
-          Default workspace
-        </button>
+        <WorkspaceSwitcher />
 
         <div class="flex-1"></div>
 
@@ -146,41 +160,21 @@
           </svg>
         </button>
 
-        <div class="relative">
-          <button
-            type="button"
-            class="rounded-full border border-border bg-surface-2 px-3 py-1.5 text-sm"
-            aria-haspopup="menu"
-            aria-expanded={userOpen}
-            onclick={() => (userOpen = !userOpen)}
-          >
-            User
-          </button>
-          {#if userOpen}
-            <ul
-              role="menu"
-              class="absolute right-0 z-40 mt-1 w-40 rounded-md border border-border bg-surface p-1 shadow-lg"
-            >
-              <li role="none">
-                <a
-                  role="menuitem"
-                  class="block rounded px-3 py-2 text-sm hover:bg-surface-2"
-                  href="/settings">Settings</a
-                >
-              </li>
-              <li role="none">
-                <a
-                  role="menuitem"
-                  class="block rounded px-3 py-2 text-sm hover:bg-surface-2"
-                  href="/login">Sign in</a
-                >
-              </li>
-            </ul>
-          {/if}
-        </div>
+        <UserMenu />
       </header>
 
-      <main class="flex-1 p-4 sm:p-6">{@render children()}</main>
+      <main class="flex-1 p-4 sm:p-6">
+        {#if session.status === 'ready'}
+          {@render children()}
+        {:else if session.status === 'error'}
+          <p role="alert">
+            Could not reach the server.
+            <button type="button" class="underline" onclick={() => session.load()}>Retry</button>
+          </p>
+        {:else}
+          <p role="status" class="text-muted">Loading...</p>
+        {/if}
+      </main>
       <Footer />
     </div>
   </div>

@@ -24,6 +24,32 @@ func TestLoad(t *testing.T) {
 				t.Errorf("poll = %v", c.WorkerPoll)
 			}
 		}},
+		{"master key file default", nil, false, func(t *testing.T, c Config) {
+			if c.MasterKeyFile != DefaultMasterKeyFile {
+				t.Errorf("file = %q", c.MasterKeyFile)
+			}
+		}},
+		{"master key file explicit", map[string]string{"ACP_MASTER_KEY_FILE": "/k/x"}, false, func(t *testing.T, c Config) {
+			if c.MasterKeyFile != "/k/x" {
+				t.Errorf("file = %q", c.MasterKeyFile)
+			}
+		}},
+		{"master key env fallback", map[string]string{"ACP_MASTER_KEY": "abc"}, false, func(t *testing.T, c Config) {
+			if c.MasterKeyFile != "" {
+				t.Errorf("file = %q", c.MasterKeyFile)
+			}
+		}},
+		{"breakglass default on", nil, false, func(t *testing.T, c Config) {
+			if !c.BreakGlassEnabled || !c.AuthEnabled() || c.OIDCEnabled() {
+				t.Errorf("got %+v", c)
+			}
+		}},
+		{"breakglass off", map[string]string{"ACP_BREAKGLASS_ENABLED": "false"}, false, func(t *testing.T, c Config) {
+			if c.BreakGlassEnabled || c.AuthEnabled() {
+				t.Errorf("got %+v", c)
+			}
+		}},
+		{"breakglass invalid", map[string]string{"ACP_BREAKGLASS_ENABLED": "maybe"}, true, nil},
 		{"overrides", map[string]string{"ACP_HTTP_ADDR": ":9000", "ACP_LOG_LEVEL": "DEBUG", "ACP_WORKER_POLL_INTERVAL": "2s"}, false,
 			func(t *testing.T, c Config) {
 				if c.HTTPAddr != ":9000" || c.LogLevel != "debug" || c.WorkerPoll != 2*time.Second {
@@ -37,6 +63,15 @@ func TestLoad(t *testing.T) {
 				}
 			}},
 		{"tls only cert", map[string]string{"ACP_TLS_CERT_FILE": "/a"}, true, nil},
+		{"oidc ok", map[string]string{"ACP_PUBLIC_URL": "https://a.example.com", "ACP_OIDC_ISSUER": "https://idp.example.com/", "ACP_OIDC_CLIENT_ID": "x"}, false,
+			func(t *testing.T, c Config) {
+				if !c.OIDCEnabled() || c.OIDCIssuer != "https://idp.example.com" || c.SessionIdle != 8*time.Hour {
+					t.Errorf("got %+v", c)
+				}
+			}},
+		{"oidc issuer only", map[string]string{"ACP_PUBLIC_URL": "https://a.example.com", "ACP_OIDC_ISSUER": "https://idp.example.com"}, true, nil},
+		{"oidc without public url", map[string]string{"ACP_OIDC_ISSUER": "https://idp.example.com", "ACP_OIDC_CLIENT_ID": "x"}, true, nil},
+		{"oidc scopes without openid", map[string]string{"ACP_PUBLIC_URL": "https://a.example.com", "ACP_OIDC_ISSUER": "https://idp.example.com", "ACP_OIDC_CLIENT_ID": "x", "ACP_OIDC_SCOPES": "email"}, true, nil},
 		{"bad level", map[string]string{"ACP_LOG_LEVEL": "loud"}, true, nil},
 		{"bad duration", map[string]string{"ACP_WORKER_POLL_INTERVAL": "x"}, true, nil},
 		{"negative duration", map[string]string{"ACP_SHUTDOWN_GRACE": "-1s"}, true, nil},
