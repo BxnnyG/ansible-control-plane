@@ -34,7 +34,7 @@ jobs:
       - run: go test -race ./cmd/... ./internal/...
       - uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.5.0
+          version: v2.15.0
           args: ./cmd/... ./internal/...
 
   web:
