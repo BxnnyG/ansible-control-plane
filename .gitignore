@@ -48,3 +48,6 @@ web/build/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Local secrets (API keys, TLS, deploy keys)
+secrets/
