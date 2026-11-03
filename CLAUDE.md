@@ -41,3 +41,35 @@ Self-hosted web platform to run, organize and monitor Ansible; replacement for t
 - M6 NetBox + monitoring, fleet view, remediation
 - M7 Semaphore migration (dry run → import → comparison → cutover)
 - M8 Hardening, backup/restore, docs, release v1.0
+
+## Architecture (details: `PLAN.md` §9, `docs/adr/`)
+
+- `app`: Go binary (REST + SSE, OIDC, scheduler, connectors, Git ops), serves the embedded SvelteKit SPA, terminates TLS (ADR-0011).
+- `worker`: separate hardened container, pulls jobs from the app API, runs `ansible-playbook` unprivileged; no DB access, no master key, no Docker socket (ADR-0004).
+- `postgres`: only state store and job queue (ADR-0003).
+
+## Stack
+
+- Go (chi, pgx/v5, sqlc, goose, slog), single binary with subcommands (`serve`, `worker`, `migrate semaphore`, `admin`, `db migrate`).
+- SvelteKit (Svelte 5, adapter-static, TypeScript) + Tailwind CSS.
+- PostgreSQL; Docker Compose for deployment.
+
+## Code conventions
+
+- Go: `gofmt`/`goimports`, `golangci-lint`; errors wrapped with context; no global state except registries; table-driven tests.
+- Every API handler declares its permission; authorization goes through the central policy package (ADR-0007).
+- Secrets: never logged, never returned by the API; use the `secrets` package only (ADR-0005).
+- Connectors: GET-only HTTP client wrapper, sanitized fixtures only (no real IPs/hostnames/MACs/tokens).
+- Frontend: TypeScript strict, components small, API types generated from OpenAPI.
+
+## Build / test commands
+
+- To be defined with the repo skeleton in M1 (Makefile targets: `make lint`, `make test`, `make build`, `make up`).
+
+## Known pitfalls
+
+- Project subagents (`.claude/agents/`) are only loaded when Claude Code is started inside the repository directory.
+- Infrastructure specifics (addresses, hostnames, tokens) belong in `docs/local/` and `secrets/` (both git-ignored), never in tracked files.
+- The host is small (4 GiB RAM): use multi-stage builds and memory limits; keep worker concurrency low by default.
+- OPNsense instances may use different DHCP backends (Kea, dnsmasq, ISC legacy) – detect per instance, never assume.
+- Some upstream APIs are only reachable over plain HTTP on non-standard ports inside an encrypted overlay network – connectors must support per-instance URL, port and TLS settings.
