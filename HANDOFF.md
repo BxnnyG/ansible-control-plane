@@ -18,7 +18,7 @@
 - Checkmk 2.5 reachable (site/user in docs/local).
 
 ## Open / Next step
-- M0 + M1 merged, tagged (`m0`, `m1`), pushed; CI green. Branch `feat/m2-auth` created.
+- M0, M1, M2 merged, tagged (`m0`, `m1`, `m2`), pushed. M2 was squash-merged (branch history contained an internal hostname). Live stack runs M2 (DB at migration 5); OIDC not yet configured in .env (needs client ID), break-glass admin not yet created. Next: M3 on `feat/m3-projects-inventory`.
 - Live instance runs from this repo: the internal host (see docs/local/; 443, own TLS cert), HTTP 8080 redirects; Semaphore keeps port 80 until cutover.
 - M2 done: `internal/secrets` (envelope encryption, local provider, masked Value) – d2ee31d. Master key wired (ACP_MASTER_KEY_FILE default /run/secrets/master_key, env fallback ACP_MASTER_KEY, `serve` fails fast); `acp admin rotate-master-key --new-key-file` re-wraps secrets + TOTP envelopes in one tx.
 - M2 done: DB schema 00002_auth_core (users, workspaces, memberships+scopes, sessions, secrets, append-only audit_log) + sqlc (internal/db/queries, dbgen) – 8f5ff15..14d25d6. DB tests need ACP_TEST_DATABASE_URL (`make test-db` runs them against a throwaway Postgres). TOTP secret stored as envelope JSON on users row.
