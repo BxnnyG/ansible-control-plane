@@ -1,6 +1,6 @@
 # ADR-0005: Envelope encryption for secrets with a pluggable provider
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-03
 
 ## Context

@@ -1,6 +1,6 @@
 # ADR-0004: Separate, hardened worker with a pull-based job API
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-03
 
 ## Context

@@ -1,6 +1,6 @@
 # ADR-0008: Server-Sent Events for live logs and status updates
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-03
 
 ## Decision

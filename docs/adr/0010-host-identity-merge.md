@@ -1,6 +1,6 @@
 # ADR-0010: Host identity merge with per-field provenance
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-03
 
 ## Decision

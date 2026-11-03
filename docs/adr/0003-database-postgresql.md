@@ -1,6 +1,6 @@
 # ADR-0003: PostgreSQL as the only state store and job queue
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-03
 
 ## Context

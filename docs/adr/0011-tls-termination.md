@@ -1,6 +1,6 @@
 # ADR-0011: TLS terminated by the app, reverse proxy optional
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-03
 
 ## Context

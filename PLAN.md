@@ -1,6 +1,6 @@
 # ansible-control-plane – Project Plan
 
-Status: **draft for approval** (M1). Working title `ansible-control-plane` (final name: keep working title).
+Status: **approved** (M1, 2026-11-03). Working title `ansible-control-plane` (final name: keep working title).
 
 ---
 
@@ -91,7 +91,7 @@ Scopes: a membership grants a role either workspace-wide or restricted to a set 
 
 ### Authentication & authorization (AUTH)
 - **AUTH-1** OIDC Authorization Code flow with PKCE (public client, no client secret); discovery via issuer URL.
-- **AUTH-2** Roles/groups mapped from configurable claims (default for Zitadel: `urn:zitadel:iam:org:project:roles`).
+- **AUTH-2** Roles/groups mapped from configurable claims (default for Zitadel: `urn:zitadel:iam:org:project:roles`). Default IdP role names: `acp-admin`, `acp-editor`, `acp-operator`, `acp-viewer`; workspace and scope are assigned by mapping rules.
 - **AUTH-3** Users are provisioned just-in-time on first login; identity key is the OIDC `sub`, email used for matching migrated users.
 - **AUTH-4** Break-glass local admin: password (argon2id) + mandatory TOTP; can be disabled via env; every use is audited prominently.
 - **AUTH-5** Built-in roles per workspace: `owner`, `admin`, `operator` (run templates, remediate), `editor` (edit inventories/templates, no secrets read), `viewer`.
@@ -247,8 +247,6 @@ Stack decisions are recorded in `docs/adr/`.
 
 ## 13. Open questions
 
-1. Monitoring credentials: Checkmk automation user (read-only) and site name are still missing.
-2. Zitadel role names for the default mapping (proposal: `acp-admin`, `acp-operator`, `acp-editor`, `acp-viewer`; workspace/scope via mapping rules).
-3. Ansible version for the worker image: current stable vs. the version Semaphore uses today (decided in M4 after a compatibility check).
-4. Is the second Semaphore repository (local path) still needed, or is the Git repository the only source?
-5. Notification channels for failed runs (email, webhook, chat).
+1. Ansible version for the worker image: current stable vs. the version Semaphore uses today (decided in M4 after a compatibility check).
+2. Is the second Semaphore repository (local path) still needed, or is the Git repository the only source?
+3. Notification channels for failed runs (email, webhook, chat).

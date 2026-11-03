@@ -1,6 +1,6 @@
 # ADR-0009: Compiled-in connector interface with normalized output
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-03
 
 ## Context

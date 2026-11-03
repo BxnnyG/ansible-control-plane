@@ -1,6 +1,6 @@
 # ADR-0007: Authorization with workspace roles and resource scopes
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-03
 
 ## Context

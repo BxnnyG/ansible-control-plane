@@ -1,6 +1,6 @@
 # ADR-0012: Use the git CLI instead of a Git library
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-03
 
 ## Decision

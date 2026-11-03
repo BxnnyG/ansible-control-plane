@@ -1,6 +1,6 @@
 # ADR-0006: OIDC with PKCE (public client), server-side sessions, break-glass admin
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-11-03
 
 ## Context
