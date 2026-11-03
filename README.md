@@ -18,11 +18,11 @@ A self-hosted web platform to run, organize and monitor Ansible – Semaphore's 
 ```sh
 git clone https://github.com/BxnnyG/ansible-control-plane.git
 cd ansible-control-plane
-cp .env.example .env   # adjust values
-docker compose up -d
+make init              # or: cp .env.example .env and set ACP_DB_PASSWORD; create secrets/master.key
+docker compose up -d --build
 ```
 
-(The compose stack is being built in milestone M1.)
+The UI is then available on `http://<host>:8080` (configurable in `.env`).
 
 ## Documentation
 

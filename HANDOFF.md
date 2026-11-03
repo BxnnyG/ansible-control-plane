@@ -13,13 +13,15 @@
 
 - M0 merged, tagged `m0`, pushed (full-history gitleaks clean).
 - Connectors reachable: 2x OPNsense 26.7 (ISC legacy / dnsmasq), Proxmox 9.2, NetBox 4.7 (HTTP 8080 over overlay); Checkmk creds missing.
-- M1 branch `feat/m1-foundation`: LICENSE, PLAN.md, ADR-0000..0012, README, CLAUDE.md extended.
+- M1 branch `feat/m1-foundation`: LICENSE, PLAN.md, ADR-0000..0012 (accepted), README, CLAUDE.md; web skeleton; Go skeleton; hardened Dockerfiles + compose (verified healthy); gitleaks hook (verified blocking); CI workflow.
+- Attribution text is "Created by bxnny" (user decision), single source: internal/version, web/src/lib/attribution.ts.
+- Checkmk 2.5 reachable (site/user in docs/local).
 
 ## Open / Next step
-- WAITING: user approval of PLAN.md + ADRs (Phase 1 gate).
-- After approval: repo skeleton (Go module, SvelteKit app), Makefile, gitleaks pre-commit, compose stack, .env.example, CI.
-- Still missing: Checkmk read-only automation user + site name; Zitadel role names.
-- After answers: finish M0, then M1 (PLAN.md, ADRs, license, skeleton).
+- M1 complete on `feat/m1-foundation` – WAITING for user OK to merge, tag `m1`, push.
+- Remote branch still has old history (name in LICENSE/README): user must force-push the rewritten branch themselves (auto mode blocks force-push).
+- Next: M2 (auth OIDC+break-glass, setup wizard, workspaces, roles+scopes, secrets store, audit).
+- Still missing: Zitadel roles acp-admin/editor/operator/viewer created by user (unconfirmed).
 
 ## Decisions (with short rationale)
 - Semaphore source DB is MySQL 8.0 → migration tool must read MySQL (or the API).

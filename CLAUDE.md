@@ -64,9 +64,17 @@ Self-hosted web platform to run, organize and monitor Ansible; replacement for t
 
 ## Build / test commands
 
-- To be defined with the repo skeleton in M1 (Makefile targets: `make lint`, `make test`, `make build`, `make up`).
+- No Go/Node on the host: everything runs in containers. `make` may be missing on the host – the Makefile targets are thin docker wrappers and can be run by hand.
+- `make init` – create `.env` (random DB password), `secrets/master.key`, enable git hooks (`core.hooksPath scripts/hooks`).
+- `make test` – `go vet` + `go test` for `./cmd/... ./internal/...` (never `./...`: `web/node_modules` contains stray Go files).
+- `make lint` – golangci-lint; web: `docker run --rm -v $PWD/web:/app -w /app node:24-alpine sh -c 'npm ci && npm run lint && npm run check && npm test -- --run && npm run build'`.
+- `make up` / `make down` – compose stack (`docker compose up -d --build`); ports from `.env` (`ACP_HTTP_PORT`, `ACP_HTTPS_PORT`).
+- Full-history secret scan: `docker run --rm -v $PWD:/repo ghcr.io/gitleaks/gitleaks:v8.21.2 git /repo --redact --config /repo/.gitleaks.toml`.
 
 ## Known pitfalls
+
+- Pinned versions: Go 1.27.2, Node 24 (Docker build) / 22 (lockfile created with), Python 3.14, ansible-core 2.21.5, PostgreSQL 18.6, gitleaks 8.21.2.
+- A goose "relation goose_db_version does not exist" error in the Postgres log on first start is expected.
 
 - Project subagents (`.claude/agents/`) are only loaded when Claude Code is started inside the repository directory.
 - Infrastructure specifics (addresses, hostnames, tokens) belong in `docs/local/` and `secrets/` (both git-ignored), never in tracked files.
