@@ -32,6 +32,9 @@ type fakeIdP struct {
 	// knobs
 	subject, email, name string
 	roles                map[string]any
+	idTokenClaims        map[string]any // replaces the default roles claim in the ID token when set
+	userInfoClaims       map[string]any // served by /userinfo
+	userInfoFails        bool
 	nonceOverride        string
 	audience             string
 	expired              bool
@@ -57,6 +60,7 @@ func newFakeIdP(t *testing.T) *fakeIdP {
 			"issuer": f.srv.URL, "authorization_endpoint": f.srv.URL + "/authorize",
 			"token_endpoint": f.srv.URL + "/token", "jwks_uri": f.srv.URL + "/jwks",
 			"end_session_endpoint":                  f.srv.URL + "/logout",
+			"userinfo_endpoint":                     f.srv.URL + "/userinfo",
 			"id_token_signing_alg_values_supported": []string{"RS256"},
 		})
 	})
@@ -64,6 +68,18 @@ func newFakeIdP(t *testing.T) *fakeIdP {
 		_ = json.NewEncoder(w).Encode(jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: &key.PublicKey, KeyID: "k1", Algorithm: "RS256", Use: "sig"}}})
 	})
 	mux.HandleFunc("/token", f.token)
+	mux.HandleFunc("/userinfo", func(w http.ResponseWriter, r *http.Request) {
+		if f.userInfoFails || r.Header.Get("Authorization") != "Bearer at-secret" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		c := map[string]any{"sub": f.subject}
+		for k, v := range f.userInfoClaims {
+			c[k] = v
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(c)
+	})
 	return f
 }
 
@@ -103,13 +119,18 @@ func (f *fakeIdP) token(w http.ResponseWriter, r *http.Request) {
 	if f.expired {
 		exp = time.Now().Add(-5 * time.Minute)
 	}
+	extra := map[string]any{"nonce": nonce, "email": f.email, "name": f.name}
+	if f.idTokenClaims != nil {
+		for k, v := range f.idTokenClaims {
+			extra[k] = v
+		}
+	} else {
+		extra["urn:zitadel:iam:org:project:roles"] = f.roles
+	}
 	raw, _ := jwt.Signed(sg).Claims(jwt.Claims{
 		Issuer: f.srv.URL, Subject: f.subject, Audience: jwt.Audience{f.audience},
 		Expiry: jwt.NewNumericDate(exp), IssuedAt: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
-	}).Claims(map[string]any{
-		"nonce": nonce, "email": f.email, "name": f.name,
-		"urn:zitadel:iam:org:project:roles": f.roles,
-	}).Serialize()
+	}).Claims(extra).Serialize()
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"access_token": "at-secret", "token_type": "Bearer", "expires_in": 300, "id_token": raw,
