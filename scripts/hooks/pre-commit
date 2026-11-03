@@ -1,0 +1,14 @@
+#!/bin/sh
+# Pre-commit secret scan with gitleaks (runs in Docker if gitleaks is not installed).
+# Enable once per clone: git config core.hooksPath scripts/hooks
+set -eu
+GITLEAKS_IMAGE="ghcr.io/gitleaks/gitleaks:v8.21.2"
+root="$(git rev-parse --show-toplevel)"
+if command -v gitleaks >/dev/null 2>&1; then
+  exec gitleaks git --pre-commit --staged --redact --no-banner "$root"
+fi
+if command -v docker >/dev/null 2>&1; then
+  exec docker run --rm -v "$root:/repo" -w /repo "$GITLEAKS_IMAGE" git --pre-commit --staged --redact --no-banner /repo
+fi
+echo "pre-commit: gitleaks not available (install gitleaks or Docker)" >&2
+exit 1

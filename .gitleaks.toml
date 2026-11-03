@@ -1,0 +1,11 @@
+# gitleaks configuration: default rules plus project-specific allowlist.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Example and generated files"
+paths = [
+  '''\.env\.example$''',
+  '''package-lock\.json$''',
+  '''go\.sum$''',
+]

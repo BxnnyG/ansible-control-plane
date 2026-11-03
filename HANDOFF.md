@@ -1,7 +1,7 @@
 # Handoff
 
 ## Goal
-- M0: Git init, orchestrator setup, read-only discovery, open questions to the user.
+- M1: plan, ADRs, license, repo skeleton, gitleaks, compose stack, CI.
 
 ## Done
 - Repository initialized (`main`), orchestrator setup, `.gitignore`.
@@ -11,9 +11,17 @@
 - Commit identity switched to GitHub noreply; unpublished history rewritten.
 - Remote `origin` (SSH, deploy key in `secrets/`) configured, nothing pushed yet.
 
+- M0 merged, tagged `m0`, pushed (full-history gitleaks clean).
+- Connectors reachable: 2x OPNsense 26.7 (ISC legacy / dnsmasq), Proxmox 9.2, NetBox 4.7 (HTTP 8080 over overlay); Checkmk creds missing.
+- M1 branch `feat/m1-foundation`: LICENSE, PLAN.md, ADR-0000..0012 (accepted), README, CLAUDE.md; web skeleton; Go skeleton; hardened Dockerfiles + compose (verified healthy); gitleaks hook (verified blocking); CI workflow.
+- Attribution text is "Created by bxnny" (user decision), single source: internal/version, web/src/lib/attribution.ts.
+- Checkmk 2.5 reachable (site/user in docs/local).
+
 ## Open / Next step
-- Waiting for: firewall rules (OPNsense x2, NetBox), tokens for Proxmox/NetBox/Checkmk, deploy key added on GitHub, project name, Zitadel redirect URIs set, M0 approval.
-- After answers: finish M0, then M1 (PLAN.md, ADRs, license, skeleton).
+- M1 complete on `feat/m1-foundation` – WAITING for user OK to merge, tag `m1`, push.
+- Remote branch still has old history (name in LICENSE/README): user must force-push the rewritten branch themselves (auto mode blocks force-push).
+- Next: M2 (auth OIDC+break-glass, setup wizard, workspaces, roles+scopes, secrets store, audit).
+- Still missing: Zitadel roles acp-admin/editor/operator/viewer created by user (unconfirmed).
 
 ## Decisions (with short rationale)
 - Semaphore source DB is MySQL 8.0 → migration tool must read MySQL (or the API).

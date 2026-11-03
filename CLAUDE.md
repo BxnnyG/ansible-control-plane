@@ -41,3 +41,45 @@ Self-hosted web platform to run, organize and monitor Ansible; replacement for t
 - M6 NetBox + monitoring, fleet view, remediation
 - M7 Semaphore migration (dry run → import → comparison → cutover)
 - M8 Hardening, backup/restore, docs, release v1.0
+
+## Architecture (details: `PLAN.md` §9, `docs/adr/`)
+
+- `app`: Go binary (REST + SSE, OIDC, scheduler, connectors, Git ops), serves the embedded SvelteKit SPA, terminates TLS (ADR-0011).
+- `worker`: separate hardened container, pulls jobs from the app API, runs `ansible-playbook` unprivileged; no DB access, no master key, no Docker socket (ADR-0004).
+- `postgres`: only state store and job queue (ADR-0003).
+
+## Stack
+
+- Go (chi, pgx/v5, sqlc, goose, slog), single binary with subcommands (`serve`, `worker`, `migrate semaphore`, `admin`, `db migrate`).
+- SvelteKit (Svelte 5, adapter-static, TypeScript) + Tailwind CSS.
+- PostgreSQL; Docker Compose for deployment.
+
+## Code conventions
+
+- Go: `gofmt`/`goimports`, `golangci-lint`; errors wrapped with context; no global state except registries; table-driven tests.
+- Every API handler declares its permission; authorization goes through the central policy package (ADR-0007).
+- Secrets: never logged, never returned by the API; use the `secrets` package only (ADR-0005).
+- Connectors: GET-only HTTP client wrapper, sanitized fixtures only (no real IPs/hostnames/MACs/tokens).
+- Frontend: TypeScript strict, components small, API types generated from OpenAPI.
+
+## Build / test commands
+
+- No Go/Node on the host: everything runs in containers. `make` may be missing on the host – the Makefile targets are thin docker wrappers and can be run by hand.
+- `make init` – create `.env` (random DB password), `secrets/master.key`, enable git hooks (`core.hooksPath scripts/hooks`).
+- `make test` – `go vet` + `go test` for `./cmd/... ./internal/...` (never `./...`: `web/node_modules` contains stray Go files).
+- `make lint` – golangci-lint; web: `docker run --rm -v $PWD/web:/app -w /app node:24-alpine sh -c 'npm ci && npm run lint && npm run check && npm test -- --run && npm run build'`.
+- `make up` / `make down` – compose stack (`docker compose up -d --build`); ports from `.env` (`ACP_HTTP_PORT`, `ACP_HTTPS_PORT`).
+- Full-history secret scan: `docker run --rm -v $PWD:/repo ghcr.io/gitleaks/gitleaks:v8.21.2 git /repo --redact --config /repo/.gitleaks.toml`.
+
+## Known pitfalls
+
+- Pinned versions: Go 1.27.2, Node 24 (Docker build) / 22 (lockfile created with), Python 3.14, ansible-core 2.21.5, PostgreSQL 18.6, gitleaks 8.21.2.
+- Compose file secrets are bind mounts that keep host ownership: private keys read by the app (`secrets/master.key`, TLS key) must be owned by uid 10001 (`acp`), mode 600. `make init` does this for the master key.
+- `ACP_PUBLIC_URL` is the only source for redirect targets (HTTPS redirect, OIDC) – never derive hosts from request headers.
+- A goose "relation goose_db_version does not exist" error in the Postgres log on first start is expected.
+
+- Project subagents (`.claude/agents/`) are only loaded when Claude Code is started inside the repository directory.
+- Infrastructure specifics (addresses, hostnames, tokens) belong in `docs/local/` and `secrets/` (both git-ignored), never in tracked files.
+- The host is small (4 GiB RAM): use multi-stage builds and memory limits; keep worker concurrency low by default.
+- OPNsense instances may use different DHCP backends (Kea, dnsmasq, ISC legacy) – detect per instance, never assume.
+- Some upstream APIs are only reachable over plain HTTP on non-standard ports inside an encrypted overlay network – connectors must support per-instance URL, port and TLS settings.
