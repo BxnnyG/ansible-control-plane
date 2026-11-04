@@ -143,6 +143,7 @@ func TestAuthSchema(t *testing.T) {
 	sec := dbgen.CreateSecretParams{
 		ID: uuid.New(), WorkspaceID: ws.ID, Name: "k", Type: "ssh_key", EnvVersion: 1, EnvKeyID: "k1",
 		EnvWrapNonce: []byte{1}, EnvWrappedDek: []byte{2}, EnvNonce: []byte{3}, EnvCiphertext: []byte{4},
+		Metadata: []byte("{}"),
 	}
 	if _, err := q.CreateSecret(ctx, sec); err != nil {
 		t.Fatal(err)

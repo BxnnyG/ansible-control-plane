@@ -19,13 +19,16 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/secrets"
 )
 
-const adminUsage = "usage: acp admin <create-breakglass --username NAME [--generate] | set-breakglass-password --username NAME [--generate] | reset-breakglass-totp --username NAME | rotate-master-key --new-key-file PATH>"
+const adminUsage = "usage: acp admin <create-breakglass --username NAME [--generate] | set-breakglass-password --username NAME [--generate] | reset-breakglass-totp --username NAME | rotate-master-key --new-key-file PATH | inventory import|list ...>"
 
 // runAdmin executes operator tasks. Secrets (generated password, TOTP secret)
 // go to stdout only; prompts and hints go to stderr.
 func runAdmin(ctx context.Context, args []string, cfg config.Config, in *os.File, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		return errors.New(adminUsage)
+	}
+	if args[0] == "inventory" {
+		return runAdminInventory(ctx, args[1:], cfg, stdout, stderr)
 	}
 	fs := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	fs.SetOutput(stderr)

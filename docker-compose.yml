@@ -32,6 +32,7 @@ services:
       ACP_HTTPS_ADDR: ":8443"
       ACP_LOG_LEVEL: ${ACP_LOG_LEVEL:-info}
       ACP_MASTER_KEY_FILE: /run/secrets/master_key
+      ACP_DATA_DIR: /var/lib/acp
       ACP_DATABASE_URL: postgres://acp:${ACP_DB_PASSWORD}@postgres:5432/acp?sslmode=disable
       ACP_PUBLIC_URL: ${ACP_PUBLIC_URL:-}
       ACP_OIDC_ISSUER: ${ACP_OIDC_ISSUER:-}
@@ -43,6 +44,8 @@ services:
       ACP_TLS_CERT_FILE: ${ACP_TLS_CERT_FILE:-}
       ACP_TLS_KEY_FILE: ${ACP_TLS_KEY_FILE:-}
     secrets: [master_key, tls_cert, tls_key]
+    volumes:
+      - acpdata:/var/lib/acp
     ports:
       - "${ACP_HTTP_PORT:-8080}:8080"
       - "${ACP_HTTPS_PORT:-8443}:8443"
@@ -96,6 +99,7 @@ networks:
 
 volumes:
   pgdata:
+  acpdata:
 
 secrets:
   master_key:

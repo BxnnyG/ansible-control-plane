@@ -53,3 +53,6 @@ web/build/
 
 # Local secrets (API keys, TLS, deploy keys)
 /secrets/
+
+# Claude Code agent worktrees
+/.claude/worktrees/

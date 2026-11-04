@@ -27,7 +27,8 @@ RUN CGO_ENABLED=0 go build -trimpath \
 
 FROM ${RUNTIME_IMAGE}
 RUN apk add --no-cache git ca-certificates openssh-client-default \
- && adduser -D -u 10001 -h /home/acp acp
+ && adduser -D -u 10001 -h /home/acp acp \
+ && install -d -o acp -g acp -m 0750 /var/lib/acp
 COPY --from=build /out/acp /usr/local/bin/acp
 USER acp
 ENV HOME=/home/acp

@@ -1,0 +1,9 @@
+dependencies: []
+argument_specs:
+  main:
+    short_description: overridden
+    options:
+      legacy: {type: str}
+  extra:
+    options:
+      x: {type: bool}

@@ -1,6 +1,10 @@
 package policy
 
-import "context"
+import (
+	"context"
+
+	"github.com/google/uuid"
+)
 
 // Scope kinds, mirroring membership_scopes.kind.
 const (
@@ -26,6 +30,9 @@ type Ref struct {
 type Target struct {
 	Refs  []Ref
 	Hosts []string
+	// InventoryID names the inventory that group refs and Hosts belong to.
+	// It may be empty when the target has exactly one inventory ref.
+	InventoryID string
 }
 
 // ScopeResolver decides whether the whole target lies inside the scopes of a
@@ -36,8 +43,8 @@ type ScopeResolver interface {
 }
 
 // RefResolver matches refs by kind and id. It cannot expand hosts, so any
-// host in the target is denied for scoped memberships. The inventory-backed
-// resolver (M3) replaces it.
+// host in the target is denied for scoped memberships. Production uses the
+// inventory-backed InventoryResolver.
 type RefResolver struct{}
 
 // InScope implements ScopeResolver. An empty target is denied (fail closed).
@@ -58,4 +65,12 @@ func (RefResolver) InScope(_ context.Context, _ string, scopes []Scope, t Target
 		}
 	}
 	return true, nil
+}
+
+// Access implements AccessResolver: only an inventory scope grants access.
+func (RefResolver) Access(_ context.Context, _ string, scopes []Scope, inv uuid.UUID) (Access, error) {
+	if hasInventoryScope(scopes, inv) {
+		return Access{All: true}, nil
+	}
+	return Access{}, nil
 }

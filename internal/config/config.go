@@ -22,6 +22,8 @@ type Config struct {
 	WorkerAddr    string // worker: health listen address
 	WorkerPoll    time.Duration
 	MasterKeyFile string
+	// DataDir holds app state outside the database, e.g. Git clones in <DataDir>/projects.
+	DataDir       string
 	ShutdownGrace time.Duration
 	// PublicURL is the external base URL users reach the app on
 	// (e.g. https://acp.example.com:8443). Used for HTTPS redirects and OIDC.
@@ -47,6 +49,9 @@ func (c Config) TLSEnabled() bool { return c.TLSCertFile != "" && c.TLSKeyFile !
 // DefaultMasterKeyFile is the in-container path of the compose master key secret.
 const DefaultMasterKeyFile = "/run/secrets/master_key"
 
+// DefaultDataDir is the in-container data volume of the app.
+const DefaultDataDir = "/var/lib/acp"
+
 // Load reads configuration using the given lookup function (e.g. os.LookupEnv).
 func Load(lookup func(string) (string, bool)) (Config, error) {
 	get := func(k, def string) string {
@@ -71,6 +76,7 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 		AppURL:        get("APP_URL", "http://app:8080"),
 		WorkerAddr:    get("WORKER_ADDR", ":8081"),
 		MasterKeyFile: keyFile,
+		DataDir:       strings.TrimRight(get("DATA_DIR", DefaultDataDir), "/"),
 		PublicURL:     strings.TrimRight(get("PUBLIC_URL", ""), "/"),
 
 		OIDCIssuer:     strings.TrimRight(get("OIDC_ISSUER", ""), "/"),

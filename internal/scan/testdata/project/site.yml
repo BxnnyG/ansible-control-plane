@@ -1,0 +1,6 @@
+- name: Site
+  hosts: webservers
+  roles:
+    - base
+    - role: webapp
+- import_playbook: playbooks/db.yml

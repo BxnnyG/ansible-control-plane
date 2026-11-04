@@ -21,6 +21,48 @@ type AuditLog struct {
 	Details     []byte
 }
 
+type Inventory struct {
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
+	Name         string
+	Slug         string
+	Mode         string
+	ProjectID    pgtype.UUID
+	Path         string
+	WriteBranch  string
+	SourceFormat string
+	BaseSha      string
+	Version      int32
+	LastImportAt pgtype.Timestamptz
+	CreatedBy    pgtype.UUID
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+}
+
+type InventoryGroup struct {
+	ID          uuid.UUID
+	InventoryID uuid.UUID
+	Name        string
+	Vars        []byte
+}
+
+type InventoryGroupHost struct {
+	GroupID uuid.UUID
+	HostID  uuid.UUID
+}
+
+type InventoryGroupLink struct {
+	ParentID uuid.UUID
+	ChildID  uuid.UUID
+}
+
+type InventoryHost struct {
+	ID          uuid.UUID
+	InventoryID uuid.UUID
+	Name        string
+	Vars        []byte
+}
+
 type Membership struct {
 	ID          uuid.UUID
 	WorkspaceID uuid.UUID
@@ -35,6 +77,40 @@ type MembershipScope struct {
 	MembershipID uuid.UUID
 	Kind         string
 	RefID        string
+}
+
+type Project struct {
+	ID                  uuid.UUID
+	WorkspaceID         uuid.UUID
+	Name                string
+	Slug                string
+	Url                 string
+	DefaultRef          string
+	CredentialSecretID  pgtype.UUID
+	HttpsUsername       string
+	KnownHosts          string
+	SyncIntervalSeconds pgtype.Int4
+	LastSyncStatus      string
+	LastSyncError       string
+	LastSyncSha         string
+	LastSyncAt          pgtype.Timestamptz
+	CreatedBy           pgtype.UUID
+	CreatedAt           pgtype.Timestamptz
+	UpdatedAt           pgtype.Timestamptz
+	NextSyncAt          pgtype.Timestamptz
+	LastSyncTrigger     string
+	WebhookEnabled      bool
+	WebhookProvider     string
+	WebhookSecretID     pgtype.UUID
+}
+
+type ProjectRevision struct {
+	ID        uuid.UUID
+	ProjectID uuid.UUID
+	Sha       string
+	SyncedAt  pgtype.Timestamptz
+	Scan      []byte
+	Warnings  []byte
 }
 
 type Secret struct {
@@ -52,6 +128,7 @@ type Secret struct {
 	CreatedBy     pgtype.UUID
 	CreatedAt     pgtype.Timestamptz
 	UpdatedAt     pgtype.Timestamptz
+	Metadata      []byte
 }
 
 type Session struct {
@@ -83,6 +160,20 @@ type User struct {
 	TotpLastStep int64
 	FailedLogins int32
 	LockedUntil  pgtype.Timestamptz
+}
+
+type VaultIdentity struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	Label       string
+	Description string
+	Provider    string
+	SecretID    pgtype.UUID
+	ScriptPath  string
+	ScriptArgs  []byte
+	CreatedBy   pgtype.UUID
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
 }
 
 type Workspace struct {

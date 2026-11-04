@@ -37,9 +37,15 @@ type Pinger interface {
 type Option func(*routerOpts)
 
 type routerOpts struct {
-	auth  *auth.Service
-	az    *policy.Authorizer
-	store APIStore
+	auth        *auth.Service
+	az          *policy.Authorizer
+	store       APIStore
+	secrets     SecretsAPI
+	projects    ProjectsAPI
+	inventories InventoriesAPI
+	vaultIDs    VaultIdentitiesAPI
+	vaultOps    VaultOpsAPI
+	publicURL   string
 }
 
 // WithAuth mounts the OIDC/session endpoints (/api/auth/*, /api/v1/me).
@@ -78,6 +84,19 @@ func Router(log *slog.Logger, db Pinger, static fs.FS, opts ...Option) http.Hand
 			info = ro.auth
 		}
 		apiRoutes(r, ro.az, ro.store, info, log)
+		if ro.secrets != nil {
+			secretRoutes(r, ro.az, ro.store, ro.secrets, log)
+		}
+		if ro.projects != nil {
+			projectRoutes(r, ro.az, ro.store, ro.projects, log)
+			webhookRoutes(r, ro.az, ro.store, ro.projects, ro.publicURL, log)
+		}
+		if ro.inventories != nil {
+			inventoryRoutes(r, ro.az, ro.store, ro.inventories, log)
+		}
+		if ro.vaultIDs != nil && ro.vaultOps != nil {
+			vaultRoutes(r, ro.az, ro.store, ro.vaultIDs, ro.vaultOps, log)
+		}
 	}
 	// Unknown API paths must not fall through to the SPA.
 	r.HandleFunc("/api/*", func(w http.ResponseWriter, _ *http.Request) {

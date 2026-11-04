@@ -30,6 +30,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq git openssh-client
       - run: go vet ./cmd/... ./internal/...
       - run: go test -race ./cmd/... ./internal/...
       - uses: golangci/golangci-lint-action@v8

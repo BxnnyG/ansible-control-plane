@@ -22,6 +22,7 @@ const (
 	SecretsWrite    Permission = "secrets.write"
 	ProjectRead     Permission = "project.read"
 	ProjectWrite    Permission = "project.write"
+	ProjectSync     Permission = "project.sync"
 	InventoryRead   Permission = "inventory.read"
 	InventoryWrite  Permission = "inventory.write"
 	TemplateRead    Permission = "template.read"
@@ -33,6 +34,9 @@ const (
 	ScheduleWrite   Permission = "schedule.write"
 	ConnectorRead   Permission = "connector.read"
 	ConnectorWrite  Permission = "connector.write"
+	VaultRead       Permission = "vault.read"
+	VaultManage     Permission = "vault.manage"
+	VaultDecrypt    Permission = "vault.decrypt"
 )
 
 // Roles in ascending order of privilege.
@@ -50,7 +54,8 @@ var workspaceWide = map[Permission]bool{
 	WorkspaceRead:   false, // reading the workspace itself is allowed when scoped
 	WorkspaceManage: true, WorkspaceDelete: true,
 	MembersRead: true, MembersManage: true,
-	AuditRead: true, ConnectorWrite: true, SecretsWrite: true,
+	AuditRead: true, ConnectorWrite: true, SecretsWrite: true, SecretsMetaRead: true,
+	VaultRead: true, VaultManage: true, VaultDecrypt: true,
 }
 
 // IsWorkspaceWide reports whether the permission requires an unscoped membership.
@@ -76,9 +81,9 @@ func buildMatrix() map[string]map[Permission]bool {
 		return m
 	}
 	viewer := grant(nil, viewerPerms...)
-	operator := grant(viewer, RunExecute, RunCancel)
-	editor := grant(operator, SecretsMetaRead, SecretsWrite, ProjectWrite, InventoryWrite, TemplateWrite, ScheduleWrite)
-	admin := grant(editor, WorkspaceManage, MembersRead, MembersManage, AuditRead, ConnectorRead, ConnectorWrite)
+	operator := grant(viewer, RunExecute, RunCancel, ProjectSync)
+	editor := grant(operator, SecretsMetaRead, ProjectWrite, InventoryWrite, TemplateWrite, ScheduleWrite, VaultRead)
+	admin := grant(editor, SecretsWrite, WorkspaceManage, MembersRead, MembersManage, AuditRead, ConnectorRead, ConnectorWrite, VaultManage, VaultDecrypt)
 	owner := grant(admin, WorkspaceDelete)
 	return map[string]map[Permission]bool{
 		RoleViewer: viewer, RoleOperator: operator, RoleEditor: editor, RoleAdmin: admin, RoleOwner: owner,

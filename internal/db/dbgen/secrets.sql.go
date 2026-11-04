@@ -14,9 +14,9 @@ import (
 
 const createSecret = `-- name: CreateSecret :one
 INSERT INTO secrets (id, workspace_id, name, type, description, env_version, env_key_id,
-    env_wrap_nonce, env_wrapped_dek, env_nonce, env_ciphertext, created_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-RETURNING id, workspace_id, name, type, description, env_version, env_key_id, env_wrap_nonce, env_wrapped_dek, env_nonce, env_ciphertext, created_by, created_at, updated_at
+    env_wrap_nonce, env_wrapped_dek, env_nonce, env_ciphertext, created_by, metadata)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+RETURNING id, workspace_id, name, type, description, env_version, env_key_id, env_wrap_nonce, env_wrapped_dek, env_nonce, env_ciphertext, created_by, created_at, updated_at, metadata
 `
 
 type CreateSecretParams struct {
@@ -32,6 +32,7 @@ type CreateSecretParams struct {
 	EnvNonce      []byte
 	EnvCiphertext []byte
 	CreatedBy     pgtype.UUID
+	Metadata      []byte
 }
 
 func (q *Queries) CreateSecret(ctx context.Context, arg CreateSecretParams) (Secret, error) {
@@ -48,6 +49,7 @@ func (q *Queries) CreateSecret(ctx context.Context, arg CreateSecretParams) (Sec
 		arg.EnvNonce,
 		arg.EnvCiphertext,
 		arg.CreatedBy,
+		arg.Metadata,
 	)
 	var i Secret
 	err := row.Scan(
@@ -65,6 +67,7 @@ func (q *Queries) CreateSecret(ctx context.Context, arg CreateSecretParams) (Sec
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Metadata,
 	)
 	return i, err
 }
@@ -84,7 +87,7 @@ func (q *Queries) DeleteSecret(ctx context.Context, arg DeleteSecretParams) erro
 }
 
 const getSecret = `-- name: GetSecret :one
-SELECT id, workspace_id, name, type, description, env_version, env_key_id, env_wrap_nonce, env_wrapped_dek, env_nonce, env_ciphertext, created_by, created_at, updated_at FROM secrets WHERE id = $1 AND workspace_id = $2
+SELECT id, workspace_id, name, type, description, env_version, env_key_id, env_wrap_nonce, env_wrapped_dek, env_nonce, env_ciphertext, created_by, created_at, updated_at, metadata FROM secrets WHERE id = $1 AND workspace_id = $2
 `
 
 type GetSecretParams struct {
@@ -110,12 +113,13 @@ func (q *Queries) GetSecret(ctx context.Context, arg GetSecretParams) (Secret, e
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Metadata,
 	)
 	return i, err
 }
 
 const listAllSecrets = `-- name: ListAllSecrets :many
-SELECT id, workspace_id, name, type, description, env_version, env_key_id, env_wrap_nonce, env_wrapped_dek, env_nonce, env_ciphertext, created_by, created_at, updated_at FROM secrets ORDER BY id
+SELECT id, workspace_id, name, type, description, env_version, env_key_id, env_wrap_nonce, env_wrapped_dek, env_nonce, env_ciphertext, created_by, created_at, updated_at, metadata FROM secrets ORDER BY id
 `
 
 func (q *Queries) ListAllSecrets(ctx context.Context) ([]Secret, error) {
@@ -142,6 +146,7 @@ func (q *Queries) ListAllSecrets(ctx context.Context) ([]Secret, error) {
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Metadata,
 		); err != nil {
 			return nil, err
 		}
@@ -154,7 +159,7 @@ func (q *Queries) ListAllSecrets(ctx context.Context) ([]Secret, error) {
 }
 
 const listSecretsMeta = `-- name: ListSecretsMeta :many
-SELECT id, workspace_id, name, type, description, created_by, created_at, updated_at
+SELECT id, workspace_id, name, type, description, metadata, created_by, created_at, updated_at
 FROM secrets WHERE workspace_id = $1 ORDER BY name
 `
 
@@ -164,6 +169,7 @@ type ListSecretsMetaRow struct {
 	Name        string
 	Type        string
 	Description string
+	Metadata    []byte
 	CreatedBy   pgtype.UUID
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz
@@ -184,6 +190,7 @@ func (q *Queries) ListSecretsMeta(ctx context.Context, workspaceID uuid.UUID) ([
 			&i.Name,
 			&i.Type,
 			&i.Description,
+			&i.Metadata,
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -228,4 +235,117 @@ func (q *Queries) ReplaceSecretEnvelope(ctx context.Context, arg ReplaceSecretEn
 		arg.EnvCiphertext,
 	)
 	return err
+}
+
+const updateSecretMeta = `-- name: UpdateSecretMeta :one
+UPDATE secrets SET name = $3, description = $4, metadata = $5, updated_at = now()
+WHERE id = $1 AND workspace_id = $2
+RETURNING id, workspace_id, name, type, description, metadata, created_by, created_at, updated_at
+`
+
+type UpdateSecretMetaParams struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	Name        string
+	Description string
+	Metadata    []byte
+}
+
+type UpdateSecretMetaRow struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	Name        string
+	Type        string
+	Description string
+	Metadata    []byte
+	CreatedBy   pgtype.UUID
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
+func (q *Queries) UpdateSecretMeta(ctx context.Context, arg UpdateSecretMetaParams) (UpdateSecretMetaRow, error) {
+	row := q.db.QueryRow(ctx, updateSecretMeta,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.Name,
+		arg.Description,
+		arg.Metadata,
+	)
+	var i UpdateSecretMetaRow
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.Type,
+		&i.Description,
+		&i.Metadata,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateSecretWithEnvelope = `-- name: UpdateSecretWithEnvelope :one
+UPDATE secrets
+SET name = $3, description = $4, metadata = $5,
+    env_version = $6, env_key_id = $7, env_wrap_nonce = $8, env_wrapped_dek = $9,
+    env_nonce = $10, env_ciphertext = $11, updated_at = now()
+WHERE id = $1 AND workspace_id = $2
+RETURNING id, workspace_id, name, type, description, metadata, created_by, created_at, updated_at
+`
+
+type UpdateSecretWithEnvelopeParams struct {
+	ID            uuid.UUID
+	WorkspaceID   uuid.UUID
+	Name          string
+	Description   string
+	Metadata      []byte
+	EnvVersion    int32
+	EnvKeyID      string
+	EnvWrapNonce  []byte
+	EnvWrappedDek []byte
+	EnvNonce      []byte
+	EnvCiphertext []byte
+}
+
+type UpdateSecretWithEnvelopeRow struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	Name        string
+	Type        string
+	Description string
+	Metadata    []byte
+	CreatedBy   pgtype.UUID
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
+func (q *Queries) UpdateSecretWithEnvelope(ctx context.Context, arg UpdateSecretWithEnvelopeParams) (UpdateSecretWithEnvelopeRow, error) {
+	row := q.db.QueryRow(ctx, updateSecretWithEnvelope,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.Name,
+		arg.Description,
+		arg.Metadata,
+		arg.EnvVersion,
+		arg.EnvKeyID,
+		arg.EnvWrapNonce,
+		arg.EnvWrappedDek,
+		arg.EnvNonce,
+		arg.EnvCiphertext,
+	)
+	var i UpdateSecretWithEnvelopeRow
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.Type,
+		&i.Description,
+		&i.Metadata,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

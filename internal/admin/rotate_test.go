@@ -60,7 +60,7 @@ func TestRotateMasterKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := q.CreateSecret(ctx, dbgen.CreateSecretParams{ID: sid, WorkspaceID: ws.ID, Name: "s", Type: "generic",
+	if _, err := q.CreateSecret(ctx, dbgen.CreateSecretParams{ID: sid, WorkspaceID: ws.ID, Name: "s", Type: "file", Metadata: []byte("{}"),
 		EnvVersion: int32(env.Version), EnvKeyID: env.KeyID, EnvWrapNonce: env.WrapNonce, //nolint:gosec // small constant
 		EnvWrappedDek: env.WrappedDEK, EnvNonce: env.Nonce, EnvCiphertext: env.Ciphertext}); err != nil {
 		t.Fatal(err)

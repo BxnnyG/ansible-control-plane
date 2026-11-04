@@ -1,6 +1,7 @@
 GO_IMAGE ?= golang:1.27.2-alpine3.24
 LINT_IMAGE ?= golangci/golangci-lint:v2.15.0
 RUN_GO = docker run --rm -v $(CURDIR):/src -w /src -e GOFLAGS=-buildvcs=false -v acp-gocache:/go $(GO_IMAGE)
+GO_TEST_DEPS = apk add --no-cache git openssh-client-default >/dev/null
 
 .PHONY: init lint test test-db build up down sqlc
 
@@ -15,7 +16,7 @@ lint:
 	docker run --rm -v $(CURDIR):/src -w /src -v acp-gocache:/go $(LINT_IMAGE) golangci-lint run ./cmd/... ./internal/...
 
 test:
-	$(RUN_GO) sh -c 'go vet ./cmd/... ./internal/... && go test ./cmd/... ./internal/...'
+	$(RUN_GO) sh -c '$(GO_TEST_DEPS) && go vet ./cmd/... ./internal/... && go test ./cmd/... ./internal/...'
 
 test-db: ## DB-backed tests against a throwaway PostgreSQL (one database per package)
 	./scripts/test-db.sh

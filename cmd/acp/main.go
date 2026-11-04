@@ -17,9 +17,15 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/config"
 	"github.com/BxnnyG/ansible-control-plane/internal/db"
 	"github.com/BxnnyG/ansible-control-plane/internal/db/dbgen"
+	"github.com/BxnnyG/ansible-control-plane/internal/gitops"
+	"github.com/BxnnyG/ansible-control-plane/internal/inventory"
 	"github.com/BxnnyG/ansible-control-plane/internal/policy"
+	"github.com/BxnnyG/ansible-control-plane/internal/projects"
+	"github.com/BxnnyG/ansible-control-plane/internal/scan"
 	"github.com/BxnnyG/ansible-control-plane/internal/secrets"
 	"github.com/BxnnyG/ansible-control-plane/internal/server"
+	"github.com/BxnnyG/ansible-control-plane/internal/vaultids"
+	"github.com/BxnnyG/ansible-control-plane/internal/vaultops"
 	"github.com/BxnnyG/ansible-control-plane/internal/version"
 	"github.com/BxnnyG/ansible-control-plane/internal/worker"
 )
@@ -86,8 +92,20 @@ func run(args []string) error {
 			return err
 		}
 		q := dbgen.New(pool)
-		opts = append(opts, server.WithAuth(svc), server.WithPolicy(policy.New(q, nil, svc.Require, log), q))
+		sp, err := secrets.NewLocalProvider(master)
+		if err != nil {
+			return fmt.Errorf("secrets provider: %w", err)
+		}
+		sec := secrets.NewService(q, sp)
+		prj := projects.New(projects.Options{Store: q, Secrets: sec, Git: &gitops.Client{}, Scanner: scan.JSONScanner{}, DataDir: cfg.DataDir})
+		invSvc := inventory.New(inventory.Options{DB: pool, Checkouts: prj, Writer: prj})
+		vids := vaultids.New(q, sec)
+		vops := vaultops.New(prj, vids)
+		opts = append(opts, server.WithAuth(svc), server.WithPolicy(policy.New(q, policy.InventoryResolver{Source: invSvc}, svc.Require, log), q),
+			server.WithSecrets(sec), server.WithProjects(prj), server.WithPublicURL(cfg.PublicURL),
+			server.WithInventories(invSvc), server.WithVault(vids, vops))
 		go auth.RunSessionCleanup(ctx, q, auth.DefaultCleanupInterval, log)
+		go prj.RunScheduler(ctx, projects.DefaultScheduleTick, projects.DefaultScheduleConcurrency, log)
 		log.Info("login enabled", "oidc", cfg.OIDCEnabled(), "breakglass", cfg.BreakGlassEnabled)
 	case cfg.AuthEnabled():
 		log.Warn("login disabled: ACP_PUBLIC_URL is not set")

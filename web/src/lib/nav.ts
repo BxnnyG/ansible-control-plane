@@ -16,6 +16,16 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
   },
   {
+    label: 'Secrets',
+    href: '/secrets',
+    icon: 'M7 11V8a5 5 0 0 1 10 0v3M5 11h14v9H5z',
+  },
+  {
+    label: 'Vault',
+    href: '/vault',
+    icon: 'M5 4h14v16H5zM12 9a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM12 13v3',
+  },
+  {
     label: 'Settings',
     href: '/settings',
     icon: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v3M12 19v3M2 12h3M19 12h3',

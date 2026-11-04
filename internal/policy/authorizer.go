@@ -139,6 +139,34 @@ func (a *Authorizer) Authorize(ctx context.Context, p auth.Principal, workspaceI
 	return err
 }
 
+// InventoryAccess returns the part of an inventory the decision's membership
+// may use. Unscoped memberships get the whole inventory (their role was
+// already checked by the route). Resolvers without AccessResolver fall back
+// to matching inventory scopes only.
+func (a *Authorizer) InventoryAccess(ctx context.Context, d Decision, inv uuid.UUID) (Access, error) {
+	if !d.Scoped() {
+		return Access{All: true}, nil
+	}
+	ws := d.Workspace.ID.String()
+	if ar, ok := a.resolver.(AccessResolver); ok {
+		return ar.Access(ctx, ws, d.Scopes, inv)
+	}
+	return RefResolver{}.Access(ctx, ws, d.Scopes, inv)
+}
+
+// AuthorizeHosts checks that every explicitly named host of the inventory is
+// in the principal's scope (pattern-free: callers pass resolved host names,
+// e.g. the limit set of a run). Scoped memberships are denied when any host
+// is outside, unknown to the inventory, or the list is empty.
+func (a *Authorizer) AuthorizeHosts(ctx context.Context, p auth.Principal, workspaceID uuid.UUID, perm Permission, inv uuid.UUID, hosts []string) error {
+	return a.Authorize(ctx, p, workspaceID, perm, Target{InventoryID: inv.String(), Hosts: hosts})
+}
+
+// Denied records an authz.denied audit entry for a handler-level denial.
+func (a *Authorizer) Denied(ctx context.Context, p auth.Principal, d Decision, perm Permission, method string) {
+	a.auditDenied(ctx, p, d, perm, method)
+}
+
 // Require returns middleware that resolves {workspace}, demands membership
 // (404 otherwise) and the permission (403 otherwise). It must run after
 // authentication.

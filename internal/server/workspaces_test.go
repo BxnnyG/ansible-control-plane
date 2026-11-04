@@ -18,6 +18,7 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/auth"
 	"github.com/BxnnyG/ansible-control-plane/internal/db/dbgen"
 	"github.com/BxnnyG/ansible-control-plane/internal/policy"
+	"github.com/BxnnyG/ansible-control-plane/internal/secrets"
 )
 
 var quiet = slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -35,7 +36,11 @@ func TestEveryAPIRouteDeclaresPermission(t *testing.T) {
 		t.Fatal(err)
 	}
 	az := policy.New(q, nil, svc.Require, quiet)
-	h := Router(quiet, fakePing{}, DefaultStatic(), WithAuth(svc), WithPolicy(az, q))
+	prov, err := secrets.NewLocalProvider([]byte("0123456789abcdef0123456789ABCDEF"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := Router(quiet, fakePing{}, DefaultStatic(), WithAuth(svc), WithPolicy(az, q), WithSecrets(secrets.NewService(q, prov)))
 	root, ok := h.(chi.Routes)
 	if !ok {
 		t.Fatal("router does not expose its routes")
@@ -54,6 +59,8 @@ type fakeAPIStore struct {
 	ws   dbgen.Workspace
 	user uuid.UUID
 	role string
+	// scopes are returned as the membership scopes.
+	scopes []dbgen.MembershipScope
 	// audits records audit actions; shared by value copies through the pointer.
 	audits *[]string
 	// auditCtxErrs records ctx.Err() seen by InsertAudit.
@@ -89,7 +96,7 @@ func (f fakeAPIStore) GetMembership(_ context.Context, a dbgen.GetMembershipPara
 }
 
 func (f fakeAPIStore) ListMembershipScopes(context.Context, uuid.UUID) ([]dbgen.MembershipScope, error) {
-	return nil, nil
+	return f.scopes, nil
 }
 
 func (f fakeAPIStore) InsertAudit(ctx context.Context, p dbgen.InsertAuditParams) (dbgen.InsertAuditRow, error) {

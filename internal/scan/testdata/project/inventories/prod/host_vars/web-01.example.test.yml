@@ -1,0 +1,9 @@
+rack: r1
+api_key: !vault |
+  $ANSIBLE_VAULT;1.1;AES256
+  3132
+nested:
+  list:
+    - !vault |
+      $ANSIBLE_VAULT;1.1;AES256
+      3132

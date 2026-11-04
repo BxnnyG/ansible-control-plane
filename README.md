@@ -24,6 +24,21 @@ docker compose up -d --build
 
 The UI is then available on `http://<host>:8080` (configurable in `.env`).
 
+## Admin CLI
+
+Operator tasks run inside the app container (it has the data volume and master key):
+
+```sh
+docker compose exec app acp admin inventory list --workspace default
+docker compose exec app acp admin inventory import --workspace default \
+  --project <slug|id> --path inventories/hosts.yml --name "Lab" [--mode git|db] [--write-branch acp/lab]
+```
+
+`import` creates the inventory if no inventory with that name or slug exists
+(otherwise it re-imports into it when mode, project and path match), imports
+from the latest synced project revision and prints the inventory id, slug and
+group/host counts (never variable values). The project must be synced first.
+
 ## Documentation
 
 - [`PLAN.md`](PLAN.md) – project plan and requirements

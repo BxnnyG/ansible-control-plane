@@ -1,0 +1,9 @@
+roles:
+  - name: geerlingguy.nginx
+    version: 3.2.0
+  - src: git+https://user:tok3n@git.example.test/org/role.git
+    version: main
+collections:
+  - name: community.general
+    version: ">=8.0.0"
+  - ansible.posix
