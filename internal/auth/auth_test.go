@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -364,6 +365,75 @@ func TestExtractRoles(t *testing.T) {
 			t.Errorf("%s: %q want %q", claim, got, want)
 		}
 	}
+}
+
+func TestExtractRolesZitadel(t *testing.T) {
+	const def = "urn:zitadel:iam:org:project:roles"
+	obj := func(names ...string) map[string]any {
+		m := map[string]any{}
+		for _, n := range names {
+			m[n] = map[string]any{"org1": "example.com"}
+		}
+		return m
+	}
+	tests := []struct {
+		name   string
+		claims map[string]any
+		claim  string
+		want   string
+	}{
+		{"default map shape", map[string]any{def: obj("acp-admin")}, def, "acp-admin"},
+		{"array shape", map[string]any{def: []any{"b", "a"}}, def, "a,b"},
+		{"project-specific fallback", map[string]any{"urn:zitadel:iam:org:project:123:roles": obj("acp-admin")}, def, "acp-admin"},
+		{"project-specific union", map[string]any{
+			"urn:zitadel:iam:org:project:1:roles": obj("a", "b"), "urn:zitadel:iam:org:project:2:roles": obj("b", "c")}, def, "a,b,c"},
+		{"default wins over project-specific", map[string]any{def: obj("x"), "urn:zitadel:iam:org:project:1:roles": obj("y")}, def, "x"},
+		{"custom claim has no fallback", map[string]any{"urn:zitadel:iam:org:project:1:roles": obj("y")}, "custom", ""},
+		{"empty", map[string]any{}, def, ""},
+		{"unrelated claims", map[string]any{"urn:zitadel:iam:org:project:1:other": obj("y")}, def, ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := strings.Join(extractRoles(tc.claims, tc.claim), ","); got != tc.want {
+				t.Errorf("got %q want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestCallbackRolesFromUserInfo(t *testing.T) {
+	e := newEnv(t)
+	e.idp.idTokenClaims = map[string]any{}
+	e.idp.userInfoClaims = map[string]any{"urn:zitadel:iam:org:project:roles": map[string]any{"acp-admin": map[string]any{"o": "d"}}}
+	if rec := e.login(t, "/"); rec.Code != http.StatusSeeOther {
+		t.Fatalf("status %d", rec.Code)
+	}
+	if len(*e.roles) != 1 || strings.Join((*e.roles)[0], ",") != "acp-admin" {
+		t.Fatalf("roles synced: %v", *e.roles)
+	}
+}
+
+func TestCallbackUserInfoFailureNotFatal(t *testing.T) {
+	e := newEnv(t)
+	e.idp.idTokenClaims = map[string]any{}
+	e.idp.userInfoFails = true
+	e.store.noAccess = true
+	rec := e.login(t, "/")
+	if loc := rec.Header().Get("Location"); !strings.Contains(loc, "error=no_access") {
+		t.Fatalf("location %q", loc)
+	}
+	for _, a := range e.store.audit {
+		if a.Action != "auth.login_denied" {
+			continue
+		}
+		var d map[string]any
+		_ = json.Unmarshal(a.Details, &d)
+		if d["role_source"] != "none" || d["roles_received"] != float64(0) {
+			t.Errorf("details: %v", d)
+		}
+		return
+	}
+	t.Fatal("no login_denied audit")
 }
 
 func TestPlainHTTPCookieNames(t *testing.T) {

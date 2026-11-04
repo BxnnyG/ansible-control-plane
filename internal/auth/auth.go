@@ -314,6 +314,27 @@ func (s *Service) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	roles := extractRoles(claims, s.o.RolesClaim)
+	roleSource := "id_token"
+	keys := claimKeys(claims)
+	if len(roles) == 0 {
+		roleSource = "none"
+		ui, err := p.UserInfo(ctx, oauth2.StaticTokenSource(tok))
+		if err != nil {
+			s.o.Log.Warn("callback: userinfo fetch failed", "error", sanitizeErr(err))
+		} else {
+			var uc map[string]any
+			if err := ui.Claims(&uc); err != nil {
+				s.o.Log.Warn("callback: userinfo claims invalid", "error", sanitizeErr(err))
+			} else {
+				keys = claimKeys(uc)
+				if roles = extractRoles(uc, s.o.RolesClaim); len(roles) > 0 {
+					roleSource = "userinfo"
+				}
+			}
+		}
+	}
+	s.o.Log.Info("callback: oidc claims", "claim_keys", keys, "roles_claim", s.o.RolesClaim,
+		"roles_found", len(roles), "role_source", roleSource, "mapped_role", MapIdPRoles(roles))
 	if s.o.RoleSync != nil {
 		if err := s.o.RoleSync.SyncRoles(r.Context(), user, roles); err != nil {
 			s.o.Log.Error("callback: role sync", "error", err, "user_id", user.ID)
@@ -325,7 +346,8 @@ func (s *Service) handleCallback(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if len(ms) == 0 {
-			s.audit(r.Context(), &user, "auth.login_denied", map[string]any{"reason": "no_access", "method": "oidc"})
+			s.audit(r.Context(), &user, "auth.login_denied", map[string]any{
+				"reason": "no_access", "method": "oidc", "roles_received": len(roles), "roles": roles, "role_source": roleSource})
 			http.Redirect(w, r, loginPath+"?error=no_access", http.StatusSeeOther)
 			return
 		}
