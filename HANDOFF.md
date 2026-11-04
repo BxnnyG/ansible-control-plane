@@ -18,7 +18,7 @@
 - Checkmk 2.5 reachable (site/user in docs/local).
 
 ## Open / Next step
-- M0, M1, M2 merged, tagged (`m0`, `m1`, `m2`), pushed. M2 was squash-merged (branch history contained an internal hostname). Live stack runs M2 (DB at migration 5); OIDC not yet configured in .env (needs client ID), break-glass admin not yet created. Next: M3 on `feat/m3-projects-inventory`.
+- M0, M1, M2 merged, tagged (`m0`, `m1`, `m2`), pushed. M2 was squash-merged (branch history contained an internal hostname). Live stack runs M2 (DB at migration 5); OIDC configured and verified live (SSO login -> IdP membership admin), break-glass admin created and verified. Next: M3 on `feat/m3-projects-inventory`.
 - Live instance runs from this repo: the internal host (see docs/local/; 443, own TLS cert), HTTP 8080 redirects; Semaphore keeps port 80 until cutover.
 - M2 done: `internal/secrets` (envelope encryption, local provider, masked Value) – d2ee31d. Master key wired (ACP_MASTER_KEY_FILE default /run/secrets/master_key, env fallback ACP_MASTER_KEY, `serve` fails fast); `acp admin rotate-master-key --new-key-file` re-wraps secrets + TOTP envelopes in one tx.
 - M2 done: DB schema 00002_auth_core (users, workspaces, memberships+scopes, sessions, secrets, append-only audit_log) + sqlc (internal/db/queries, dbgen) – 8f5ff15..14d25d6. DB tests need ACP_TEST_DATABASE_URL (`make test-db` runs them against a throwaway Postgres). TOTP secret stored as envelope JSON on users row.
@@ -28,6 +28,7 @@
 - M2 done: `internal/policy` (permission matrix, scope resolver, `Authorizer.Handle/Require`, route-declaration test), migration 00004 (`memberships.source`), `auth.IdPRoleSyncer` (acp-* roles -> `default` workspace, login rejected with `/login?error=no_access`), GET /api/v1/workspaces[/{workspace}], extended /api/v1/me. Details in ADR-0007. Open: M3 inventory-backed ScopeResolver, membership-management API using `policy.CanAssignRole`, /login UI error code `no_access`.
 - M2 done: /login (SSO + break-glass, ?error= codes, safe return_to), authenticated shell (workspace switcher, logout), first-run setup wizard (`/setup`, migration 00005, GET/PUT /api/v1/workspaces/{ws}/setup, POST .../setup/complete, public GET /api/auth/config). Open: OpenAPI-generated TS types (api.ts is hand-written), browser/e2e check against the live stack, remaining M2 sub-tasks (secrets store API, membership management UI).
 - M2 small items closed: `make test-db`, session cleanup job (15m, serve), setup audit detached from request ctx, `acp admin set-breakglass-password`. After a key rotation: swap the master key file and restart.
+- Fix merged (`fix/oidc-role-claims`): OIDC roles fall back to UserInfo and Zitadel project-specific claims; callback logs claim key names/role source; login_denied audit has roles_received/roles/role_source. Zitadel needs: project 'assert roles', app 'roles inside ID token', scope urn:zitadel:iam:org:project:roles (ACP_OIDC_SCOPES must still include openid).
 - TLS chain: server cert served without intermediate; need intermediate + root CA cert (public) from user to serve full chain / trust in worker.
 
 ## Decisions (with short rationale)
