@@ -223,10 +223,10 @@ Stack decisions are recorded in `docs/adr/`.
 | Milestone | Content |
 |---|---|
 | M0 ✅ | Git init, orchestrator setup, discovery |
-| M1 | This plan, ADRs, license, repo skeleton, `.gitignore` + gitleaks hook, compose stack (hello-world app/worker/postgres), CI (lint, test, secret scan) |
-| M2 | Auth (OIDC + break-glass), setup wizard (SETUP-1/3/4), workspaces, roles + scopes, secrets store, audit |
-| M3 | Git projects, inventories (DB + Git-synced), vault integration, surveys from `argument_specs` |
-| M4 | Worker, templates, live logs, run history, per-host results, schedules, webhooks |
+| M1 ✅ | This plan, ADRs, license, repo skeleton, `.gitignore` + gitleaks hook, compose stack (hello-world app/worker/postgres), CI (lint, test, secret scan) |
+| M2 ✅ | Auth (OIDC + break-glass), setup wizard (SETUP-1/3/4), workspaces, roles + scopes, secrets store, audit |
+| M3 ✅ | Git projects, inventories (DB + Git-synced), vault integration, surveys from `argument_specs` (GIT-4 requirements install moved to M4) |
+| M4 | Worker, templates, `requirements.yml` install (GIT-4), live logs, run history, per-host results, schedules, webhooks |
 | M5 | Connector framework, OPNsense (Kea/dnsmasq/ISC), Proxmox VE, host merge, conflicts, group rules |
 | M6 | NetBox, monitoring adapters (Checkmk first), fleet view, unmanaged list, remediation |
 | M7 | Semaphore migration: dry run → import → comparison → cutover |
