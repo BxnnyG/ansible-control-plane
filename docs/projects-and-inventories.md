@@ -63,6 +63,19 @@ The checkout is a disposable cache under `ACP_DATA_DIR/projects/<id>`
   (default `acp/<inventory-slug>`). Import reads the file from the latest
   synced revision; edits are committed back.
 
+### Syncing from the host
+
+Projects can be listed and synced without the UI (inside the app container):
+
+```sh
+docker compose exec app acp admin project list --workspace <ws>
+docker compose exec app acp admin project sync --workspace <ws> --project <slug|id>
+```
+
+The sync uses the same service as the UI (per-project lock, revision, scan),
+is recorded with trigger `manual`, audited as actor `cli`, and prints sha,
+revision id and scan counts. Failures exit non-zero with a redacted error.
+
 ### Import
 
 UI: inventory → *Import* (project + path from the latest scan). CLI (inside the

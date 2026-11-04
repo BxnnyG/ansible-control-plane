@@ -38,10 +38,19 @@ The UI is then available on `http://<host>:8080` (configurable in `.env`).
 Operator tasks run inside the app container (it has the data volume and master key):
 
 ```sh
+docker compose exec app acp admin project list --workspace default
+docker compose exec app acp admin project sync --workspace default --project <slug|id>
 docker compose exec app acp admin inventory list --workspace default
 docker compose exec app acp admin inventory import --workspace default \
   --project <slug|id> --path inventories/hosts.yml --name "Lab" [--mode git|db] [--write-branch acp/lab]
 ```
+
+`project list` prints id, slug, URL, ref, last sync status/sha/time and interval.
+`project sync` runs the same sync as the UI (per-project lock, revision
+recording, scan; recorded with trigger `manual`, audited as actor `cli`) and
+prints slug, status, sha, revision id and scan counts (playbooks, roles,
+inventories, vars files, vault files, warnings). On failure it exits non-zero
+with the redacted error. Credentials are never printed.
 
 `import` creates the inventory if no inventory with that name or slug exists
 (otherwise it re-imports into it when mode, project and path match), imports
