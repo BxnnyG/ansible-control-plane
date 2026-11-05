@@ -199,7 +199,12 @@
                 <a class="text-accent hover:underline" href="/runs/{r.id}">{r.template_name}</a>
                 <div class="font-mono text-xs text-muted">{r.params.playbook}</div>
               </td>
-              <td class={td}>{r.trigger}</td>
+              <td class={td}>
+                {r.trigger}
+                {#if r.triggered_by_name}<div class="text-xs text-muted">
+                    {r.triggered_by_name}
+                  </div>{/if}
+              </td>
               <td class={td}>
                 {(r.params.hosts ?? []).length}
                 {#if r.hosts_failed + r.hosts_unreachable > 0}

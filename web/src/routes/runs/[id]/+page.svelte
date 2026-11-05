@@ -2,7 +2,7 @@
   import { page } from '$app/state';
   import { api, type RunDetail, type RunStatusEvent } from '$lib/api';
   import { describeError } from '$lib/errors';
-  import { formatDuration, isFinal } from '$lib/runs';
+  import { formatDuration, isFinal, triggeredByLabel } from '$lib/runs';
   import { session } from '$lib/session.svelte';
   import { btnDanger, card, fmtDate } from '$lib/ui';
   import FormError from '$lib/components/FormError.svelte';
@@ -58,15 +58,7 @@
     }
   }
 
-  const who = $derived(
-    !run?.triggered_by
-      ? run?.trigger === 'manual' || run?.trigger === 'api'
-        ? 'unknown'
-        : '-'
-      : run.triggered_by === session.me?.id
-        ? 'you'
-        : run.triggered_by.slice(0, 8),
-  );
+  const who = $derived(run ? triggeredByLabel(run, session.me?.id) : '-');
 </script>
 
 <svelte:head><title>Run - Ansible Control Plane</title></svelte:head>

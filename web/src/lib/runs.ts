@@ -95,3 +95,10 @@ export function statusClass(status: RunStatus): string {
       return 'bg-surface-2 text-muted';
   }
 }
+
+/** Who started a run: "you", the user's name, or a dash for unattended triggers. */
+export function triggeredByLabel(run: Run, meId: string | undefined): string {
+  if (!run.triggered_by) return run.trigger === 'manual' || run.trigger === 'api' ? 'unknown' : '-';
+  if (run.triggered_by === meId) return 'you';
+  return run.triggered_by_name ?? 'unknown user';
+}

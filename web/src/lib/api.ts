@@ -427,6 +427,14 @@ export interface RunParams {
   verbosity: number;
 }
 
+export interface RunPreview {
+  host_count: number;
+  /** First 50 host names. */
+  hosts: string[];
+  truncated: boolean;
+  all_in_scope: boolean;
+}
+
 export interface Run {
   id: string;
   template_id: string | null;
@@ -436,6 +444,8 @@ export interface Run {
   status: RunStatus;
   trigger: RunTrigger;
   triggered_by: string | null;
+  /** Display name (or email) of the user; null for schedule/webhook runs without a user. */
+  triggered_by_name: string | null;
   schedule_id: string | null;
   params: RunParams;
   created_at: string;
@@ -675,6 +685,8 @@ export const api = {
     remove: (ws: string, id: string) => request<void>('DELETE', templatesPath(ws, id)),
     start: (ws: string, id: string, ov: RunOverrides) =>
       request<Run>('POST', templatesPath(ws, id, 'runs'), ov),
+    previewRun: (ws: string, id: string, ov: RunOverrides) =>
+      request<RunPreview>('POST', templatesPath(ws, id, 'runs/preview'), ov),
     webhook: (ws: string, id: string) =>
       request<TemplateWebhook>('GET', templatesPath(ws, id, 'webhook')),
     rotateWebhook: (ws: string, id: string) =>

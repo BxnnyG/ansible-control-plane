@@ -7,6 +7,7 @@ import {
   isFinal,
   isUuid,
   matchesFilter,
+  triggeredByLabel,
 } from './runs';
 
 function run(id: string, created: string, over: Partial<Run> = {}): Run {
@@ -19,6 +20,7 @@ function run(id: string, created: string, over: Partial<Run> = {}): Run {
     status: 'running',
     trigger: 'manual',
     triggered_by: 'u1',
+    triggered_by_name: 'User One',
     schedule_id: null,
     params: { hosts: ['h1'] } as Run['params'],
     created_at: created,
@@ -90,5 +92,24 @@ describe('helpers', () => {
     expect(isFinal('lost')).toBe(true);
     expect(isUuid('7d444840-9dc0-11d1-b245-5ffdce74fad2')).toBe(true);
     expect(isUuid('nope')).toBe(false);
+  });
+});
+
+describe('triggeredByLabel', () => {
+  it('prefers you, then the name, never the raw uuid', () => {
+    expect(triggeredByLabel(run('x', '2026-01-01T00:00:00Z', {}), 'u1')).toBe('you');
+    expect(triggeredByLabel(run('x', '2026-01-01T00:00:00Z', {}), 'u2')).toBe('User One');
+    expect(
+      triggeredByLabel(run('x', '2026-01-01T00:00:00Z', { triggered_by_name: null }), 'u2'),
+    ).toBe('unknown user');
+    expect(
+      triggeredByLabel(
+        run('x', '2026-01-01T00:00:00Z', { triggered_by: null, trigger: 'schedule' }),
+        'u2',
+      ),
+    ).toBe('-');
+    expect(triggeredByLabel(run('x', '2026-01-01T00:00:00Z', { triggered_by: null }), 'u2')).toBe(
+      'unknown',
+    );
   });
 });

@@ -7,7 +7,7 @@ Implements the user-facing part of ADR-0016 (RUN-1, RUN-2, RUN-5, RUN-7). All ro
 |-------|------------|
 | `GET templates`, `GET templates/{id}` | `template.read` |
 | `POST templates`, `PUT/DELETE templates/{id}` | `template.write` (unscoped memberships only) |
-| `POST templates/{id}/runs` | `run.execute` |
+| `POST templates/{id}/runs`, `POST templates/{id}/runs/preview` | `run.execute` |
 | `GET runs` (filters: `template`, `status`, `trigger`, `user`, `host`, `cursor`, `limit`), `GET runs/{id}` | `run.read` |
 | `POST runs/{id}/cancel` | `run.cancel` |
 
@@ -34,6 +34,17 @@ groups, wildcards, `:`/`,` union, `:&` intersection, `:!` exclusion) and authori
 with `Authorizer.AuthorizeHosts` (403 when outside the caller's scope, 422 when the limit matches no
 host). The run row stores the full parameter snapshot (`runs.params`) so later template edits do not
 affect queued runs. Values of survey fields flagged `secret` are masked in every API response.
+
+Every run response (list, detail, start, cancel, the `runs/events` payload) carries `triggered_by_name`: the
+display name of the user (email or username as fallback), or `null` for schedule and webhook runs without a
+user. The `user` filter still takes the user id.
+
+### Preview
+
+`POST templates/{id}/runs/preview` takes the same body as start and runs the same validation (allowed
+overrides, survey, limit pattern, host scope authorization) but creates no run and writes no audit entry.
+The response has `host_count`, `hosts` (the first 50 names), `truncated` and `all_in_scope` (always `true`:
+a host set outside the caller's scope is rejected with 403, a limit matching nothing with 422, as in start).
 
 Scoped memberships only see runs whose whole host set lies in their scope (others are 404).
 
@@ -198,9 +209,9 @@ Example (generic scheme):
 
 - `/templates`: list and create; `/templates/{id}`: details, edit, delete, run dialog, recent runs, schedules
   and webhook (secret shown once). The run dialog offers only the overrides the template allows and renders the
-  template survey (secret fields as password inputs). The effective host count is not shown before the start
-  because the API has no dry-resolve endpoint; it appears on the run page.
-- `/runs`: history with filters (template, status, trigger, user id, host), cursor pagination and live
+  template survey (secret fields as password inputs). The dialog calls the preview endpoint
+  (debounced on limit changes) and shows the effective host count and the first host names.
+- `/runs`: history with filters (template, status, trigger, user id with a "Me" shortcut, host) and the name of the user who started a run, cursor pagination and live
   updates through `runs/events` (reload after a reconnect). `/runs/{id}`: status header, cancel, live log
   (SSE, ANSI rendered as escaped text segments, search, auto-scroll, download) and per-host results.
 - Schedule overrides are not editable in the UI yet; existing overrides are kept on edit.

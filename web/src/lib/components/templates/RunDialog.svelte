@@ -1,7 +1,9 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { api, type Template } from '$lib/api';
   import { describeError } from '$lib/errors';
+  import { createPreviewScheduler, previewSummary, type PreviewState } from '$lib/runPreview';
   import { buildStartRequest, initialStartForm } from '$lib/runStart';
   import { surveyToFormFields } from '$lib/survey';
   import { surveyFields } from '$lib/templates';
@@ -26,6 +28,26 @@
       template.allow_diff_override ||
       template.allow_verbosity_override,
   );
+
+  let preview = $state<PreviewState>({ kind: 'idle' });
+  const scheduler = createPreviewScheduler(
+    async () => {
+      const built = buildStartRequest(template, fields, form);
+      if (built.errors.length > 0) throw new Error(built.errors[0]);
+      return api.templates.previewRun(ws, template.id, built.overrides);
+    },
+    (s) => (preview = s),
+    describeError,
+  );
+  onDestroy(() => scheduler.cancel());
+  // Re-run the preview whenever the limit changes (also once on open).
+  let lastLimit: string | undefined;
+  $effect(() => {
+    const l = form.limit;
+    if (l === lastLimit) return;
+    lastLimit = l;
+    scheduler.request();
+  });
 
   async function submit(e: SubmitEvent) {
     e.preventDefault();
@@ -71,6 +93,25 @@
           <p class="text-xs text-muted">The run fails if the limit matches no host.</p>
         </div>
       {/if}
+      <div id="run-preview" class="text-sm" aria-live="polite">
+        {#if preview.kind === 'loading'}
+          <p class="text-muted">Checking hosts...</p>
+        {:else if preview.kind === 'ok'}
+          <p>
+            <span class="font-medium">{previewSummary(preview.preview)}</span>
+            {#if preview.preview.all_in_scope}<span class="text-muted">
+                (all in your scope)</span
+              >{/if}
+          </p>
+          {#if preview.preview.hosts.length > 0}
+            <p class="font-mono text-xs break-words text-muted">
+              {preview.preview.hosts.join(', ')}{preview.preview.truncated ? ', ...' : ''}
+            </p>
+          {/if}
+        {:else if preview.kind === 'error'}
+          <p class="text-red-600 dark:text-red-400">{preview.message}</p>
+        {/if}
+      </div>
       {#if template.allow_tags_override}
         <div class="grid gap-3 sm:grid-cols-2">
           <div>
