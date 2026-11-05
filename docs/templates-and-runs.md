@@ -135,3 +135,61 @@ inventory and templates via SQL, syncs the project with `acp admin project sync`
 successful run (status, host summary, log, changed tasks, run directory removed) and a cancelled run. It
 does not exercise Galaxy installs (needs internet) or credentials; those are covered by unit tests.
 `KEEP=1` leaves the stack up for debugging. The live stack is never touched.
+
+## Schedules (RUN-6)
+
+A template can have any number of cron schedules. Endpoints under `/api/v1/workspaces/{ws}/`:
+
+- `GET|POST templates/{id}/schedules` – list / create (`schedule.read` / `schedule.write`).
+- `GET|PUT|DELETE schedules/{id}` – read / change / delete. PUT is partial: omitted fields keep their value;
+  every change recomputes `next_run_at` from now.
+- `GET schedules/preview?cron=&tz=&n=5` – the next `n` (1-20) run times of an expression without saving it.
+
+Fields: `name`, `cron` (five fields `minute hour day-of-month month day-of-week`, lists, ranges, `*/n`,
+month and weekday names, `@hourly`/`@daily`/`@weekly`/`@monthly`/`@yearly`), `timezone` (IANA name, default
+`UTC`; `Local` is rejected; zone data is embedded in the binary), `enabled`, `missed_policy` and `overrides`
+(same shape and rules as a manual start; checked on save, so overrides the template does not allow are 422).
+Like Vixie cron, a day matches when either restricted day field (day-of-month or day-of-week) matches.
+
+Daylight saving: wall-clock times that do not exist (spring-forward gap) are skipped for that day; a time that
+occurs twice (fall-back) fires once, at its first occurrence. Pick a time outside 02:00-03:00 if a daily job
+must never be skipped.
+
+Scheduler: the app polls every 30 seconds, claims due schedules with `FOR UPDATE SKIP LOCKED` in one
+transaction, enqueues the run with `trigger=schedule`, `triggered_by` = the schedule's creator (the creator
+being deleted leaves it empty) and advances `next_run_at`, all before commit, so several app instances never
+start the same slot. Scheduled runs use workspace authority (no per-host scope check, as the creator needed
+`schedule.write`, which scoped memberships do not get). Missed runs (the app was down; a due time more than
+90 seconds in the past): `skip` (default) advances to the next future slot without running, `run_once`
+starts one run and then advances, so any number of missed slots collapse into one run. A schedule whose
+enqueue fails (playbook gone, project unsynced, limit matches nothing) stays enabled, is advanced and audited
+as `schedule.run_failed`; if the template no longer exists it is disabled (`schedule.disabled`). Disabled
+schedules have no `next_run_at`. Audit actions: `schedule.create|update|delete` (user), `schedule.run`,
+`schedule.run_skipped`, `schedule.run_failed`, `schedule.disabled` (actor `schedule`).
+
+## Template webhooks
+
+`POST templates/{id}/webhook` (`template.write`, workspace-level memberships only) enables the webhook and
+generates a new secret; calling it again rotates the secret. The secret is stored through the secrets
+package and shown **once** in the response (`secret`), together with `path` and, when `ACP_PUBLIC_URL` is
+set, the absolute `url`. `GET` reports `enabled`/`has_secret` only; `DELETE` disables the hook and deletes
+the secret. Audit: `template.webhook_set`, `template.webhook_delete`.
+
+The public endpoint is `POST /api/hooks/templates/{id}`; there is no session or CSRF. It accepts any
+signature scheme of the project hooks, all HMAC-SHA256 over the raw body with the secret (GitLab: the
+token compared as is): `X-ACP-Signature: sha256=<hex>`, `X-Gitea-Signature`, `X-Hub-Signature-256`,
+`X-Gitlab-Token`. Unknown template, disabled hook and bad signature are indistinguishable (404 `not found`),
+bodies are limited to 1 MiB and calls are limited to 60 per minute per peer IP, one bucket shared with the
+project hooks (behind a reverse proxy all callers share one bucket). On success the response is 202 with
+the `run_id`; the run has `trigger=webhook` and no `triggered_by`, and runs with workspace authority.
+Only a body signed with `X-ACP-Signature` may carry JSON run overrides (the fields of a manual start); they
+are subject to the template's `allow_*_override` flags. Bodies of Git providers are push payloads and are
+ignored. An authenticated call that cannot start a run answers 422 (invalid overrides, empty limit) or 409
+(project not synced). Each call is audited as `template.webhook_run` or `template.webhook_failed` (actor
+`webhook:<scheme>`). Rejected calls are not audited.
+
+Example (generic scheme):
+
+    body='{"limit":"web"}'
+    sig=$(printf '%s' "$body" | openssl dgst -sha256 -hmac "$SECRET" -hex | sed 's/^.* //')
+    curl -X POST -H "X-ACP-Signature: sha256=$sig" -d "$body" "$ACP_PUBLIC_URL/api/hooks/templates/$TEMPLATE_ID"

@@ -4,7 +4,7 @@
 set -eu
 GO_IMAGE="${GO_IMAGE:-golang:1.27.2-alpine3.24}"
 PG_IMAGE="${PG_IMAGE:-postgres:18.6-alpine}"
-PACKAGES="${TEST_DB_PACKAGES:-db auth admin server projects inventory runs workerapi runstream}"
+PACKAGES="${TEST_DB_PACKAGES:-db auth admin server projects inventory runs workerapi runstream schedules}"
 root="$(cd "$(dirname "$0")/.." && pwd)"
 suffix="$$"
 net="acp-testdb-net-$suffix"
@@ -37,7 +37,7 @@ for p in $PACKAGES; do
   docker run --rm --network "$net" -v "$root:/src" -w /src -e GOFLAGS=-buildvcs=false \
     -v acp-gocache:/go \
     -e ACP_TEST_DATABASE_URL="postgres://postgres:$pw@$pg:5432/$dbname?sslmode=disable" \
-    "$GO_IMAGE" sh -c 'apk add --no-cache git openssh-client-default >/dev/null && go test -count=1 ./internal/'"$p"'/...' >"$out" 2>&1 || status=1
+    "$GO_IMAGE" sh -c 'apk add --no-cache git openssh-client-default >/dev/null && go test -count=1 -timeout 150s ./internal/'"$p"'/...' >"$out" 2>&1 || status=1
   tail -n 30 "$out"
 done
 exit "$status"
