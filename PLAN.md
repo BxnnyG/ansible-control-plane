@@ -247,6 +247,6 @@ Stack decisions are recorded in `docs/adr/`.
 
 ## 13. Open questions
 
-1. Ansible version for the worker image: current stable vs. the version Semaphore uses today (decided in M4 after a compatibility check).
+1. Ansible version for the worker image: answered, full community `ansible` package 14.6.0 (ansible-core 2.21.6), pinned via build arg.
 2. Is the second Semaphore repository (local path) still needed, or is the Git repository the only source?
 3. Notification channels for failed runs (email, webhook, chat).

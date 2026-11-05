@@ -74,7 +74,7 @@ Self-hosted web platform to run, organize and monitor Ansible; replacement for t
 
 ## Known pitfalls
 
-- Pinned versions: Go 1.27.2, Node 24 (Docker build) / 22 (lockfile created with), Python 3.14, ansible-core 2.21.5, PostgreSQL 18.6, gitleaks 8.21.2.
+- Pinned versions: Go 1.27.2, Node 24 (Docker build) / 22 (lockfile created with), Python 3.14, ansible 14.6.0 (full community package, bundles ansible-core 2.21.6), PostgreSQL 18.6, gitleaks 8.21.2.
 - Compose file secrets are bind mounts that keep host ownership: private keys read by the app (`secrets/master.key`, TLS key) must be owned by uid 10001 (`acp`), mode 600. `make init` does this for the master key.
 - `ACP_PUBLIC_URL` is the only source for redirect targets (HTTPS redirect, OIDC) – never derive hosts from request headers.
 - A goose "relation goose_db_version does not exist" error in the Postgres log on first start is expected.
