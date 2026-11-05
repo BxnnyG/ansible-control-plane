@@ -8,7 +8,7 @@ Ansible runs execute untrusted-ish code (playbooks, collections from Git) and ne
 
 ## Decision
 - A separate `worker` container with ansible-core and common collections bundled; a Go supervisor (`acp worker`) runs `ansible-playbook` as an unprivileged subprocess.
-- The worker **pulls** jobs from the app over an internal, token-authenticated API. It receives a run bundle (repo revision, rendered inventory, credentials decrypted just in time) and streams log chunks and per-host events back.
+- The worker **pulls** jobs from the app over an internal, token-authenticated API. It receives a run bundle (repo revision, rendered inventory, credentials decrypted just in time) and streams log chunks and per-host events back. Network: the worker joins the `internal` network (app API) plus a dedicated `egress` network that no other service uses, so it can reach managed hosts while app and postgres stay without outbound routes.
 - The worker has **no DB credentials, no master key, no Docker socket**. Read-only rootfs, `cap_drop: [ALL]`, `no-new-privileges`, tmpfs for the run directory, resource limits.
 - A run is cancelled via the job API (SIGTERM, then SIGKILL).
 

@@ -23,6 +23,6 @@ M4 implements RUN-1..7 and GIT-4 on top of ADR-0003 (Postgres as queue), ADR-000
 - **Retention (RUN-5):** log chunks older than `ACP_RUN_LOG_RETENTION_DAYS` (default 90) are deleted; run rows and host results are kept.
 
 ## Consequences
-- The worker only needs network access to the app and managed hosts; a compromised worker sees secrets only for runs it currently holds.
+- The worker only needs network access to the app and managed hosts; a compromised worker sees secrets only for runs it currently holds. In compose the worker is the only service on the non-internal `egress` network (outbound SSH to managed hosts); it reaches the app over the `internal` network, which has no external route.
 - The full `ansible` package makes the worker image large (~1 GB); builds run with memory limits.
 - Notifications (RUN-8) are out of scope for M4.

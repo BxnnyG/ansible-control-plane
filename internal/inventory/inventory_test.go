@@ -283,21 +283,21 @@ all:
 	if got, want := js(hv["lone"]), `{"a":"all","b":"all","c":"all"}`; got != want {
 		t.Errorf("lone hostvars=%s want %s", got, want)
 	}
-	if got, want := js(r["all"]), `{"children":["other","parent","ungrouped"]}`; got != want {
+	if got, want := js(r["all"]), `{"children":["other","parent","ungrouped"],"hosts":[],"vars":{}}`; got != want {
 		t.Errorf("all=%s want %s", got, want)
 	}
-	if got, want := js(r["ungrouped"]), `{"hosts":["lone"]}`; got != want {
+	if got, want := js(r["ungrouped"]), `{"children":[],"hosts":["lone"],"vars":{}}`; got != want {
 		t.Errorf("ungrouped=%s want %s", got, want)
 	}
-	if got, want := js(r["child"]), `{"hosts":["h1","h2"]}`; got != want {
+	if got, want := js(r["child"]), `{"children":[],"hosts":["h1","h2"],"vars":{}}`; got != want {
 		t.Errorf("child=%s want %s", got, want)
 	}
-	if got, want := js(r["parent"]), `{"children":["child"]}`; got != want {
+	if got, want := js(r["parent"]), `{"children":["child"],"hosts":[],"vars":{}}`; got != want {
 		t.Errorf("parent=%s want %s", got, want)
 	}
 
 	ex := Render(d, RenderOptions{Export: true})
-	if got, want := js(ex["child"]), `{"hosts":["h1","h2"],"vars":{"c":"child"}}`; got != want {
+	if got, want := js(ex["child"]), `{"children":[],"hosts":["h1","h2"],"vars":{"c":"child"}}`; got != want {
 		t.Errorf("export child=%s want %s", got, want)
 	}
 	exHost := ex["_meta"].(map[string]any)["hostvars"].(map[string]any)["h1"]
@@ -406,5 +406,44 @@ func TestApplyVarsDirsDottedExtensionlessNames(t *testing.T) {
 	src, err := collectVarsSources(d, fsys, "inv")
 	if err != nil || len(src) != 2 {
 		t.Fatalf("sources: %v %v", src, err)
+	}
+}
+
+// TestRenderGroupShape guards the Ansible script inventory format: every group
+// is an object with list-valued hosts/children and a vars object, even when
+// empty (ansible-core 2.21 warns about "malformed group" otherwise).
+func TestRenderGroupShape(t *testing.T) {
+	for name, yml := range map[string]string{
+		"empty":   "all:\n  children:\n    g: {}\n",
+		"grouped": "all:\n  children:\n    g:\n      hosts: {h: }\n",
+		"mixed":   "all:\n  hosts:\n    lone: {}\n  children:\n    g:\n      hosts: {h: }\n",
+	} {
+		d, err := ParseYAML([]byte(yml))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, o := range []RenderOptions{{}, {Export: true}, {MaskVault: true}} {
+			var back map[string]any
+			if err := json.Unmarshal([]byte(js(Render(d, o))), &back); err != nil {
+				t.Fatal(err)
+			}
+			for _, g := range []string{"all", "ungrouped", "g"} {
+				obj, ok := back[g].(map[string]any)
+				if !ok {
+					t.Fatalf("%s %+v: group %s is %T", name, o, g, back[g])
+				}
+				for _, k := range []string{"hosts", "children"} {
+					if _, ok := obj[k].([]any); !ok {
+						t.Errorf("%s: %s.%s is %T, want list", name, g, k, obj[k])
+					}
+				}
+				if _, ok := obj["vars"].(map[string]any); !ok {
+					t.Errorf("%s: %s.vars is %T, want object", name, g, obj["vars"])
+				}
+			}
+			if _, ok := back["_meta"].(map[string]any)["hostvars"].(map[string]any); !ok {
+				t.Errorf("%s: _meta.hostvars missing", name)
+			}
+		}
 	}
 }

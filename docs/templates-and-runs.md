@@ -51,7 +51,7 @@ Scoped memberships only see runs whose whole host set lies in their scope (other
 ## Run execution (operator view)
 
 Runs are executed by the separate `worker` container (ADR-0004, ADR-0016). The worker holds no database
-credentials and no master key; it talks to the app over the internal compose network only.
+credentials and no master key; it talks to the app over the internal compose network only. For SSH to managed hosts it additionally joins the dedicated `egress` network (the only service that does).
 
 ### Worker token
 

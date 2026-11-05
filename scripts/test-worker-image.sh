@@ -20,6 +20,13 @@ assert "TOPSECRETVALUE" not in open(os.environ["ACP_EVENTS_FILE"]).read(), "leak
 assert ev[-1]["event"] == "stats" and ev[-1]["hosts"]["localhost"]["ok"] >= 2
 print("events ok:", len(ev))
 PY
+# Bundle-style script inventory (internal/inventory Render shape) must parse without warnings.
+cat >/tmp/inv.json <<JSON
+{"all":{"hosts":[],"children":["g","ungrouped"],"vars":{}},"g":{"hosts":["h1"],"children":[],"vars":{}},"ungrouped":{"hosts":["lone"],"children":[],"vars":{}},"_meta":{"hostvars":{"h1":{"ansible_connection":"local"},"lone":{"ansible_connection":"local"}}}}
+JSON
+printf "#!/bin/sh\nexec cat /tmp/inv.json\n" >/tmp/inv.sh && chmod 700 /tmp/inv.sh
+ansible-inventory -i /tmp/inv.sh --list >/tmp/inv.out 2>/tmp/inv.err || { tail -n 10 /tmp/inv.err; exit 1; }
+! grep -qi "warning" /tmp/inv.err || { head -n 5 /tmp/inv.err; exit 1; }
 ansible --version | head -n 1
 pip show ansible | grep -i ^version
 '

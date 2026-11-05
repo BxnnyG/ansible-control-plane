@@ -92,7 +92,7 @@ services:
       - /home/acp:size=64m,uid=10001,gid=10001,mode=0700
     volumes:
       - acpworker-cache:/var/cache/acp
-    networks: [internal]
+    networks: [internal, egress]   # egress: only the worker may reach managed hosts
     mem_limit: 512m
     pids_limit: 256
     healthcheck:
@@ -105,6 +105,7 @@ services:
 networks:
   internal:
     internal: true
+  egress: {}   # outbound access for the worker only (SSH to managed hosts)
 
 volumes:
   pgdata:

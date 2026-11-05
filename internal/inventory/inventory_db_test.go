@@ -233,7 +233,7 @@ func TestGroupsHostsAndRender(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := js(r)
-	for _, want := range []string{`"web01.example.test":{"ansible_host":"192.0.2.10","secret":"<vault>","tier":"leaf"}`, `"parent":{"children":["child"]}`, `"ungrouped":{"hosts":["loner.example.test"]}`} {
+	for _, want := range []string{`"web01.example.test":{"ansible_host":"192.0.2.10","secret":"<vault>","tier":"leaf"}`, `"parent":{"children":["child"],"hosts":[],"vars":{}}`, `"ungrouped":{"children":[],"hosts":["loner.example.test"],"vars":{}}`} {
 		if !strings.Contains(out, want) {
 			t.Errorf("render missing %s in %s", want, out)
 		}
