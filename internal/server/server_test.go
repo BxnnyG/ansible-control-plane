@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/go-chi/chi/v5"
 )
 
 type fakePing struct{ err error }
@@ -63,5 +65,24 @@ func TestRedirectUsesConfiguredHostOnly(t *testing.T) {
 	rec = get(h, "/healthz")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("healthz must not redirect, got %d", rec.Code)
+	}
+}
+
+func TestWorkerAPIMount(t *testing.T) {
+	log := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	// Without a handler the internal paths do not exist (and never fall through to the SPA).
+	if c := get(Router(log, fakePing{}, DefaultStatic()), "/api/internal/worker/claim").Code; c != http.StatusNotFound {
+		t.Errorf("unmounted worker API: %d", c)
+	}
+	inner := chi.NewRouter()
+	inner.Get("/claim", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTeapot) })
+	h := Router(log, fakePing{}, DefaultStatic(), WithWorkerAPI(inner))
+	if c := get(h, "/api/internal/worker/claim").Code; c != http.StatusTeapot {
+		t.Errorf("mounted worker API: %d", c)
+	}
+	// The worker reaches the app over plain HTTP even when users are redirected.
+	red := redirectExceptOps(h, "https://acp.example.com:8443")
+	if c := get(red, "/api/internal/worker/claim").Code; c != http.StatusTeapot {
+		t.Errorf("worker API redirected: %d", c)
 	}
 }

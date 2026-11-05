@@ -29,6 +29,7 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/vaultops"
 	"github.com/BxnnyG/ansible-control-plane/internal/version"
 	"github.com/BxnnyG/ansible-control-plane/internal/worker"
+	"github.com/BxnnyG/ansible-control-plane/internal/workerapi"
 )
 
 func main() {
@@ -103,7 +104,21 @@ func run(args []string) error {
 		vids := vaultids.New(q, sec)
 		vops := vaultops.New(prj, vids)
 		az := policy.New(q, policy.InventoryResolver{Source: invSvc}, svc.Require, log)
-		runSvc := runs.New(runs.Options{DB: pool, Graphs: invSvc, Authz: az})
+		runSvc := runs.New(runs.Options{DB: pool, Graphs: invSvc, Authz: az, Sealer: sp})
+		if cfg.WorkerTokenFile != "" {
+			token, err := workerapi.TokenFromFile(cfg.WorkerTokenFile, os.ReadFile)
+			if err != nil {
+				return fmt.Errorf("worker token (ACP_WORKER_TOKEN_FILE): %w", err)
+			}
+			wh := workerapi.New(workerapi.Options{Pool: pool, Token: token, Log: log, Builder: &workerapi.Builder{
+				Trees: prj, Inventories: invSvc, Secrets: sec, Vault: vids, Provider: sp,
+			}})
+			opts = append(opts, server.WithWorkerAPI(wh.Routes()))
+			go wh.RunMaintenance(ctx)
+			log.Info("worker API enabled")
+		} else {
+			log.Warn("worker API disabled: ACP_WORKER_TOKEN_FILE is not set; runs cannot execute")
+		}
 		opts = append(opts, server.WithAuth(svc), server.WithPolicy(az, q),
 			server.WithSecrets(sec), server.WithProjects(prj), server.WithPublicURL(cfg.PublicURL),
 			server.WithInventories(invSvc), server.WithVault(vids, vops), server.WithRuns(runSvc))
