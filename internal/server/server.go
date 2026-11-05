@@ -46,14 +46,8 @@ type routerOpts struct {
 	vaultIDs    VaultIdentitiesAPI
 	vaultOps    VaultOpsAPI
 	runs        RunsAPI
-	workerAPI   http.Handler
 	publicURL   string
 }
-
-// WithWorkerAPI mounts the internal worker API (bearer-token protected, not
-// part of the user permission model) at /api/internal/worker. A nil handler
-// leaves the paths unmounted (404).
-func WithWorkerAPI(h http.Handler) Option { return func(o *routerOpts) { o.workerAPI = h } }
 
 // WithAuth mounts the OIDC/session endpoints (/api/auth/*, /api/v1/me).
 func WithAuth(a *auth.Service) Option { return func(o *routerOpts) { o.auth = a } }
@@ -107,9 +101,6 @@ func Router(log *slog.Logger, db Pinger, static fs.FS, opts ...Option) http.Hand
 		if ro.vaultIDs != nil && ro.vaultOps != nil {
 			vaultRoutes(r, ro.az, ro.store, ro.vaultIDs, ro.vaultOps, log)
 		}
-	}
-	if ro.workerAPI != nil {
-		r.Mount("/api/internal/worker", ro.workerAPI)
 	}
 	// Unknown API paths must not fall through to the SPA.
 	r.HandleFunc("/api/*", func(w http.ResponseWriter, _ *http.Request) {
@@ -213,18 +204,13 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger, db Pinger, op
 	return nil
 }
 
-// redirectExceptOps keeps /healthz, /readyz, /metrics and the internal worker API on plain HTTP and
+// redirectExceptOps keeps /healthz, /readyz, /metrics on plain HTTP and
 // redirects everything else to the configured public HTTPS URL. The target
 // host never comes from the request, which prevents open redirects.
 func redirectExceptOps(next http.Handler, publicURL string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/healthz", "/readyz", "/metrics":
-			next.ServeHTTP(w, r)
-			return
-		}
-		// The worker talks plain HTTP over the internal compose network.
-		if strings.HasPrefix(r.URL.Path, "/api/internal/worker/") {
 			next.ServeHTTP(w, r)
 			return
 		}

@@ -20,7 +20,13 @@ type Config struct {
 	LogLevel    string
 	AppURL      string // worker: base URL of the app
 	WorkerAddr  string // worker: health listen address
-	WorkerPoll  time.Duration
+	// WorkerAPIAddr is the app's internal-only listener for the worker API
+	// (plain HTTP, never published, ADR-0016).
+	WorkerAPIAddr string
+	// RunLogRetentionDays deletes log chunks of finished runs older than this
+	// many days; 0 keeps them forever.
+	RunLogRetentionDays int
+	WorkerPoll          time.Duration
 	// WorkerTokenFile holds the shared bearer token of the internal worker API
 	// (app and worker). Empty on the app disables the API.
 	WorkerTokenFile   string
@@ -80,6 +86,7 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 		LogLevel:        strings.ToLower(get("LOG_LEVEL", "info")),
 		AppURL:          get("APP_URL", "http://app:8080"),
 		WorkerAddr:      get("WORKER_ADDR", ":8081"),
+		WorkerAPIAddr:   get("WORKER_API_ADDR", ":8082"),
 		MasterKeyFile:   keyFile,
 		WorkerTokenFile: get("WORKER_TOKEN_FILE", ""),
 		WorkerCacheDir:  get("WORKER_CACHE_DIR", "/var/cache/acp"),
@@ -100,6 +107,9 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 	}
 	if c.WorkerConcurrency, err = parseInt(get("WORKER_CONCURRENCY", "2"), 1, 16); err != nil {
 		return c, fmt.Errorf("ACP_WORKER_CONCURRENCY: %w", err)
+	}
+	if c.RunLogRetentionDays, err = parseInt(get("RUN_LOG_RETENTION_DAYS", "90"), 0, 36500); err != nil {
+		return c, fmt.Errorf("ACP_RUN_LOG_RETENTION_DAYS: %w", err)
 	}
 	if c.ShutdownGrace, err = parseDur(get("SHUTDOWN_GRACE", "15s")); err != nil {
 		return c, fmt.Errorf("ACP_SHUTDOWN_GRACE: %w", err)
@@ -172,7 +182,7 @@ func (c Config) validate() error {
 	if (c.TLSCertFile == "") != (c.TLSKeyFile == "") {
 		return fmt.Errorf("ACP_TLS_CERT_FILE and ACP_TLS_KEY_FILE must be set together")
 	}
-	for _, a := range []string{c.HTTPAddr, c.HTTPSAddr, c.WorkerAddr} {
+	for _, a := range []string{c.HTTPAddr, c.HTTPSAddr, c.WorkerAddr, c.WorkerAPIAddr} {
 		if i := strings.LastIndex(a, ":"); i < 0 {
 			return fmt.Errorf("invalid listen address %q", a)
 		} else if _, err := strconv.Atoi(a[i+1:]); err != nil {

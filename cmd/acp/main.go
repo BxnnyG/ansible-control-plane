@@ -87,6 +87,8 @@ func run(args []string) error {
 		return err
 	}
 	var opts []server.Option
+	serveCtx, cancelServe := context.WithCancelCause(ctx)
+	defer cancelServe(nil)
 	switch {
 	case cfg.AuthEnabled() && cfg.PublicURL != "":
 		svc, err := newAuth(cfg, log, pool, master)
@@ -113,7 +115,17 @@ func run(args []string) error {
 			wh := workerapi.New(workerapi.Options{Pool: pool, Token: token, Log: log, Builder: &workerapi.Builder{
 				Trees: prj, Inventories: invSvc, Secrets: sec, Vault: vids, Provider: sp,
 			}})
-			opts = append(opts, server.WithWorkerAPI(wh.Routes()))
+			werr := make(chan error, 1)
+			if err := server.StartWorkerAPI(serveCtx, cfg.WorkerAPIAddr, wh.Routes(), cfg.ShutdownGrace, log, werr); err != nil {
+				return err
+			}
+			go func() {
+				select {
+				case e := <-werr:
+					cancelServe(e)
+				case <-serveCtx.Done():
+				}
+			}()
 			go wh.RunMaintenance(ctx)
 			log.Info("worker API enabled")
 		} else {
@@ -130,7 +142,11 @@ func run(args []string) error {
 	default:
 		log.Warn("login disabled: OIDC not configured and ACP_BREAKGLASS_ENABLED=false")
 	}
-	return server.Run(ctx, cfg, log, pool, opts...)
+	err = server.Run(serveCtx, cfg, log, pool, opts...)
+	if c := context.Cause(serveCtx); err == nil && ctx.Err() == nil && c != nil {
+		err = c
+	}
+	return err
 }
 
 func newAuth(cfg config.Config, log *slog.Logger, pool *pgxpool.Pool, master []byte) (*auth.Service, error) {

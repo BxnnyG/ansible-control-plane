@@ -9,7 +9,7 @@ M4 implements RUN-1..7 and GIT-4 on top of ADR-0003 (Postgres as queue), ADR-000
 ## Decision
 - **Worker image:** the full community `ansible` package (pinned, current release) on the pinned Python, so existing playbooks find the same collections they had under Semaphore. Project `requirements.yml` (GIT-4) is installed by the worker on top, into a cache volume keyed by `sha256(requirements file)`; the cache holds no secrets.
 - **Queue:** `runs` rows move `queued → running → {succeeded, failed, cancelled, lost}`. Claiming uses `SELECT … FOR UPDATE SKIP LOCKED` and respects the per-template limit `max_concurrent` (default 1, RUN-7). Worker concurrency comes from `ACP_WORKER_CONCURRENCY` (default 2).
-- **Worker API** (`/api/internal/worker/*`, internal network only, bearer token from a Docker secret file `worker_token`, constant-time compare, never accepted on public routes):
+- **Worker API** (`/api/internal/worker/*`, served on a separate plain-HTTP listener `ACP_WORKER_API_ADDR` (default `:8082`) that is never published and exists only on the internal compose network; absent from the public app listeners; bearer token from a Docker secret file `worker_token`, constant-time compare, never accepted on public routes):
   - `POST claim` (long poll ≤ 25 s) → run id + lease;
   - `GET runs/{id}/bundle` → tar.gz with the project tree at the run's revision, rendered inventory (unmasked JSON), `extra_vars.json`, the command line and the credentials (SSH key, become password, vault passwords) decrypted just in time; served once per lease;
   - `POST runs/{id}/events` → batched log chunks (monotonic `seq`) and callback events;

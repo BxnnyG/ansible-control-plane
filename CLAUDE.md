@@ -44,7 +44,7 @@ Self-hosted web platform to run, organize and monitor Ansible; replacement for t
 
 ## Architecture (details: `PLAN.md` §9, `docs/adr/`)
 
-- `app`: Go binary (REST + SSE, OIDC, scheduler, connectors, Git ops), serves the embedded SvelteKit SPA, terminates TLS (ADR-0011).
+- `app`: Go binary (REST + SSE, OIDC, scheduler, connectors, Git ops), serves the embedded SvelteKit SPA, terminates TLS (ADR-0011). The worker API runs on a separate internal-only listener (`ACP_WORKER_API_ADDR`, `:8082`, never published, ADR-0016).
 - `worker`: separate hardened container, pulls jobs from the app API, runs `ansible-playbook` unprivileged; no DB access, no master key, no Docker socket (ADR-0004).
 - `postgres`: only state store and job queue (ADR-0003).
 

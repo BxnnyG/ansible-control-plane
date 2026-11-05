@@ -32,6 +32,7 @@ services:
         condition: service_started
     environment:
       ACP_HTTP_ADDR: ":8080"
+      ACP_WORKER_API_ADDR: ":8082"
       ACP_MASTER_KEY_FILE: /run/secrets/master_key
       ACP_WORKER_TOKEN_FILE: /run/secrets/worker_token
       ACP_DATA_DIR: /var/lib/acp
@@ -58,7 +59,7 @@ services:
       app:
         condition: service_healthy
     environment:
-      ACP_APP_URL: http://app:8080
+      ACP_APP_URL: http://app:8082
       ACP_WORKER_ADDR: ":8081"
       ACP_WORKER_CACHE_DIR: /var/cache/acp
       ACP_WORKER_TOKEN_FILE: /run/secrets/worker_token

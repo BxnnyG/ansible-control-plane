@@ -47,10 +47,14 @@ credentials and no master key; it talks to the app over the internal compose net
 App and worker share a bearer token, mounted as the Docker secret `worker_token` from
 `./secrets/worker.token` (`make init` creates it with uid 10001, mode 600; the app reads it through
 `ACP_WORKER_TOKEN_FILE`, the worker through the same variable). Without the token file the app does not
-mount the worker API at all (`/api/internal/worker/*` answers 404), and queued runs stay queued. The routes
-are not part of the user permission model (`/api/v1/...`); they accept only this token, compared in
-constant time. They are served over plain HTTP on the app port so the worker needs no certificates: do not
-publish `/api/internal/` through a reverse proxy.
+start the worker API at all, and queued runs stay queued. The routes are not part of the user permission
+model (`/api/v1/...`); they accept only this token, compared in constant time.
+
+The worker API has its own plain-HTTP listener (`ACP_WORKER_API_ADDR`, default `:8082`) that serves nothing
+but `/api/internal/worker/*`. The compose file does not publish this port and the worker reaches it as
+`http://app:8082` over the internal network, so the worker needs no certificates. The public listeners
+(`:8080` redirect, `:8443`) do not know these paths and answer 404 or redirect. Never publish port 8082 or
+route `/api/internal/` through a reverse proxy.
 
 ### Lifecycle
 

@@ -34,6 +34,18 @@ func TestLoad(t *testing.T) {
 				t.Errorf("got %+v", c)
 			}
 		}},
+		{"worker api and retention defaults", nil, false, func(t *testing.T, c Config) {
+			if c.WorkerAPIAddr != ":8082" || c.RunLogRetentionDays != 90 {
+				t.Errorf("got %+v", c)
+			}
+		}},
+		{"retention forever", map[string]string{"ACP_RUN_LOG_RETENTION_DAYS": "0"}, false, func(t *testing.T, c Config) {
+			if c.RunLogRetentionDays != 0 {
+				t.Errorf("got %d", c.RunLogRetentionDays)
+			}
+		}},
+		{"retention negative", map[string]string{"ACP_RUN_LOG_RETENTION_DAYS": "-1"}, true, nil},
+		{"worker api addr invalid", map[string]string{"ACP_WORKER_API_ADDR": "nope"}, true, nil},
 		{"worker concurrency zero", map[string]string{"ACP_WORKER_CONCURRENCY": "0"}, true, nil},
 		{"worker concurrency junk", map[string]string{"ACP_WORKER_CONCURRENCY": "x"}, true, nil},
 		{"master key file default", nil, false, func(t *testing.T, c Config) {

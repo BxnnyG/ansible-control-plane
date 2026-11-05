@@ -19,7 +19,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 docker network create "$net" >/dev/null
-docker run -d --name "$pg" --network "$net" -e POSTGRES_PASSWORD="$pw" "$PG_IMAGE" >/dev/null
+docker run -d --name "$pg" --network "$net" --tmpfs /var/lib/postgresql:size=512m -e POSTGRES_PASSWORD="$pw" "$PG_IMAGE" >/dev/null
 i=0
 until docker exec "$pg" pg_isready -U postgres -h 127.0.0.1 >/dev/null 2>&1; do
   i=$((i + 1))
