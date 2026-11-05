@@ -1,0 +1,17 @@
+- name: Worker image smoke test
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Ping
+      ansible.builtin.ping:
+    - name: Secret task
+      ansible.builtin.command: echo TOPSECRETVALUE
+      no_log: true
+    - name: Ignored failure
+      ansible.builtin.fail:
+      ignore_errors: true
+    - name: Skipped
+      ansible.builtin.debug:
+        msg: x
+      when: false
