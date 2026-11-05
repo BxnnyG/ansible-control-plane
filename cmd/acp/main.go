@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/BxnnyG/ansible-control-plane/internal/auth"
@@ -21,13 +22,17 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/inventory"
 	"github.com/BxnnyG/ansible-control-plane/internal/policy"
 	"github.com/BxnnyG/ansible-control-plane/internal/projects"
+	"github.com/BxnnyG/ansible-control-plane/internal/runs"
+	"github.com/BxnnyG/ansible-control-plane/internal/runstream"
 	"github.com/BxnnyG/ansible-control-plane/internal/scan"
+	"github.com/BxnnyG/ansible-control-plane/internal/schedules"
 	"github.com/BxnnyG/ansible-control-plane/internal/secrets"
 	"github.com/BxnnyG/ansible-control-plane/internal/server"
 	"github.com/BxnnyG/ansible-control-plane/internal/vaultids"
 	"github.com/BxnnyG/ansible-control-plane/internal/vaultops"
 	"github.com/BxnnyG/ansible-control-plane/internal/version"
 	"github.com/BxnnyG/ansible-control-plane/internal/worker"
+	"github.com/BxnnyG/ansible-control-plane/internal/workerapi"
 )
 
 func main() {
@@ -85,6 +90,8 @@ func run(args []string) error {
 		return err
 	}
 	var opts []server.Option
+	serveCtx, cancelServe := context.WithCancelCause(ctx)
+	defer cancelServe(nil)
 	switch {
 	case cfg.AuthEnabled() && cfg.PublicURL != "":
 		svc, err := newAuth(cfg, log, pool, master)
@@ -101,10 +108,42 @@ func run(args []string) error {
 		invSvc := inventory.New(inventory.Options{DB: pool, Checkouts: prj, Writer: prj})
 		vids := vaultids.New(q, sec)
 		vops := vaultops.New(prj, vids)
-		opts = append(opts, server.WithAuth(svc), server.WithPolicy(policy.New(q, policy.InventoryResolver{Source: invSvc}, svc.Require, log), q),
+		az := policy.New(q, policy.InventoryResolver{Source: invSvc}, svc.Require, log)
+		runSvc := runs.New(runs.Options{DB: pool, Graphs: invSvc, Authz: az, Sealer: sp})
+		schedSvc := schedules.New(schedules.Options{DB: pool, Runs: runSvc, Secret: sec})
+		if cfg.WorkerTokenFile != "" {
+			token, err := workerapi.TokenFromFile(cfg.WorkerTokenFile, os.ReadFile)
+			if err != nil {
+				return fmt.Errorf("worker token (ACP_WORKER_TOKEN_FILE): %w", err)
+			}
+			wh := workerapi.New(workerapi.Options{Pool: pool, Token: token, Log: log, Builder: &workerapi.Builder{
+				Trees: prj, Inventories: invSvc, Secrets: sec, Vault: vids, Provider: sp,
+			}})
+			werr := make(chan error, 1)
+			if err := server.StartWorkerAPI(serveCtx, cfg.WorkerAPIAddr, wh.Routes(), cfg.ShutdownGrace, log, werr); err != nil {
+				return err
+			}
+			go func() {
+				select {
+				case e := <-werr:
+					cancelServe(e)
+				case <-serveCtx.Done():
+				}
+			}()
+			go wh.RunMaintenance(ctx)
+			log.Info("worker API enabled")
+		} else {
+			log.Warn("worker API disabled: ACP_WORKER_TOKEN_FILE is not set; runs cannot execute")
+		}
+		hub := runstream.New(func(ctx context.Context) (*pgx.Conn, error) { return pgx.ConnectConfig(ctx, pool.Config().ConnConfig) }, log)
+		go hub.Run(ctx)
+		opts = append(opts, server.WithRunStream(hub, q))
+		go runs.RunLogRetention(ctx, q, cfg.RunLogRetentionDays, runs.RetentionInterval, log)
+		opts = append(opts, server.WithAuth(svc), server.WithPolicy(az, q),
 			server.WithSecrets(sec), server.WithProjects(prj), server.WithPublicURL(cfg.PublicURL),
-			server.WithInventories(invSvc), server.WithVault(vids, vops))
+			server.WithInventories(invSvc), server.WithVault(vids, vops), server.WithRuns(runSvc), server.WithSchedules(schedSvc))
 		go auth.RunSessionCleanup(ctx, q, auth.DefaultCleanupInterval, log)
+		go schedSvc.Run(ctx, schedules.DefaultTick, log)
 		go prj.RunScheduler(ctx, projects.DefaultScheduleTick, projects.DefaultScheduleConcurrency, log)
 		log.Info("login enabled", "oidc", cfg.OIDCEnabled(), "breakglass", cfg.BreakGlassEnabled)
 	case cfg.AuthEnabled():
@@ -112,7 +151,11 @@ func run(args []string) error {
 	default:
 		log.Warn("login disabled: OIDC not configured and ACP_BREAKGLASS_ENABLED=false")
 	}
-	return server.Run(ctx, cfg, log, pool, opts...)
+	err = server.Run(serveCtx, cfg, log, pool, opts...)
+	if c := context.Cause(serveCtx); err == nil && ctx.Err() == nil && c != nil {
+		err = c
+	}
+	return err
 }
 
 func newAuth(cfg config.Config, log *slog.Logger, pool *pgxpool.Pool, master []byte) (*auth.Service, error) {

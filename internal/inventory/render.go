@@ -104,13 +104,7 @@ func Render(d *Doc, o RenderOptions) map[string]any {
 		if g.Name == GroupAll {
 			continue
 		}
-		entry := map[string]any{}
-		if len(g.Hosts) > 0 {
-			entry["hosts"] = append([]string(nil), g.Hosts...)
-		}
-		if len(g.Children) > 0 {
-			entry["children"] = append([]string(nil), g.Children...)
-		}
+		entry := groupEntry(g.Hosts, g.Children, nil)
 		if o.Export && len(g.Vars) > 0 {
 			entry["vars"] = g.Vars
 		}
@@ -120,21 +114,31 @@ func Render(d *Doc, o RenderOptions) map[string]any {
 		}
 	}
 	sort.Strings(tops)
-	allEntry := map[string]any{"children": append(tops, GroupUngrouped)}
+	allEntry := groupEntry(nil, append(tops, GroupUngrouped), nil)
 	if g := d.group(GroupAll); o.Export && g != nil && len(g.Vars) > 0 {
 		allEntry["vars"] = g.Vars
 	}
 	out[GroupAll] = allEntry
-	ug := map[string]any{}
-	if len(ungrouped) > 0 {
-		ug["hosts"] = ungrouped
-	}
-	out[GroupUngrouped] = ug
+	out[GroupUngrouped] = groupEntry(ungrouped, nil, nil)
 	out["_meta"] = map[string]any{"hostvars": hostvars}
 	if o.MaskVault {
 		return maskVault(out).(map[string]any)
 	}
 	return out
+}
+
+// groupEntry builds a group object in the Ansible script inventory format.
+// hosts, children and vars are always present (empty, never null): ansible-core
+// treats an empty group object as malformed and mistakes it for a host.
+func groupEntry(hosts, children []string, vars map[string]any) map[string]any {
+	if vars == nil {
+		vars = map[string]any{}
+	}
+	return map[string]any{
+		"hosts":    append([]string{}, hosts...),
+		"children": append([]string{}, children...),
+		"vars":     vars,
+	}
 }
 
 // depths computes the nesting depth of every group: top-level groups are 1.

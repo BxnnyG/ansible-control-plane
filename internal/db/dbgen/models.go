@@ -113,6 +113,72 @@ type ProjectRevision struct {
 	Warnings  []byte
 }
 
+type Run struct {
+	ID                uuid.UUID
+	WorkspaceID       uuid.UUID
+	TemplateID        pgtype.UUID
+	TemplateName      string
+	ProjectID         pgtype.UUID
+	ProjectRevision   string
+	Status            string
+	Trigger           string
+	TriggeredBy       pgtype.UUID
+	ScheduleID        pgtype.UUID
+	Overrides         []byte
+	Params            []byte
+	WorkerID          string
+	LeaseID           pgtype.UUID
+	ClaimedAt         pgtype.Timestamptz
+	StartedAt         pgtype.Timestamptz
+	FinishedAt        pgtype.Timestamptz
+	LastHeartbeatAt   pgtype.Timestamptz
+	CancelRequestedAt pgtype.Timestamptz
+	ExitCode          pgtype.Int4
+	HostsOk           int32
+	HostsChanged      int32
+	HostsFailed       int32
+	HostsUnreachable  int32
+	CreatedAt         pgtype.Timestamptz
+	BundleServedAt    pgtype.Timestamptz
+}
+
+type RunHostResult struct {
+	RunID        uuid.UUID
+	Host         string
+	Ok           int32
+	Changed      int32
+	Failed       int32
+	Unreachable  int32
+	Skipped      int32
+	Rescued      int32
+	Ignored      int32
+	ChangedTasks []byte
+}
+
+type RunLogChunk struct {
+	RunID     uuid.UUID
+	Seq       int64
+	Data      string
+	CreatedAt pgtype.Timestamptz
+}
+
+type Schedule struct {
+	ID           uuid.UUID
+	WorkspaceID  uuid.UUID
+	TemplateID   uuid.UUID
+	Name         string
+	CronExpr     string
+	Timezone     string
+	Enabled      bool
+	MissedPolicy string
+	Overrides    []byte
+	NextRunAt    pgtype.Timestamptz
+	LastRunAt    pgtype.Timestamptz
+	CreatedBy    pgtype.UUID
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+}
+
 type Secret struct {
 	ID            uuid.UUID
 	WorkspaceID   uuid.UUID
@@ -141,6 +207,46 @@ type Session struct {
 	LastSeenAt    pgtype.Timestamptz
 	IdleExpiresAt pgtype.Timestamptz
 	ExpiresAt     pgtype.Timestamptz
+}
+
+type Template struct {
+	ID                     uuid.UUID
+	WorkspaceID            uuid.UUID
+	ProjectID              uuid.UUID
+	InventoryID            uuid.UUID
+	Name                   string
+	Slug                   string
+	Description            string
+	Playbook               string
+	ExtraVars              []byte
+	EnvVars                []byte
+	SshSecretID            pgtype.UUID
+	BecomeSecretID         pgtype.UUID
+	DefaultLimit           string
+	DefaultTags            string
+	DefaultSkipTags        string
+	Verbosity              int16
+	CheckMode              bool
+	DiffMode               bool
+	Survey                 []byte
+	MaxConcurrent          int32
+	AllowLimitOverride     bool
+	AllowTagsOverride      bool
+	AllowVarsOverride      bool
+	AllowCheckOverride     bool
+	AllowDiffOverride      bool
+	AllowVerbosityOverride bool
+	WebhookEnabled         bool
+	WebhookSecretID        pgtype.UUID
+	CreatedBy              pgtype.UUID
+	CreatedAt              pgtype.Timestamptz
+	UpdatedAt              pgtype.Timestamptz
+}
+
+type TemplateVaultIdentity struct {
+	TemplateID      uuid.UUID
+	VaultIdentityID uuid.UUID
+	Position        int32
 }
 
 type User struct {

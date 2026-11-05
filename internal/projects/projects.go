@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -90,6 +91,7 @@ type Git interface {
 	StagedDiff(ctx context.Context, dir string, paths []string) (string, error)
 	Commit(ctx context.Context, dir string, files []string, name, email, message string, signoff bool) (string, error)
 	Push(ctx context.Context, dir string, r gitops.Remote, branch string) error
+	Archive(ctx context.Context, dir, rev, prefix string, w io.Writer) error
 }
 
 // Scanner inspects a synced checkout and returns the scan result as JSON.

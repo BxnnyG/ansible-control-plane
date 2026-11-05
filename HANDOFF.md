@@ -1,10 +1,13 @@
 # Handoff
 
 ## Goal
-- Next: M4 (worker, templates, live logs, run history, schedules, webhooks; GIT-4 requirements install).
+- Next: M7 on `feat/m7-migration`, start with a fresh Semaphore backup (rule 2).
 - M3 (done, merged): Git projects (sync/scan/webhooks), inventories (DB + Git-synced, import, preview), vault (Go-native), surveys from argument_specs, inventory-backed ScopeResolver, secrets API.
 
 ## Done
+- M4 done (branch `feat/m4-runner`, ADR-0016): packages internal/runs, runproto, runmask, workerapi, worker, schedules; worker image ansible 14.6.0 (core 2.21.6) with `acp` callback; worker token `secrets/worker.token` (`make init`); worker API on internal listener :8082 (not published); worker reaches hosts via egress network; SSE logs, retention 90d; schedules + template webhooks; UI templates/runs; admin CLI `template`/`run`; migrations 00011-00012. Use `db.ClaimRun`, never raw sqlc ClaimRun. test-db.sh uses tmpfs; full test-db ~10 min (run in background); never run Go test containers in parallel (disk-full incident 2026-11-05).
+- M4 live: deployed 2026-11-05 (DB backup /opt/backups/acp-2026-11-05-1836/, migrations 11-12); smoke template "ping (M4 smoke)" runs end-to-end; SSH auth fails until keys are migrated (M7).
+- M7 notes: Ansible repo references `~/.ssh/ansible_infra`; migrated templates must override it (inventory/group vars beat --private-key). Open from M4: schedule overrides not editable in UI, survey override is a JSON textarea, argument_specs only for entry point main.
 - Repository initialized (`main`), orchestrator setup, `.gitignore`.
 - Discovery done (branch `feat/m0-discovery`): `docs/discovery.md` (sanitized), `docs/local/discovery.md` (raw, git-ignored).
 - Semaphore backup created outside the repo (path in `docs/local/discovery.md`).
@@ -19,6 +22,7 @@
 - Checkmk 2.5 reachable (site/user in docs/local).
 
 ## Open / Next step
+- M4 verification 2026-11-05 (branch feat/m4-runner, 45 commits): make test, full test-db, lint (0 issues), web lint/check/86 vitest/build, full-history gitleaks, branch-history infra scan – all green. Live: deployed, smoke template 'ping (M4 smoke)' runs end-to-end (auth fails until M7 keys).
 - M3 plan: (1) secrets API, (2) gitops package, (3) projects schema+API+sync+scan, (4) argument_specs → survey schema, (5) vault package + vault identities, (6) inventory schema+CRUD+render+import, (7) git-synced write-back, (8) ScopeResolver, (9) webhooks + scheduled sync, (10) UI pages.
 - M3 done: (1) secrets API (migration 00006 secret types+metadata; secrets.write admin/owner only; known gap: concurrent PUT not locked), (2) internal/gitops, (5a) internal/vault; Go tests install git+openssh via apk (Makefile, test-db.sh, CI). Commit 64aa7aa has trailers in subject – fix via squash-merge (no history rewrite).
 - M3 done: (3) projects (migration 00007, internal/projects, API, hostkey TOFU scan/confirm, sync with revisions, ACP_DATA_DIR + acpdata volume – verify volume ownership on next `make up`), (4) internal/scan (playbooks/roles/requirements/vars/inventories/vault detection, surveys from argument_specs) wired via scan.JSONScanner. Permissions: project.read viewer, project.write editor, project.sync operator.
@@ -27,7 +31,7 @@
 - M3 done: (5b) vault identities (00010, internal/vaultids; vault.read editor+, vault.manage/decrypt admin+, workspace-wide), internal/vaultops (list/decrypt audited before plaintext, encrypt/rekey via WriteBack, default branch acp/vault); (10) UI: secrets, projects (hostkey, sync, scan + survey preview, webhook), inventories (tree, vars, import, render, diff/commit), vault identities page + project vault panel. Extensionless dotted vars files fixed in inventory + scan.
 - M3 live: deployed (DB at migration 10; ACP DB backup before deploy in /opt/backups/acp-2026-11-04-2102/), the Ansible project synced (host key pinned, deploy key secret), its three inventories imported via `acp admin inventory import` (git mode, write branch acp/<slug>), counts verified against the source files.
 - Ansible repo: group_vars/host_vars moved next to the infra inventory (README updated), merged to main (fast-forward) by Claude on user request; ACP project re-synced and infra re-imported (group vars all/docker_hosts and host_vars now present). matrix_webhook_url is an empty placeholder (no secret in Git).
-- Admin CLI for autonomous ops: `acp admin project list|sync`, `acp admin inventory list|import` (run via `docker compose exec app acp admin ...`). User expects routine live ops (sync, import, checks) to be done by Claude without asking.
+- Admin CLI for autonomous ops: `acp admin project list|sync`, `acp admin inventory list|import`, `acp admin template list|create`, `acp admin run start|show|list` (`--wait` follows the log) (run via `docker compose exec app acp admin ...`). User expects routine live ops (sync, import, checks) to be done by Claude without asking.
 - Docs: README status/features, PLAN roadmap (M1–M3 done, GIT-4 → M4), operator guide docs/projects-and-inventories.md. Keep docs current with every change (user request).
 - Full verification on branch green: make test, test-db, lint, web lint/check/vitest/build, docker compose build. Not yet: browser/live test, deploy to live stack (migrations 00006–00010).
 - Open after M3: no vitest for vault components; identity CRUD SQL not DB-tested; secrets concurrent PUT unlocked; webhook rate limit per peer IP; rewriting files drops comments (inventory) / normalizes indentation (inline vault).
@@ -45,6 +49,7 @@
 - TLS chain: server cert served without intermediate; need intermediate + root CA cert (public) from user to serve full chain / trust in worker.
 
 ## Decisions (with short rationale)
+- Roadmap order (user + Claude, 2026-11-05): M4 → M7 (migration) → M5 → M6 → M8; numbers unchanged. Reason: real runs need migrated SSH keys. M7 starts with a fresh Semaphore backup (hard rule 2).
 - M3 (user, 2026-11-04): ACP gets its own read-write deploy key for the Ansible repo (`secrets/acp_git_deploy_ed25519`, public key to be added on the Git server by the user); Git server is Gitea/Forgejo (webhook HMAC); write branch configurable per inventory, default `acp/<inventory-slug>`, never force-push.
 - M3: ADR-0013 (project cache clone + scan in Go, TOFU-with-confirmation known_hosts), ADR-0014 (single relational inventory model for both modes), ADR-0015 (vault format in Go). GIT-4 (requirements install) moves to M4 (needs ansible-galaxy in worker).
 - Semaphore source DB is MySQL 8.0 → migration tool must read MySQL (or the API).

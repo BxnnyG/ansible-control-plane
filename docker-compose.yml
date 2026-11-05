@@ -29,9 +29,12 @@ services:
         condition: service_healthy
     environment:
       ACP_HTTP_ADDR: ":8080"
+      ACP_WORKER_API_ADDR: ":8082"   # internal network only, never published
+      ACP_RUN_LOG_RETENTION_DAYS: ${ACP_RUN_LOG_RETENTION_DAYS:-90}
       ACP_HTTPS_ADDR: ":8443"
       ACP_LOG_LEVEL: ${ACP_LOG_LEVEL:-info}
       ACP_MASTER_KEY_FILE: /run/secrets/master_key
+      ACP_WORKER_TOKEN_FILE: /run/secrets/worker_token
       ACP_DATA_DIR: /var/lib/acp
       ACP_DATABASE_URL: postgres://acp:${ACP_DB_PASSWORD}@postgres:5432/acp?sslmode=disable
       ACP_PUBLIC_URL: ${ACP_PUBLIC_URL:-}
@@ -43,7 +46,7 @@ services:
       ACP_SESSION_ABSOLUTE_TIMEOUT: ${ACP_SESSION_ABSOLUTE_TIMEOUT:-}
       ACP_TLS_CERT_FILE: ${ACP_TLS_CERT_FILE:-}
       ACP_TLS_KEY_FILE: ${ACP_TLS_KEY_FILE:-}
-    secrets: [master_key, tls_cert, tls_key]
+    secrets: [master_key, worker_token, tls_cert, tls_key]
     volumes:
       - acpdata:/var/lib/acp
     ports:
@@ -73,17 +76,23 @@ services:
       app:
         condition: service_healthy
     environment:
-      ACP_APP_URL: http://app:8080
+      ACP_APP_URL: http://app:8082
       ACP_WORKER_ADDR: ":8081"
       ACP_LOG_LEVEL: ${ACP_LOG_LEVEL:-info}
+      ACP_WORKER_CACHE_DIR: /var/cache/acp
+      ACP_WORKER_TOKEN_FILE: /run/secrets/worker_token
+      ACP_WORKER_CONCURRENCY: ${ACP_WORKER_CONCURRENCY:-2}
       HOME: /home/acp
+    secrets: [worker_token]
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     tmpfs:
       - /tmp:size=256m,mode=1777,exec
       - /home/acp:size=64m,uid=10001,gid=10001,mode=0700
-    networks: [internal]
+    volumes:
+      - acpworker-cache:/var/cache/acp
+    networks: [internal, egress]   # egress: only the worker may reach managed hosts
     mem_limit: 512m
     pids_limit: 256
     healthcheck:
@@ -96,14 +105,18 @@ services:
 networks:
   internal:
     internal: true
+  egress: {}   # outbound access for the worker only (SSH to managed hosts)
 
 volumes:
   pgdata:
   acpdata:
+  acpworker-cache:
 
 secrets:
   master_key:
     file: ./secrets/master.key
+  worker_token:
+    file: ./secrets/worker.token
   tls_cert:
     file: ${ACP_TLS_CERT_SECRET:-./deploy/empty}
   tls_key:

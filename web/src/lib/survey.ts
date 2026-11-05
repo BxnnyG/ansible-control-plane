@@ -7,6 +7,8 @@ export interface FormField {
   key: string;
   label: string;
   kind: InputKind;
+  /** Original survey type (str, int, bool, list, ...). */
+  type: string;
   required: boolean;
   description: string;
   /** String form of the default value ('' if none). */
@@ -55,6 +57,7 @@ export function surveyToFormFields(
       key,
       label: f.name,
       kind: nested ? 'text' : kindOf(f),
+      type: f.type,
       required: f.required,
       description: f.description ?? '',
       // Secret defaults are never rendered.

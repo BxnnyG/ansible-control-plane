@@ -126,7 +126,7 @@ func TestScopeResolutionOnStoredInventory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v, _ := exp["all"].(map[string]any)["vars"]; v != nil {
+	if v, _ := exp["all"].(map[string]any)["vars"].(map[string]any); len(v) != 0 {
 		t.Errorf("export leaked all vars: %v", v)
 	}
 	if _, ok := exp["top"]; ok {

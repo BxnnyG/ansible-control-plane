@@ -1,0 +1,9 @@
+- name: e2e slow playbook (cancelled by the test)
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Announce
+      ansible.builtin.debug:
+        msg: e2e slow started
+    - name: Sleep
+      ansible.builtin.command: sleep 300

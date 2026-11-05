@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/go-chi/chi/v5"
 )
 
 type fakePing struct{ err error }
@@ -63,5 +65,35 @@ func TestRedirectUsesConfiguredHostOnly(t *testing.T) {
 	rec = get(h, "/healthz")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("healthz must not redirect, got %d", rec.Code)
+	}
+}
+
+func TestWorkerAPINotOnPublicRouter(t *testing.T) {
+	log := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	h := Router(log, fakePing{}, DefaultStatic())
+	for _, p := range []string{"/api/internal/worker/claim", "/api/internal/worker/runs/x/bundle"} {
+		if c := get(h, p).Code; c != http.StatusNotFound {
+			t.Errorf("%s on public router: %d", p, c)
+		}
+		// Even behind the HTTPS redirect the path is redirected, never served.
+		if c := get(redirectExceptOps(h, "https://acp.example.com:8443"), p).Code; c != http.StatusMovedPermanently {
+			t.Errorf("%s not redirected: %d", p, c)
+		}
+	}
+}
+
+func TestWorkerAPIListener(t *testing.T) {
+	log := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	inner := chi.NewRouter()
+	inner.Get("/claim", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTeapot) })
+	h := WorkerAPIHandler(inner, log)
+	if c := get(h, "/api/internal/worker/claim").Code; c != http.StatusTeapot {
+		t.Errorf("worker listener: %d", c)
+	}
+	// Nothing but the worker API is served on the internal listener.
+	for _, p := range []string{"/", "/api/v1/me", "/healthz", "/api/internal/other"} {
+		if c := get(h, p).Code; c != http.StatusNotFound {
+			t.Errorf("%s on worker listener: %d", p, c)
+		}
 	}
 }

@@ -337,6 +337,209 @@ export interface VaultWriteResult {
   no_op: boolean;
 }
 
+export type RunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'lost';
+export type RunTrigger = 'manual' | 'schedule' | 'webhook' | 'api';
+
+/** Per-run overrides; the template's allow_*_override flags decide what is accepted. */
+export interface RunOverrides {
+  limit?: string;
+  tags?: string;
+  skip_tags?: string;
+  extra_vars?: Record<string, unknown>;
+  check?: boolean;
+  diff?: boolean;
+  verbosity?: number;
+}
+
+export interface Template {
+  id: string;
+  project_id: string;
+  inventory_id: string;
+  name: string;
+  slug: string;
+  description: string;
+  playbook: string;
+  extra_vars: Record<string, unknown>;
+  env_vars: Record<string, unknown>;
+  ssh_secret_id: string | null;
+  become_secret_id: string | null;
+  vault_identity_ids: string[];
+  default_limit: string;
+  default_tags: string;
+  default_skip_tags: string;
+  verbosity: number;
+  check_mode: boolean;
+  diff_mode: boolean;
+  /** Survey fields (list or `{fields}`); null when the template has none. */
+  survey: unknown;
+  max_concurrent: number;
+  allow_limit_override: boolean;
+  allow_tags_override: boolean;
+  allow_vars_override: boolean;
+  allow_check_override: boolean;
+  allow_diff_override: boolean;
+  allow_verbosity_override: boolean;
+  webhook_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Create/update body. On update omitted fields stay; null clears nullable references. */
+export interface TemplateInput {
+  name?: string;
+  description?: string;
+  project_id?: string;
+  inventory_id?: string;
+  playbook?: string;
+  extra_vars?: Record<string, unknown>;
+  env_vars?: Record<string, unknown>;
+  ssh_secret_id?: string | null;
+  become_secret_id?: string | null;
+  vault_identity_ids?: string[];
+  default_limit?: string;
+  default_tags?: string;
+  default_skip_tags?: string;
+  verbosity?: number;
+  check_mode?: boolean;
+  diff_mode?: boolean;
+  survey?: unknown;
+  max_concurrent?: number;
+  allow_limit_override?: boolean;
+  allow_tags_override?: boolean;
+  allow_vars_override?: boolean;
+  allow_check_override?: boolean;
+  allow_diff_override?: boolean;
+  allow_verbosity_override?: boolean;
+}
+
+export interface RunParams {
+  playbook: string;
+  project_revision: string;
+  inventory_id: string;
+  limit: string;
+  /** Effective host set (inventory and limit). */
+  hosts: string[] | null;
+  tags: string;
+  skip_tags: string;
+  extra_vars: Record<string, unknown> | null;
+  check: boolean;
+  diff: boolean;
+  verbosity: number;
+}
+
+export interface RunPreview {
+  host_count: number;
+  /** First 50 host names. */
+  hosts: string[];
+  truncated: boolean;
+  all_in_scope: boolean;
+}
+
+export interface Run {
+  id: string;
+  template_id: string | null;
+  template_name: string;
+  project_id: string | null;
+  project_revision: string;
+  status: RunStatus;
+  trigger: RunTrigger;
+  triggered_by: string | null;
+  /** Display name (or email) of the user; null for schedule/webhook runs without a user. */
+  triggered_by_name: string | null;
+  schedule_id: string | null;
+  params: RunParams;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  cancel_requested_at: string | null;
+  exit_code: number | null;
+  hosts_ok: number;
+  hosts_changed: number;
+  hosts_failed: number;
+  hosts_unreachable: number;
+}
+
+export interface HostResult {
+  host: string;
+  ok: number;
+  changed: number;
+  failed: number;
+  unreachable: number;
+  skipped: number;
+  rescued: number;
+  ignored: number;
+  /** Names of changed tasks; null when none were recorded. */
+  changed_tasks: string[] | null;
+}
+
+export interface RunDetail extends Run {
+  host_results: HostResult[] | null;
+}
+
+/** Payload of the `status` SSE event of a run log stream. */
+export interface RunStatusEvent {
+  status: RunStatus;
+  started_at: string | null;
+  finished_at: string | null;
+  cancel_requested_at: string | null;
+  exit_code: number | null;
+  hosts_ok: number;
+  hosts_changed: number;
+  hosts_failed: number;
+  hosts_unreachable: number;
+  host_results: HostResult[] | null;
+}
+
+export interface RunPage {
+  items: Run[] | null;
+  next_cursor: string;
+}
+
+export interface RunFilter {
+  template?: string;
+  status?: string;
+  trigger?: string;
+  user?: string;
+  host?: string;
+  cursor?: string;
+  limit?: number;
+}
+
+export type MissedPolicy = 'skip' | 'run_once';
+
+export interface Schedule {
+  id: string;
+  template_id: string;
+  name: string;
+  cron: string;
+  timezone: string;
+  enabled: boolean;
+  missed_policy: MissedPolicy;
+  overrides: RunOverrides;
+  next_run_at: string | null;
+  last_run_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScheduleInput {
+  name?: string;
+  cron?: string;
+  timezone?: string;
+  enabled?: boolean;
+  missed_policy?: MissedPolicy;
+  overrides?: RunOverrides;
+}
+
+/** Template webhook; `secret` is only present once, on enable or rotate. */
+export interface TemplateWebhook {
+  enabled: boolean;
+  has_secret: boolean;
+  path: string;
+  url?: string;
+  secret?: string;
+}
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -473,6 +676,45 @@ export const api = {
     latestRevision: (ws: string, id: string) =>
       request<ProjectRevision>('GET', projectsPath(ws, id, 'revisions/latest')),
   },
+  templates: {
+    list: (ws: string) => request<Template[]>('GET', templatesPath(ws)),
+    get: (ws: string, id: string) => request<Template>('GET', templatesPath(ws, id)),
+    create: (ws: string, t: TemplateInput) => request<Template>('POST', templatesPath(ws), t),
+    update: (ws: string, id: string, t: TemplateInput) =>
+      request<Template>('PUT', templatesPath(ws, id), t),
+    remove: (ws: string, id: string) => request<void>('DELETE', templatesPath(ws, id)),
+    start: (ws: string, id: string, ov: RunOverrides) =>
+      request<Run>('POST', templatesPath(ws, id, 'runs'), ov),
+    previewRun: (ws: string, id: string, ov: RunOverrides) =>
+      request<RunPreview>('POST', templatesPath(ws, id, 'runs/preview'), ov),
+    webhook: (ws: string, id: string) =>
+      request<TemplateWebhook>('GET', templatesPath(ws, id, 'webhook')),
+    rotateWebhook: (ws: string, id: string) =>
+      request<TemplateWebhook>('POST', templatesPath(ws, id, 'webhook')),
+    removeWebhook: (ws: string, id: string) =>
+      request<void>('DELETE', templatesPath(ws, id, 'webhook')),
+    schedules: (ws: string, id: string) =>
+      request<Schedule[]>('GET', templatesPath(ws, id, 'schedules')),
+    createSchedule: (ws: string, id: string, s: ScheduleInput) =>
+      request<Schedule>('POST', templatesPath(ws, id, 'schedules'), s),
+  },
+  schedules: {
+    update: (ws: string, id: string, s: ScheduleInput) =>
+      request<Schedule>('PUT', schedulesPath(ws, id), s),
+    remove: (ws: string, id: string) => request<void>('DELETE', schedulesPath(ws, id)),
+    preview: (ws: string, cron: string, tz: string, n = 5) =>
+      request<{ next_runs: string[] }>(
+        'GET',
+        schedulesPath(ws, 'preview') +
+          `?cron=${encodeURIComponent(cron)}&tz=${encodeURIComponent(tz)}&n=${n}`,
+      ),
+  },
+  runs: {
+    list: (ws: string, query: string) =>
+      request<RunPage>('GET', runsPath(ws) + (query ? `?${query}` : '')),
+    get: (ws: string, id: string) => request<RunDetail>('GET', runsPath(ws, id)),
+    cancel: (ws: string, id: string) => request<Run>('POST', runsPath(ws, id, 'cancel')),
+  },
   inventories: {
     list: (ws: string) => request<Inventory[]>('GET', inventoriesPath(ws)),
     get: (ws: string, id: string) => request<Inventory>('GET', inventoriesPath(ws, id)),
@@ -551,6 +793,29 @@ function projectsPath(ws: string, id?: string, sub?: string): string {
   if (id) p += `/${encodeURIComponent(id)}`;
   if (sub) p += `/${sub}`;
   return p;
+}
+
+function templatesPath(ws: string, id?: string, sub?: string): string {
+  let p = `/api/v1/workspaces/${encodeURIComponent(ws)}/templates`;
+  if (id) p += `/${encodeURIComponent(id)}`;
+  if (sub) p += `/${sub}`;
+  return p;
+}
+
+function schedulesPath(ws: string, idOrSub: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(ws)}/schedules/${encodeURIComponent(idOrSub)}`;
+}
+
+function runsPath(ws: string, id?: string, sub?: string): string {
+  let p = `/api/v1/workspaces/${encodeURIComponent(ws)}/runs`;
+  if (id) p += `/${encodeURIComponent(id)}`;
+  if (sub) p += `/${sub}`;
+  return p;
+}
+
+/** URL of a run's SSE log stream or log download (`log`, `log.txt`) or the run list stream (`events`). */
+export function runStreamUrl(ws: string, kind: 'events' | 'log' | 'log.txt', id?: string): string {
+  return kind === 'events' ? runsPath(ws, undefined, 'events') : runsPath(ws, id, kind);
 }
 
 /** Login URL for the OIDC redirect flow; the caller must pass a validated path. */
