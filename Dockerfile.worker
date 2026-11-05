@@ -14,17 +14,22 @@ RUN CGO_ENABLED=0 go build -trimpath \
       -o /out/acp ./cmd/acp
 
 FROM ${PYTHON_IMAGE}
-ARG ANSIBLE_CORE_VERSION=2.21.5
+ARG ANSIBLE_VERSION=14.6.0
+# ansible 14.6.0 bundles ansible-core 2.21.6
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git openssh-client ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
- && pip install --no-cache-dir "ansible-core==${ANSIBLE_CORE_VERSION}" \
+ && pip install --no-cache-dir "ansible==${ANSIBLE_VERSION}" \
+ && mkdir -p /var/cache/acp && chown 10001:10001 /var/cache/acp \
  && useradd --uid 10001 --create-home --home-dir /home/acp --shell /usr/sbin/nologin acp
 COPY --from=build /out/acp /usr/local/bin/acp
+COPY worker/ansible/callback_plugins /usr/share/acp/ansible/callback_plugins
 USER acp
 ENV HOME=/home/acp \
     ANSIBLE_LOCAL_TEMP=/tmp/ansible-local \
     ANSIBLE_REMOTE_TEMP=/tmp/ansible-remote \
+    ANSIBLE_CALLBACK_PLUGINS=/usr/share/acp/ansible/callback_plugins \
+    ANSIBLE_CALLBACKS_ENABLED=acp \
     PYTHONDONTWRITEBYTECODE=1
 EXPOSE 8081
 ENTRYPOINT ["acp"]
