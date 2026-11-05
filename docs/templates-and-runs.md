@@ -97,7 +97,28 @@ replaced by `***` in the worker before sending and again in the app before persi
 (`run_log_chunks`). Values shorter than 4 characters are not masked. Anything a playbook prints that is not
 one of these values (for example a password a task derives) is not recognized: use `no_log` for such tasks.
 After each batch the app issues `NOTIFY acp_run_<run id without dashes>` (payload `log:<last seq>` or
-`status:<status>`) for the SSE stream.
+`status:<status>`) for the SSE stream. Status transitions also notify the channel `acp_runs` (payload: run id)
+for the run list stream.
+
+### Live logs and run status (SSE, ADR-0008)
+
+All endpoints need `run.read` and apply the same scope check as `GET runs/{id}` (out-of-scope runs: 404).
+
+- `GET /api/v1/workspaces/{ws}/runs/{id}/log` (`text/event-stream`): replays stored chunks after
+  `Last-Event-ID` (or `?after=<seq>`), then follows the run live. Events: `log` (id = chunk `seq`, data = the
+  chunk as a JSON string, so CR/LF and ANSI escapes are preserved), `status` (JSON: status, timestamps, exit
+  code, host counters and per-host results; sent when it changes), `end` (run finished and all chunks sent,
+  then the stream closes). A `: ping` comment is sent every 15 s. Browsers resume automatically with
+  `Last-Event-ID`. At most 10 concurrent streams per user (HTTP 429 beyond that).
+- `GET /api/v1/workspaces/{ws}/runs/events`: `run` events (JSON run object) when a run visible to the caller
+  changes status (queued, running, finished) among the 50 newest runs. No initial snapshot: load the list
+  through REST first and again after a reconnect.
+- `GET /api/v1/workspaces/{ws}/runs/{id}/log.txt`: the stored log as a plain-text download (ANSI kept).
+
+All streams share one PostgreSQL `LISTEN` connection (one subscription per run, not per browser); streams
+also re-read the database every 5 s, so a missed notification only delays updates. The handler lifts the write
+deadline for its own response only. Reverse proxies must not buffer these paths (`X-Accel-Buffering: no` is
+set; for nginx also `proxy_buffering off`, long `proxy_read_timeout`). HTTP/2 works as is.
 
 ### End-to-end smoke test
 

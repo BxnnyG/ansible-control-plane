@@ -92,7 +92,7 @@ func (b templateBody) empty() bool {
 }
 
 // runRoutes registers templates and runs under /api/v1/workspaces/{workspace}.
-func runRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc RunsAPI, log *slog.Logger) {
+func runRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc RunsAPI, stream *runStream, log *slog.Logger) {
 	const tpl = "/api/v1/workspaces/{workspace}/templates"
 	const rns = "/api/v1/workspaces/{workspace}/runs"
 	fail := func(w http.ResponseWriter, what string, err error) {
@@ -419,4 +419,8 @@ func runRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc RunsAPI,
 		audit(req, d, "run.cancel", "run", id, map[string]any{"template": run.TemplateName, "status": run.Status})
 		policy.WriteJSON(w, http.StatusOK, run)
 	})
+
+	if stream != nil {
+		streamRoutes(r, az, svc, stream, runHelpers{fail: fail, notFound: notFound, decision: decision, target: target, visible: visible}, log)
+	}
 }

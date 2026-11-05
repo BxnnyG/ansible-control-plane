@@ -31,6 +31,7 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/runmask"
 	"github.com/BxnnyG/ansible-control-plane/internal/runproto"
 	"github.com/BxnnyG/ansible-control-plane/internal/runs"
+	"github.com/BxnnyG/ansible-control-plane/internal/runstream"
 )
 
 const (
@@ -128,6 +129,7 @@ func (h *Handler) claim(w http.ResponseWriter, req *http.Request) {
 		switch {
 		case err == nil:
 			h.o.Log.Info("run claimed", "run", run.ID, "worker", in.WorkerID)
+			h.notify(ctx, run.ID, "status:running")
 			writeJSON(w, http.StatusOK, runproto.ClaimResponse{
 				RunID: run.ID.String(), LeaseID: uuid.UUID(run.LeaseID.Bytes).String(), TemplateName: run.TemplateName,
 			})
@@ -230,7 +232,7 @@ func (h *Handler) masker(ctx context.Context, run dbgen.Run) (*runmask.Masker, e
 }
 
 // Channel returns the NOTIFY channel of the run (SSE fan-out, ADR-0008).
-func Channel(run uuid.UUID) string { return "acp_run_" + strings.ReplaceAll(run.String(), "-", "") }
+func Channel(run uuid.UUID) string { return runstream.RunChannel(run) }
 
 func (h *Handler) events(w http.ResponseWriter, req *http.Request) {
 	run, ok := h.lease(w, req)
@@ -272,6 +274,8 @@ func (h *Handler) events(w http.ResponseWriter, req *http.Request) {
 	}
 	if last > 0 {
 		h.notify(ctx, run.ID, "log:"+strconv.FormatInt(last, 10))
+	} else if len(in.Events) > 0 {
+		h.notify(ctx, run.ID, "events")
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -279,6 +283,12 @@ func (h *Handler) events(w http.ResponseWriter, req *http.Request) {
 func (h *Handler) notify(ctx context.Context, id uuid.UUID, payload string) {
 	if err := h.q.NotifyRun(ctx, dbgen.NotifyRunParams{Channel: Channel(id), Payload: payload}); err != nil {
 		h.o.Log.Warn("notify run", "run", id, "error", err)
+	}
+	// Status transitions also feed the run list stream.
+	if strings.HasPrefix(payload, "status:") {
+		if err := h.q.NotifyRun(ctx, dbgen.NotifyRunParams{Channel: runstream.ListChannel, Payload: id.String()}); err != nil {
+			h.o.Log.Warn("notify run list", "run", id, "error", err)
+		}
 	}
 }
 

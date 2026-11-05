@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/BxnnyG/ansible-control-plane/internal/auth"
@@ -22,6 +23,7 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/policy"
 	"github.com/BxnnyG/ansible-control-plane/internal/projects"
 	"github.com/BxnnyG/ansible-control-plane/internal/runs"
+	"github.com/BxnnyG/ansible-control-plane/internal/runstream"
 	"github.com/BxnnyG/ansible-control-plane/internal/scan"
 	"github.com/BxnnyG/ansible-control-plane/internal/secrets"
 	"github.com/BxnnyG/ansible-control-plane/internal/server"
@@ -131,6 +133,9 @@ func run(args []string) error {
 		} else {
 			log.Warn("worker API disabled: ACP_WORKER_TOKEN_FILE is not set; runs cannot execute")
 		}
+		hub := runstream.New(func(ctx context.Context) (*pgx.Conn, error) { return pgx.ConnectConfig(ctx, pool.Config().ConnConfig) }, log)
+		go hub.Run(ctx)
+		opts = append(opts, server.WithRunStream(hub, q))
 		opts = append(opts, server.WithAuth(svc), server.WithPolicy(az, q),
 			server.WithSecrets(sec), server.WithProjects(prj), server.WithPublicURL(cfg.PublicURL),
 			server.WithInventories(invSvc), server.WithVault(vids, vops), server.WithRuns(runSvc))

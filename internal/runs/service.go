@@ -258,6 +258,7 @@ func (s *Service) Enqueue(ctx context.Context, ws, templateID uuid.UUID, ov Over
 	if err != nil {
 		return Run{}, fmt.Errorf("enqueue run: %w", mapErr(err))
 	}
+	s.notifyList(ctx, row.ID)
 	return toRun(row)
 }
 
@@ -618,5 +619,6 @@ func (s *Service) CancelRun(ctx context.Context, ws, id uuid.UUID) (Run, error) 
 	if err != nil {
 		return Run{}, fmt.Errorf("cancel run: %w", err)
 	}
+	s.notifyList(ctx, r.ID)
 	return toRun(r)
 }
