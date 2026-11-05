@@ -94,7 +94,10 @@ SELECT * FROM run_host_results WHERE run_id = $1 ORDER BY host;
 
 -- name: ListRuns :many
 -- Keyset pagination: pass the created_at and id of the last row as the cursor.
-SELECT * FROM runs r
+SELECT sqlc.embed(r),
+       COALESCE(NULLIF(u.display_name, ''), NULLIF(u.email, ''), u.username, '')::text AS triggered_by_name
+FROM runs r
+LEFT JOIN users u ON u.id = r.triggered_by
 WHERE r.workspace_id = sqlc.arg(workspace_id)
   AND (sqlc.narg(template_id)::uuid IS NULL OR r.template_id = sqlc.narg(template_id))
   AND (sqlc.narg(status)::text IS NULL OR r.status = sqlc.narg(status))
@@ -167,3 +170,8 @@ ON CONFLICT (run_id, host) DO UPDATE SET
 
 -- name: NotifyRun :exec
 SELECT pg_notify(sqlc.arg(channel)::text, sqlc.arg(payload)::text);
+
+-- name: GetUserLabel :one
+-- Display label of a user (display name, else email, else username).
+SELECT COALESCE(NULLIF(display_name, ''), NULLIF(email, ''), username, '')::text AS label
+FROM users WHERE id = $1;

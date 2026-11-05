@@ -204,7 +204,11 @@ func TestRunLostCancelHistory(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return rs
+		out := make([]dbgen.Run, len(rs))
+		for i, r := range rs {
+			out[i] = r.Run
+		}
+		return out
 	}
 	if n := len(list(dbgen.ListRunsParams{})); n != 3 {
 		t.Fatalf("all=%d", n)
@@ -222,7 +226,7 @@ func TestRunLostCancelHistory(t *testing.T) {
 	}
 	p2, err := f.q.ListRuns(ctx, dbgen.ListRunsParams{
 		WorkspaceID: f.ws.ID, PageSize: 2,
-		CursorCreatedAt: p1[1].CreatedAt, CursorID: pgtype.UUID{Bytes: p1[1].ID, Valid: true},
+		CursorCreatedAt: p1[1].Run.CreatedAt, CursorID: pgtype.UUID{Bytes: p1[1].Run.ID, Valid: true},
 	})
 	if err != nil || len(p2) != 1 {
 		t.Fatalf("page2: %v %d", err, len(p2))

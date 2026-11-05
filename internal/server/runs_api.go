@@ -30,6 +30,7 @@ type RunsAPI interface {
 	UpdateTemplate(ctx context.Context, ws, id uuid.UUID, in runs.TemplateInput) (runs.Template, error)
 	DeleteTemplate(ctx context.Context, ws, id uuid.UUID) (int, error)
 	Enqueue(ctx context.Context, ws, templateID uuid.UUID, ov runs.Overrides, trigger string, actor runs.Actor, scheduleID *uuid.UUID) (runs.Run, error)
+	Preview(ctx context.Context, ws, templateID uuid.UUID, ov runs.Overrides, actor runs.Actor) (runs.Preview, error)
 	GetRun(ctx context.Context, ws, id uuid.UUID) (runs.RunDetail, error)
 	ListRuns(ctx context.Context, ws uuid.UUID, f runs.Filter) (runs.Page, error)
 	CancelRun(ctx context.Context, ws, id uuid.UUID) (runs.Run, error)
@@ -342,6 +343,26 @@ func runRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc RunsAPI,
 			"override_vars": varKeys, // names only, never values
 		})
 		policy.WriteJSON(w, http.StatusCreated, run)
+	})
+
+	// Preview validates like start (overrides, limit, host scope) but creates
+	// no run and writes no audit entry.
+	az.Handle(r, http.MethodPost, tpl+"/{id}/runs/preview", policy.RunExecute, func(w http.ResponseWriter, req *http.Request) {
+		d, id, ok := target(w, req)
+		if !ok {
+			return
+		}
+		var ov runs.Overrides
+		if !decode(w, req, &ov, true) {
+			return
+		}
+		p := auth.FromContext(req.Context())
+		pv, err := svc.Preview(req.Context(), d.Workspace.ID, id, ov, runs.Actor{UserID: p.User.ID, Principal: &p})
+		if err != nil {
+			fail(w, "preview run", err)
+			return
+		}
+		policy.WriteJSON(w, http.StatusOK, pv)
 	})
 
 	az.Handle(r, http.MethodGet, rns, policy.RunRead, func(w http.ResponseWriter, req *http.Request) {

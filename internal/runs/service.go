@@ -166,6 +166,69 @@ func scannedSurvey(res scan.Result, playbook string) []scan.Field {
 	return out
 }
 
+// prepared is the validated, merged and authorized parameter set of a run.
+type prepared struct {
+	template dbgen.Template
+	sha      string
+	params   Params
+}
+
+// prepare merges the template defaults with the overrides, validates them,
+// resolves the effective host set and authorizes it for the actor. It is the
+// shared validation of Enqueue and Preview and writes nothing.
+func (s *Service) prepare(ctx context.Context, ws, templateID uuid.UUID, ov Overrides, actor Actor) (prepared, error) {
+	t, err := s.q.GetTemplate(ctx, dbgen.GetTemplateParams{ID: templateID, WorkspaceID: ws})
+	if err != nil {
+		return prepared{}, mapErr(err)
+	}
+	sha, res, err := s.revisionScan(ctx, t.ProjectID)
+	if err != nil {
+		return prepared{}, err
+	}
+	if !hasPlaybook(res, t.Playbook) {
+		return prepared{}, fmt.Errorf("%w: playbook %q does not exist in the synced project revision", ErrInvalid, t.Playbook)
+	}
+	surveyFields, strict, err := s.surveyFor(t, res)
+	if err != nil {
+		return prepared{}, err
+	}
+	p, err := mergeParams(t, ov, surveyFields, strict)
+	if err != nil {
+		return prepared{}, err
+	}
+	p.ProjectID, p.ProjectRevision = t.ProjectID, sha
+	vis, err := s.q.ListTemplateVaultIdentities(ctx, t.ID)
+	if err != nil {
+		return prepared{}, fmt.Errorf("load template vault identities: %w", err)
+	}
+	p.VaultIdentityIDs = make([]uuid.UUID, 0, len(vis))
+	for _, v := range vis {
+		p.VaultIdentityIDs = append(p.VaultIdentityIDs, v.ID)
+	}
+
+	g, err := s.gs.InventoryGraph(ctx, ws, t.InventoryID)
+	if errors.Is(err, policy.ErrNoInventory) {
+		return prepared{}, fmt.Errorf("%w: the template's inventory no longer exists", ErrInvalid)
+	}
+	if err != nil {
+		return prepared{}, fmt.Errorf("load inventory graph: %w", err)
+	}
+	hosts, err := ResolveLimit(g, p.Limit)
+	if err != nil {
+		return prepared{}, err
+	}
+	if len(hosts) == 0 {
+		return prepared{}, fmt.Errorf("%w: the limit matches no hosts of the inventory", ErrInvalid)
+	}
+	p.Hosts = hosts
+	if actor.Principal != nil {
+		if err := s.az.AuthorizeHosts(ctx, *actor.Principal, ws, policy.RunExecute, t.InventoryID, hosts); err != nil {
+			return prepared{}, err
+		}
+	}
+	return prepared{template: t, sha: sha, params: p}, nil
+}
+
 // Enqueue creates a queued run of the template. It merges the template
 // defaults with the overrides (rejecting overrides the template does not
 // allow), validates the extra variables against the survey, pins the
@@ -183,56 +246,11 @@ func (s *Service) Enqueue(ctx context.Context, ws, templateID uuid.UUID, ov Over
 	default:
 		return Run{}, fmt.Errorf("%w: unknown trigger", ErrInvalid)
 	}
-	t, err := s.q.GetTemplate(ctx, dbgen.GetTemplateParams{ID: templateID, WorkspaceID: ws})
-	if err != nil {
-		return Run{}, mapErr(err)
-	}
-	sha, res, err := s.revisionScan(ctx, t.ProjectID)
+	pr, err := s.prepare(ctx, ws, templateID, ov, actor)
 	if err != nil {
 		return Run{}, err
 	}
-	if !hasPlaybook(res, t.Playbook) {
-		return Run{}, fmt.Errorf("%w: playbook %q does not exist in the synced project revision", ErrInvalid, t.Playbook)
-	}
-	surveyFields, strict, err := s.surveyFor(t, res)
-	if err != nil {
-		return Run{}, err
-	}
-	p, err := mergeParams(t, ov, surveyFields, strict)
-	if err != nil {
-		return Run{}, err
-	}
-	p.ProjectID, p.ProjectRevision = t.ProjectID, sha
-	vis, err := s.q.ListTemplateVaultIdentities(ctx, t.ID)
-	if err != nil {
-		return Run{}, fmt.Errorf("load template vault identities: %w", err)
-	}
-	p.VaultIdentityIDs = make([]uuid.UUID, 0, len(vis))
-	for _, v := range vis {
-		p.VaultIdentityIDs = append(p.VaultIdentityIDs, v.ID)
-	}
-
-	g, err := s.gs.InventoryGraph(ctx, ws, t.InventoryID)
-	if errors.Is(err, policy.ErrNoInventory) {
-		return Run{}, fmt.Errorf("%w: the template's inventory no longer exists", ErrInvalid)
-	}
-	if err != nil {
-		return Run{}, fmt.Errorf("load inventory graph: %w", err)
-	}
-	hosts, err := ResolveLimit(g, p.Limit)
-	if err != nil {
-		return Run{}, err
-	}
-	if len(hosts) == 0 {
-		return Run{}, fmt.Errorf("%w: the limit matches no hosts of the inventory", ErrInvalid)
-	}
-	p.Hosts = hosts
-	if actor.Principal != nil {
-		if err := s.az.AuthorizeHosts(ctx, *actor.Principal, ws, policy.RunExecute, t.InventoryID, hosts); err != nil {
-			return Run{}, err
-		}
-	}
-
+	t, sha, p := pr.template, pr.sha, pr.params
 	if err := p.SealSecretVars(s.sp, ws); err != nil {
 		return Run{}, err
 	}
@@ -259,7 +277,54 @@ func (s *Service) Enqueue(ctx context.Context, ws, templateID uuid.UUID, ov Over
 		return Run{}, fmt.Errorf("enqueue run: %w", mapErr(err))
 	}
 	s.notifyList(ctx, row.ID)
-	return toRun(row)
+	run, err := toRun(row)
+	if err != nil {
+		return Run{}, err
+	}
+	s.fillName(ctx, &run)
+	return run, nil
+}
+
+// PreviewMaxHosts is the number of host names a preview lists.
+const PreviewMaxHosts = 50
+
+// Preview is the dry validation result of a run start.
+type Preview struct {
+	HostCount int      `json:"host_count"`
+	Hosts     []string `json:"hosts"`
+	// Truncated is true when Hosts lists only the first PreviewMaxHosts.
+	Truncated bool `json:"truncated"`
+	// AllInScope is always true: out-of-scope host sets are rejected with
+	// ErrForbidden, as when starting the run.
+	AllInScope bool `json:"all_in_scope"`
+}
+
+// Preview validates overrides exactly like Enqueue (including host scope
+// authorization) and returns the effective host set without creating a run.
+func (s *Service) Preview(ctx context.Context, ws, templateID uuid.UUID, ov Overrides, actor Actor) (Preview, error) {
+	if actor.Principal == nil {
+		return Preview{}, fmt.Errorf("%w: a preview needs an authenticated actor", ErrInvalid)
+	}
+	pr, err := s.prepare(ctx, ws, templateID, ov, actor)
+	if err != nil {
+		return Preview{}, err
+	}
+	hosts := pr.params.Hosts
+	out := Preview{HostCount: len(hosts), Hosts: hosts, AllInScope: true}
+	if len(hosts) > PreviewMaxHosts {
+		out.Hosts, out.Truncated = hosts[:PreviewMaxHosts], true
+	}
+	return out, nil
+}
+
+// fillName sets TriggeredByName of a run from the users table; failures leave it nil.
+func (s *Service) fillName(ctx context.Context, r *Run) {
+	if r.TriggeredBy == nil {
+		return
+	}
+	if l, err := s.q.GetUserLabel(ctx, *r.TriggeredBy); err == nil && l != "" {
+		r.TriggeredByName = &l
+	}
 }
 
 // surveyFor picks the survey that validates the extra variables: the
@@ -385,6 +450,7 @@ type Run struct {
 	Status            string          `json:"status"`
 	Trigger           string          `json:"trigger"`
 	TriggeredBy       *uuid.UUID      `json:"triggered_by"`
+	TriggeredByName   *string         `json:"triggered_by_name"`
 	ScheduleID        *uuid.UUID      `json:"schedule_id"`
 	Overrides         json.RawMessage `json:"overrides"`
 	Params            Params          `json:"params"`
@@ -458,6 +524,7 @@ func (s *Service) GetRun(ctx context.Context, ws, id uuid.UUID) (RunDetail, erro
 	if err != nil {
 		return RunDetail{}, err
 	}
+	s.fillName(ctx, &run)
 	rows, err := s.q.ListRunHostResults(ctx, id)
 	if err != nil {
 		return RunDetail{}, fmt.Errorf("list host results: %w", err)
@@ -571,11 +638,16 @@ func (s *Service) ListRuns(ctx context.Context, ws uuid.UUID, f Filter) (Page, e
 		if err != nil {
 			return Page{}, fmt.Errorf("list runs: %w", err)
 		}
-		for _, r := range rows {
+		for _, row := range rows {
 			scanned++
+			r := row.Run
 			run, err := toRun(r)
 			if err != nil {
 				return Page{}, err
+			}
+			if row.TriggeredByName != "" {
+				n := row.TriggeredByName
+				run.TriggeredByName = &n
 			}
 			if f.Visible != nil && !f.Visible(run) {
 				continue
@@ -592,11 +664,11 @@ func (s *Service) ListRuns(ctx context.Context, ws uuid.UUID, f Filter) (Page, e
 		}
 		if scanned >= maxScanRows {
 			// Too many invisible rows: hand back a cursor at the last examined row.
-			last := rows[len(rows)-1]
+			last := rows[len(rows)-1].Run
 			page.NextCursor = encodeCursor(last.CreatedAt.Time, last.ID)
 			return page, nil
 		}
-		last := rows[len(rows)-1]
+		last := rows[len(rows)-1].Run
 		arg.CursorCreatedAt = last.CreatedAt
 		arg.CursorID = pgtype.UUID{Bytes: last.ID, Valid: true}
 	}
@@ -620,7 +692,12 @@ func (s *Service) CancelRun(ctx context.Context, ws, id uuid.UUID) (Run, error) 
 		return Run{}, fmt.Errorf("cancel run: %w", err)
 	}
 	s.notifyList(ctx, r.ID)
-	return toRun(r)
+	run, err := toRun(r)
+	if err != nil {
+		return Run{}, err
+	}
+	s.fillName(ctx, &run)
+	return run, nil
 }
 
 // ValidateOverrides checks overrides against the template with the same rules

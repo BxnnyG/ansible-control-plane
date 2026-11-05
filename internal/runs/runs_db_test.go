@@ -285,6 +285,54 @@ func TestEnqueue(t *testing.T) {
 			t.Errorf("calls %d->%d hosts %v", before, e.az.calls, run.Params.Hosts)
 		}
 	})
+	t.Run("preview", func(t *testing.T) {
+		before := countRuns(t, e)
+		pv, err := e.svc.Preview(ctx, e.ws, tpl.ID, Overrides{Limit: sp("web"), ExtraVars: map[string]any{"pw": "x"}}, e.actor())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if pv.HostCount != 2 || !slices.Equal(pv.Hosts, []string{"web1.example.test", "web2.example.test"}) || pv.Truncated || !pv.AllInScope {
+			t.Errorf("preview %+v", pv)
+		}
+		if _, err := e.svc.Preview(ctx, e.ws, tpl.ID, Overrides{}, e.actor()); !errors.Is(err, policy.ErrForbidden) {
+			t.Errorf("out of scope: err = %v", err)
+		}
+		if _, err := e.svc.Preview(ctx, e.ws, tpl.ID, Overrides{Limit: sp("nothing")}, e.actor()); !errors.Is(err, ErrInvalid) {
+			t.Errorf("invalid limit: err = %v", err)
+		}
+		if after := countRuns(t, e); after != before {
+			t.Errorf("preview created runs: %d -> %d", before, after)
+		}
+	})
+	t.Run("triggered_by_name", func(t *testing.T) {
+		run, err := e.svc.Enqueue(ctx, e.ws, tpl.ID, Overrides{Limit: sp("web1.example.test"), ExtraVars: map[string]any{"pw": "x"}}, TriggerManual, e.actor(), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if run.TriggeredByName == nil || *run.TriggeredByName == "" {
+			t.Fatalf("name missing on enqueue: %+v", run.TriggeredByName)
+		}
+		d, err := e.svc.GetRun(ctx, e.ws, run.ID)
+		if err != nil || d.TriggeredByName == nil || *d.TriggeredByName != *run.TriggeredByName {
+			t.Errorf("detail name %v err %v", d.TriggeredByName, err)
+		}
+		page, err := e.svc.ListRuns(ctx, e.ws, Filter{Limit: 100})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range page.Items {
+			if r.ID == run.ID && (r.TriggeredByName == nil || *r.TriggeredByName != *run.TriggeredByName) {
+				t.Errorf("list name %v", r.TriggeredByName)
+			}
+		}
+		sched, err := e.svc.Enqueue(ctx, e.ws, tpl.ID, Overrides{ExtraVars: map[string]any{"pw": "x"}}, TriggerSchedule, Actor{}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if sched.TriggeredByName != nil {
+			t.Errorf("schedule run has name %v", *sched.TriggeredByName)
+		}
+	})
 	t.Run("interactive needs principal", func(t *testing.T) {
 		if _, err := e.svc.Enqueue(ctx, e.ws, tpl.ID, Overrides{}, TriggerManual, Actor{}, nil); !errors.Is(err, ErrInvalid) {
 			t.Errorf("err = %v", err)
@@ -320,6 +368,15 @@ func TestScannedSurveyIsLenient(t *testing.T) {
 	if _, err := e.svc.Enqueue(ctx, e.ws, tpl.ID, Overrides{ExtraVars: map[string]any{"web_port": 80, "free": "form"}}, TriggerManual, e.actor(), nil); err != nil {
 		t.Errorf("valid vars: %v", err)
 	}
+}
+
+func countRuns(t *testing.T, e *env) int {
+	t.Helper()
+	p, err := e.svc.ListRuns(context.Background(), e.ws, Filter{Limit: MaxPageSize})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return len(p.Items)
 }
 
 func TestListCancelAndDelete(t *testing.T) {

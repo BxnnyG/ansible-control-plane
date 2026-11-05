@@ -22,6 +22,7 @@ type fakeRuns struct {
 	// run returned by GetRun/Enqueue/CancelRun
 	run runs.Run
 
+	previews  []runs.Overrides
 	enqueued  []runs.Overrides
 	actors    []runs.Actor
 	filters   []runs.Filter
@@ -58,6 +59,10 @@ func (f *fakeRuns) Enqueue(_ context.Context, _, _ uuid.UUID, ov runs.Overrides,
 	r := f.run
 	r.Trigger = trigger
 	return r, f.err
+}
+func (f *fakeRuns) Preview(_ context.Context, _, _ uuid.UUID, ov runs.Overrides, _ runs.Actor) (runs.Preview, error) {
+	f.previews = append(f.previews, ov)
+	return runs.Preview{HostCount: 2, Hosts: []string{"a", "b"}, AllInScope: true}, f.err
 }
 func (f *fakeRuns) GetRun(context.Context, uuid.UUID, uuid.UUID) (runs.RunDetail, error) {
 	return runs.RunDetail{Run: f.run, HostResults: []runs.HostResult{}}, f.err
@@ -132,6 +137,10 @@ func TestRunsAPIPermissions(t *testing.T) {
 		{"editor deletes template", policy.RoleEditor, "DELETE", "/templates/" + tid, "", 204, "template.delete"},
 		{"bad template id", policy.RoleViewer, "GET", "/templates/nope", "", 404, ""},
 		{"bad run id", policy.RoleViewer, "GET", "/runs/nope", "", 404, ""},
+		{"viewer cannot preview", policy.RoleViewer, "POST", "/templates/" + tid + "/runs/preview", "", 403, ""},
+		{"operator previews without audit", policy.RoleOperator, "POST", "/templates/" + tid + "/runs/preview", `{"limit":"web"}`, 200, ""},
+		{"preview unknown field", policy.RoleOperator, "POST", "/templates/" + tid + "/runs/preview", `{"bogus":1}`, 400, ""},
+		{"bad preview id", policy.RoleOperator, "POST", "/templates/nope/runs/preview", "", 404, ""},
 		{"bad start id", policy.RoleOperator, "POST", "/templates/nope/runs", "", 404, ""},
 		{"bad template filter", policy.RoleViewer, "GET", "/runs?template=nope", "", 400, ""},
 		{"bad limit", policy.RoleViewer, "GET", "/runs?limit=0", "", 400, ""},
@@ -173,19 +182,26 @@ func TestRunsAPIErrorMapping(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			fr := newFakeRuns()
 			fr.err = tc.err
-			rec := doRuns(runsRouter(policy.RoleOperator, fr, nil), "POST", "/templates/"+tid+"/runs", `{"limit":"web"}`)
-			if rec.Code != tc.want {
-				t.Fatalf("status %d, want %d: %s", rec.Code, tc.want, rec.Body.String())
-			}
-			var e apiError
-			_ = json.Unmarshal(rec.Body.Bytes(), &e)
-			if e.Code != tc.code {
-				t.Errorf("code %q, want %q", e.Code, tc.code)
-			}
-			if tc.want == 500 && strings.Contains(rec.Body.String(), "deadline") {
-				t.Error("internal error leaked")
+			for _, path := range []string{"/runs", "/runs/preview"} { // preview shares start's error mapping
+				rec := doRuns(runsRouter(policy.RoleOperator, fr, nil), "POST", "/templates/"+tid+path, `{"limit":"web"}`)
+				if rec.Code != tc.want {
+					t.Fatalf("%s: status %d, want %d: %s", path, rec.Code, tc.want, rec.Body.String())
+				}
+				checkErrBody(t, rec, tc.want, tc.code)
 			}
 		})
+	}
+}
+
+func checkErrBody(t *testing.T, rec *httptest.ResponseRecorder, want int, code string) {
+	t.Helper()
+	var e apiError
+	_ = json.Unmarshal(rec.Body.Bytes(), &e)
+	if e.Code != code {
+		t.Errorf("code %q, want %q", e.Code, code)
+	}
+	if want == 500 && strings.Contains(rec.Body.String(), "deadline") {
+		t.Error("internal error leaked")
 	}
 }
 
@@ -301,14 +317,15 @@ func TestRunRoutesDeclarePermissions(t *testing.T) {
 		t.Fatalf("undeclared routes: %v %v", missing, err)
 	}
 	want := map[string]policy.Permission{
-		"GET /api/v1/workspaces/{workspace}/templates":            policy.TemplateRead,
-		"POST /api/v1/workspaces/{workspace}/templates":           policy.TemplateWrite,
-		"PUT /api/v1/workspaces/{workspace}/templates/{id}":       policy.TemplateWrite,
-		"DELETE /api/v1/workspaces/{workspace}/templates/{id}":    policy.TemplateWrite,
-		"POST /api/v1/workspaces/{workspace}/templates/{id}/runs": policy.RunExecute,
-		"GET /api/v1/workspaces/{workspace}/runs":                 policy.RunRead,
-		"GET /api/v1/workspaces/{workspace}/runs/{id}":            policy.RunRead,
-		"POST /api/v1/workspaces/{workspace}/runs/{id}/cancel":    policy.RunCancel,
+		"GET /api/v1/workspaces/{workspace}/templates":                    policy.TemplateRead,
+		"POST /api/v1/workspaces/{workspace}/templates":                   policy.TemplateWrite,
+		"PUT /api/v1/workspaces/{workspace}/templates/{id}":               policy.TemplateWrite,
+		"DELETE /api/v1/workspaces/{workspace}/templates/{id}":            policy.TemplateWrite,
+		"POST /api/v1/workspaces/{workspace}/templates/{id}/runs":         policy.RunExecute,
+		"POST /api/v1/workspaces/{workspace}/templates/{id}/runs/preview": policy.RunExecute,
+		"GET /api/v1/workspaces/{workspace}/runs":                         policy.RunRead,
+		"GET /api/v1/workspaces/{workspace}/runs/{id}":                    policy.RunRead,
+		"POST /api/v1/workspaces/{workspace}/runs/{id}/cancel":            policy.RunCancel,
 	}
 	for route, perm := range want {
 		method, pattern, _ := strings.Cut(route, " ")

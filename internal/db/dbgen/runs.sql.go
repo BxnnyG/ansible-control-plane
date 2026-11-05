@@ -437,6 +437,19 @@ func (q *Queries) GetRunForLease(ctx context.Context, arg GetRunForLeaseParams) 
 	return i, err
 }
 
+const getUserLabel = `-- name: GetUserLabel :one
+SELECT COALESCE(NULLIF(display_name, ''), NULLIF(email, ''), username, '')::text AS label
+FROM users WHERE id = $1
+`
+
+// Display label of a user (display name, else email, else username).
+func (q *Queries) GetUserLabel(ctx context.Context, id uuid.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, getUserLabel, id)
+	var label string
+	err := row.Scan(&label)
+	return label, err
+}
+
 const heartbeatRun = `-- name: HeartbeatRun :one
 UPDATE runs SET last_heartbeat_at = now()
 WHERE id = $1 AND lease_id = $2 AND status = 'running'
@@ -537,7 +550,10 @@ func (q *Queries) ListRunLogChunks(ctx context.Context, arg ListRunLogChunksPara
 }
 
 const listRuns = `-- name: ListRuns :many
-SELECT id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at FROM runs r
+SELECT r.id, r.workspace_id, r.template_id, r.template_name, r.project_id, r.project_revision, r.status, r.trigger, r.triggered_by, r.schedule_id, r.overrides, r.params, r.worker_id, r.lease_id, r.claimed_at, r.started_at, r.finished_at, r.last_heartbeat_at, r.cancel_requested_at, r.exit_code, r.hosts_ok, r.hosts_changed, r.hosts_failed, r.hosts_unreachable, r.created_at, r.bundle_served_at,
+       COALESCE(NULLIF(u.display_name, ''), NULLIF(u.email, ''), u.username, '')::text AS triggered_by_name
+FROM runs r
+LEFT JOIN users u ON u.id = r.triggered_by
 WHERE r.workspace_id = $1
   AND ($2::uuid IS NULL OR r.template_id = $2)
   AND ($3::text IS NULL OR r.status = $3)
@@ -563,8 +579,13 @@ type ListRunsParams struct {
 	PageSize        int32
 }
 
+type ListRunsRow struct {
+	Run             Run
+	TriggeredByName string
+}
+
 // Keyset pagination: pass the created_at and id of the last row as the cursor.
-func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]Run, error) {
+func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]ListRunsRow, error) {
 	rows, err := q.db.Query(ctx, listRuns,
 		arg.WorkspaceID,
 		arg.TemplateID,
@@ -580,36 +601,37 @@ func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]Run, erro
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Run
+	var items []ListRunsRow
 	for rows.Next() {
-		var i Run
+		var i ListRunsRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.WorkspaceID,
-			&i.TemplateID,
-			&i.TemplateName,
-			&i.ProjectID,
-			&i.ProjectRevision,
-			&i.Status,
-			&i.Trigger,
-			&i.TriggeredBy,
-			&i.ScheduleID,
-			&i.Overrides,
-			&i.Params,
-			&i.WorkerID,
-			&i.LeaseID,
-			&i.ClaimedAt,
-			&i.StartedAt,
-			&i.FinishedAt,
-			&i.LastHeartbeatAt,
-			&i.CancelRequestedAt,
-			&i.ExitCode,
-			&i.HostsOk,
-			&i.HostsChanged,
-			&i.HostsFailed,
-			&i.HostsUnreachable,
-			&i.CreatedAt,
-			&i.BundleServedAt,
+			&i.Run.ID,
+			&i.Run.WorkspaceID,
+			&i.Run.TemplateID,
+			&i.Run.TemplateName,
+			&i.Run.ProjectID,
+			&i.Run.ProjectRevision,
+			&i.Run.Status,
+			&i.Run.Trigger,
+			&i.Run.TriggeredBy,
+			&i.Run.ScheduleID,
+			&i.Run.Overrides,
+			&i.Run.Params,
+			&i.Run.WorkerID,
+			&i.Run.LeaseID,
+			&i.Run.ClaimedAt,
+			&i.Run.StartedAt,
+			&i.Run.FinishedAt,
+			&i.Run.LastHeartbeatAt,
+			&i.Run.CancelRequestedAt,
+			&i.Run.ExitCode,
+			&i.Run.HostsOk,
+			&i.Run.HostsChanged,
+			&i.Run.HostsFailed,
+			&i.Run.HostsUnreachable,
+			&i.Run.CreatedAt,
+			&i.Run.BundleServedAt,
+			&i.TriggeredByName,
 		); err != nil {
 			return nil, err
 		}
