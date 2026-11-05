@@ -83,5 +83,6 @@ Self-hosted web platform to run, organize and monitor Ansible; replacement for t
 - Project subagents (`.claude/agents/`) are only loaded when Claude Code is started inside the repository directory.
 - Infrastructure specifics (addresses, hostnames, tokens) belong in `docs/local/` and `secrets/` (both git-ignored), never in tracked files.
 - The host is small (4 GiB RAM): use multi-stage builds and memory limits; keep worker concurrency low by default.
+- The root disk is small (16 GB) and shared with the live stack and Semaphore: never run Go/test containers in parallel, always `docker run --rm`, no anonymous volumes (test Postgres uses tmpfs), remove throwaway images (e.g. `acp-e2e-*:test`) after use.
 - OPNsense instances may use different DHCP backends (Kea, dnsmasq, ISC legacy) – detect per instance, never assume.
 - Some upstream APIs are only reachable over plain HTTP on non-standard ports inside an encrypted overlay network – connectors must support per-instance URL, port and TLS settings.
