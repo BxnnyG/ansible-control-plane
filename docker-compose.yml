@@ -30,6 +30,7 @@ services:
     environment:
       ACP_HTTP_ADDR: ":8080"
       ACP_WORKER_API_ADDR: ":8082"   # internal network only, never published
+      ACP_RUN_LOG_RETENTION_DAYS: ${ACP_RUN_LOG_RETENTION_DAYS:-90}
       ACP_HTTPS_ADDR: ":8443"
       ACP_LOG_LEVEL: ${ACP_LOG_LEVEL:-info}
       ACP_MASTER_KEY_FILE: /run/secrets/master_key

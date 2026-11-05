@@ -136,6 +136,7 @@ func run(args []string) error {
 		hub := runstream.New(func(ctx context.Context) (*pgx.Conn, error) { return pgx.ConnectConfig(ctx, pool.Config().ConnConfig) }, log)
 		go hub.Run(ctx)
 		opts = append(opts, server.WithRunStream(hub, q))
+		go runs.RunLogRetention(ctx, q, cfg.RunLogRetentionDays, runs.RetentionInterval, log)
 		opts = append(opts, server.WithAuth(svc), server.WithPolicy(az, q),
 			server.WithSecrets(sec), server.WithProjects(prj), server.WithPublicURL(cfg.PublicURL),
 			server.WithInventories(invSvc), server.WithVault(vids, vops), server.WithRuns(runSvc))

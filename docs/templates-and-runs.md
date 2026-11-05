@@ -120,6 +120,12 @@ also re-read the database every 5 s, so a missed notification only delays update
 deadline for its own response only. Reverse proxies must not buffer these paths (`X-Accel-Buffering: no` is
 set; for nginx also `proxy_buffering off`, long `proxy_read_timeout`). HTTP/2 works as is.
 
+### Log retention
+
+The app deletes log chunks of finished runs older than `ACP_RUN_LOG_RETENTION_DAYS` (default 90, `0` keeps
+them forever) once at start and then daily. Run rows, host results and the audit log are kept; an expired
+log is simply empty.
+
 ### End-to-end smoke test
 
 `scripts/test-run-e2e.sh` starts a throwaway compose project (`scripts/e2e/compose.yml`, project name
