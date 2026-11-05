@@ -75,6 +75,39 @@ func (q *Queries) CancelQueuedRun(ctx context.Context, arg CancelQueuedRunParams
 	return i, err
 }
 
+const cancelQueuedRunsForTemplate = `-- name: CancelQueuedRunsForTemplate :many
+UPDATE runs SET status = 'cancelled', cancel_requested_at = now(), finished_at = now()
+WHERE template_id = $1 AND workspace_id = $2 AND status = 'queued'
+RETURNING id
+`
+
+type CancelQueuedRunsForTemplateParams struct {
+	TemplateID  pgtype.UUID
+	WorkspaceID uuid.UUID
+}
+
+// Used when a template is deleted: queued runs would never become claimable
+// again (claiming joins the template), so they are cancelled in the same transaction.
+func (q *Queries) CancelQueuedRunsForTemplate(ctx context.Context, arg CancelQueuedRunsForTemplateParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, cancelQueuedRunsForTemplate, arg.TemplateID, arg.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const claimRun = `-- name: ClaimRun :one
 UPDATE runs
 SET status = 'running', worker_id = $1, lease_id = gen_random_uuid(),

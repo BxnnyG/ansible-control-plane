@@ -108,3 +108,10 @@ LIMIT sqlc.arg(page_size);
 
 -- name: CountRunningForTemplate :one
 SELECT count(*) FROM runs WHERE template_id = $1 AND status = 'running';
+
+-- name: CancelQueuedRunsForTemplate :many
+-- Used when a template is deleted: queued runs would never become claimable
+-- again (claiming joins the template), so they are cancelled in the same transaction.
+UPDATE runs SET status = 'cancelled', cancel_requested_at = now(), finished_at = now()
+WHERE template_id = $1 AND workspace_id = $2 AND status = 'queued'
+RETURNING id;
