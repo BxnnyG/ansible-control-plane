@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 
@@ -35,4 +36,20 @@ func (s *Service) WithCheckout(ctx context.Context, ws, id uuid.UUID, fn func(ro
 	}
 	defer func() { _ = root.Close() }()
 	return fn(root, rev.Sha)
+}
+
+// WriteTree streams the tree of the commit rev of the project as a tar
+// archive (paths prefixed with prefix) to w. The per-project lock is held, so
+// a concurrent sync cannot rewrite the clone meanwhile.
+func (s *Service) WriteTree(ctx context.Context, ws, id uuid.UUID, rev, prefix string, w io.Writer) error {
+	if _, err := s.load(ctx, ws, id); err != nil {
+		return err
+	}
+	l := s.lock(id)
+	l.Lock()
+	defer l.Unlock()
+	if err := s.o.Git.Archive(ctx, s.cacheDir(id), rev, prefix, w); err != nil {
+		return fmt.Errorf("archive project tree: %w", err)
+	}
+	return nil
 }
