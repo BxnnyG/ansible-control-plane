@@ -32,9 +32,10 @@ func (q *Queries) AppendRunLogChunk(ctx context.Context, arg AppendRunLogChunkPa
 }
 
 const cancelQueuedRun = `-- name: CancelQueuedRun :one
-UPDATE runs SET status = 'cancelled', cancel_requested_at = now(), finished_at = now()
+UPDATE runs SET status = 'cancelled', cancel_requested_at = now(), finished_at = now(),
+    params = params - 'secret_vars_enc'
 WHERE id = $1 AND workspace_id = $2 AND status = 'queued'
-RETURNING id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at
+RETURNING id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at
 `
 
 type CancelQueuedRunParams struct {
@@ -71,12 +72,14 @@ func (q *Queries) CancelQueuedRun(ctx context.Context, arg CancelQueuedRunParams
 		&i.HostsFailed,
 		&i.HostsUnreachable,
 		&i.CreatedAt,
+		&i.BundleServedAt,
 	)
 	return i, err
 }
 
 const cancelQueuedRunsForTemplate = `-- name: CancelQueuedRunsForTemplate :many
-UPDATE runs SET status = 'cancelled', cancel_requested_at = now(), finished_at = now()
+UPDATE runs SET status = 'cancelled', cancel_requested_at = now(), finished_at = now(),
+    params = params - 'secret_vars_enc'
 WHERE template_id = $1 AND workspace_id = $2 AND status = 'queued'
 RETURNING id
 `
@@ -121,7 +124,7 @@ WHERE runs.id = (
     LIMIT 1
     FOR UPDATE OF r SKIP LOCKED
 )
-RETURNING id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at
+RETURNING id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at
 `
 
 func (q *Queries) ClaimRun(ctx context.Context, workerID string) (Run, error) {
@@ -153,6 +156,7 @@ func (q *Queries) ClaimRun(ctx context.Context, workerID string) (Run, error) {
 		&i.HostsFailed,
 		&i.HostsUnreachable,
 		&i.CreatedAt,
+		&i.BundleServedAt,
 	)
 	return i, err
 }
@@ -186,7 +190,7 @@ const enqueueRun = `-- name: EnqueueRun :one
 INSERT INTO runs (workspace_id, template_id, template_name, project_id, project_revision, trigger,
     triggered_by, schedule_id, overrides, params)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at
+RETURNING id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at
 `
 
 type EnqueueRunParams struct {
@@ -242,13 +246,14 @@ func (q *Queries) EnqueueRun(ctx context.Context, arg EnqueueRunParams) (Run, er
 		&i.HostsFailed,
 		&i.HostsUnreachable,
 		&i.CreatedAt,
+		&i.BundleServedAt,
 	)
 	return i, err
 }
 
 const finishRun = `-- name: FinishRun :one
 UPDATE runs r
-SET status = $3, exit_code = $4, finished_at = now(),
+SET status = $3, exit_code = $4, finished_at = now(), params = r.params - 'secret_vars_enc',
     hosts_ok = s.ok, hosts_changed = s.changed, hosts_failed = s.failed, hosts_unreachable = s.unreachable
 FROM (
     SELECT count(*) FILTER (WHERE failed = 0 AND unreachable = 0) AS ok,
@@ -258,7 +263,7 @@ FROM (
     FROM run_host_results WHERE run_id = $1
 ) s
 WHERE r.id = $1 AND r.lease_id = $2 AND r.status = 'running'
-RETURNING r.id, r.workspace_id, r.template_id, r.template_name, r.project_id, r.project_revision, r.status, r.trigger, r.triggered_by, r.schedule_id, r.overrides, r.params, r.worker_id, r.lease_id, r.claimed_at, r.started_at, r.finished_at, r.last_heartbeat_at, r.cancel_requested_at, r.exit_code, r.hosts_ok, r.hosts_changed, r.hosts_failed, r.hosts_unreachable, r.created_at
+RETURNING r.id, r.workspace_id, r.template_id, r.template_name, r.project_id, r.project_revision, r.status, r.trigger, r.triggered_by, r.schedule_id, r.overrides, r.params, r.worker_id, r.lease_id, r.claimed_at, r.started_at, r.finished_at, r.last_heartbeat_at, r.cancel_requested_at, r.exit_code, r.hosts_ok, r.hosts_changed, r.hosts_failed, r.hosts_unreachable, r.created_at, r.bundle_served_at
 `
 
 type FinishRunParams struct {
@@ -303,12 +308,13 @@ func (q *Queries) FinishRun(ctx context.Context, arg FinishRunParams) (Run, erro
 		&i.HostsFailed,
 		&i.HostsUnreachable,
 		&i.CreatedAt,
+		&i.BundleServedAt,
 	)
 	return i, err
 }
 
 const getRun = `-- name: GetRun :one
-SELECT id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at FROM runs WHERE id = $1 AND workspace_id = $2
+SELECT id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at FROM runs WHERE id = $1 AND workspace_id = $2
 `
 
 type GetRunParams struct {
@@ -345,12 +351,13 @@ func (q *Queries) GetRun(ctx context.Context, arg GetRunParams) (Run, error) {
 		&i.HostsFailed,
 		&i.HostsUnreachable,
 		&i.CreatedAt,
+		&i.BundleServedAt,
 	)
 	return i, err
 }
 
 const getRunByID = `-- name: GetRunByID :one
-SELECT id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at FROM runs WHERE id = $1
+SELECT id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at FROM runs WHERE id = $1
 `
 
 func (q *Queries) GetRunByID(ctx context.Context, id uuid.UUID) (Run, error) {
@@ -382,6 +389,50 @@ func (q *Queries) GetRunByID(ctx context.Context, id uuid.UUID) (Run, error) {
 		&i.HostsFailed,
 		&i.HostsUnreachable,
 		&i.CreatedAt,
+		&i.BundleServedAt,
+	)
+	return i, err
+}
+
+const getRunForLease = `-- name: GetRunForLease :one
+SELECT id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at FROM runs WHERE id = $1 AND lease_id = $2 AND status = 'running'
+`
+
+type GetRunForLeaseParams struct {
+	ID      uuid.UUID
+	LeaseID pgtype.UUID
+}
+
+func (q *Queries) GetRunForLease(ctx context.Context, arg GetRunForLeaseParams) (Run, error) {
+	row := q.db.QueryRow(ctx, getRunForLease, arg.ID, arg.LeaseID)
+	var i Run
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.TemplateID,
+		&i.TemplateName,
+		&i.ProjectID,
+		&i.ProjectRevision,
+		&i.Status,
+		&i.Trigger,
+		&i.TriggeredBy,
+		&i.ScheduleID,
+		&i.Overrides,
+		&i.Params,
+		&i.WorkerID,
+		&i.LeaseID,
+		&i.ClaimedAt,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.LastHeartbeatAt,
+		&i.CancelRequestedAt,
+		&i.ExitCode,
+		&i.HostsOk,
+		&i.HostsChanged,
+		&i.HostsFailed,
+		&i.HostsUnreachable,
+		&i.CreatedAt,
+		&i.BundleServedAt,
 	)
 	return i, err
 }
@@ -486,7 +537,7 @@ func (q *Queries) ListRunLogChunks(ctx context.Context, arg ListRunLogChunksPara
 }
 
 const listRuns = `-- name: ListRuns :many
-SELECT id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at FROM runs r
+SELECT id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at FROM runs r
 WHERE r.workspace_id = $1
   AND ($2::uuid IS NULL OR r.template_id = $2)
   AND ($3::text IS NULL OR r.status = $3)
@@ -558,6 +609,7 @@ func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]Run, erro
 			&i.HostsFailed,
 			&i.HostsUnreachable,
 			&i.CreatedAt,
+			&i.BundleServedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -581,9 +633,9 @@ func (q *Queries) LockRunClaim(ctx context.Context) error {
 }
 
 const markLostRuns = `-- name: MarkLostRuns :many
-UPDATE runs SET status = 'lost', finished_at = now()
+UPDATE runs SET status = 'lost', finished_at = now(), params = params - 'secret_vars_enc'
 WHERE status = 'running' AND last_heartbeat_at < now() - make_interval(secs => $1::float8)
-RETURNING id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at
+RETURNING id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at
 `
 
 func (q *Queries) MarkLostRuns(ctx context.Context, staleSeconds float64) ([]Run, error) {
@@ -621,6 +673,7 @@ func (q *Queries) MarkLostRuns(ctx context.Context, staleSeconds float64) ([]Run
 			&i.HostsFailed,
 			&i.HostsUnreachable,
 			&i.CreatedAt,
+			&i.BundleServedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -632,10 +685,138 @@ func (q *Queries) MarkLostRuns(ctx context.Context, staleSeconds float64) ([]Run
 	return items, nil
 }
 
+const markRunBundleServed = `-- name: MarkRunBundleServed :one
+UPDATE runs SET bundle_served_at = now()
+WHERE id = $1 AND lease_id = $2 AND status = 'running' AND bundle_served_at IS NULL
+RETURNING id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at
+`
+
+type MarkRunBundleServedParams struct {
+	ID      uuid.UUID
+	LeaseID pgtype.UUID
+}
+
+// Succeeds once per lease: the bundle carries decrypted credentials.
+func (q *Queries) MarkRunBundleServed(ctx context.Context, arg MarkRunBundleServedParams) (Run, error) {
+	row := q.db.QueryRow(ctx, markRunBundleServed, arg.ID, arg.LeaseID)
+	var i Run
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.TemplateID,
+		&i.TemplateName,
+		&i.ProjectID,
+		&i.ProjectRevision,
+		&i.Status,
+		&i.Trigger,
+		&i.TriggeredBy,
+		&i.ScheduleID,
+		&i.Overrides,
+		&i.Params,
+		&i.WorkerID,
+		&i.LeaseID,
+		&i.ClaimedAt,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.LastHeartbeatAt,
+		&i.CancelRequestedAt,
+		&i.ExitCode,
+		&i.HostsOk,
+		&i.HostsChanged,
+		&i.HostsFailed,
+		&i.HostsUnreachable,
+		&i.CreatedAt,
+		&i.BundleServedAt,
+	)
+	return i, err
+}
+
+const markRunHostEvent = `-- name: MarkRunHostEvent :exec
+INSERT INTO run_host_results (run_id, host, changed, failed, unreachable, changed_tasks)
+VALUES (
+    $1, $2,
+    CASE WHEN $3::text = 'changed' THEN 1 ELSE 0 END,
+    CASE WHEN $3::text = 'failed' THEN 1 ELSE 0 END,
+    CASE WHEN $3::text = 'unreachable' THEN 1 ELSE 0 END,
+    CASE WHEN $3::text = 'changed' THEN jsonb_build_array($4::text) ELSE '[]'::jsonb END
+)
+ON CONFLICT (run_id, host) DO UPDATE SET
+    changed = GREATEST(run_host_results.changed, EXCLUDED.changed),
+    failed = GREATEST(run_host_results.failed, EXCLUDED.failed),
+    unreachable = GREATEST(run_host_results.unreachable, EXCLUDED.unreachable),
+    changed_tasks = CASE
+        WHEN $3::text = 'changed'
+         AND jsonb_array_length(run_host_results.changed_tasks) < 200
+         AND NOT run_host_results.changed_tasks ? $4::text
+        THEN run_host_results.changed_tasks || jsonb_build_array($4::text)
+        ELSE run_host_results.changed_tasks END
+`
+
+type MarkRunHostEventParams struct {
+	RunID uuid.UUID
+	Host  string
+	Kind  string
+	Task  string
+}
+
+// Idempotent progress marker from a callback event; the final counters come
+// from SetRunHostStats. kind is one of ok, changed, failed, unreachable.
+func (q *Queries) MarkRunHostEvent(ctx context.Context, arg MarkRunHostEventParams) error {
+	_, err := q.db.Exec(ctx, markRunHostEvent,
+		arg.RunID,
+		arg.Host,
+		arg.Kind,
+		arg.Task,
+	)
+	return err
+}
+
+const notifyRun = `-- name: NotifyRun :exec
+SELECT pg_notify($1::text, $2::text)
+`
+
+type NotifyRunParams struct {
+	Channel string
+	Payload string
+}
+
+func (q *Queries) NotifyRun(ctx context.Context, arg NotifyRunParams) error {
+	_, err := q.db.Exec(ctx, notifyRun, arg.Channel, arg.Payload)
+	return err
+}
+
+const requestCancelOrphanRuns = `-- name: RequestCancelOrphanRuns :many
+UPDATE runs SET cancel_requested_at = now()
+WHERE status = 'running' AND template_id IS NULL AND cancel_requested_at IS NULL
+RETURNING id
+`
+
+// Running runs whose template was deleted are stopped (the worker sees the
+// cancel flag with its next heartbeat).
+func (q *Queries) RequestCancelOrphanRuns(ctx context.Context) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, requestCancelOrphanRuns)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const requestRunCancel = `-- name: RequestRunCancel :one
 UPDATE runs SET cancel_requested_at = COALESCE(cancel_requested_at, now())
 WHERE id = $1 AND workspace_id = $2 AND status = 'running'
-RETURNING id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at
+RETURNING id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at
 `
 
 type RequestRunCancelParams struct {
@@ -672,8 +853,46 @@ func (q *Queries) RequestRunCancel(ctx context.Context, arg RequestRunCancelPara
 		&i.HostsFailed,
 		&i.HostsUnreachable,
 		&i.CreatedAt,
+		&i.BundleServedAt,
 	)
 	return i, err
+}
+
+const setRunHostStats = `-- name: SetRunHostStats :exec
+INSERT INTO run_host_results (run_id, host, ok, changed, failed, unreachable, skipped, rescued, ignored)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+ON CONFLICT (run_id, host) DO UPDATE SET
+    ok = EXCLUDED.ok, changed = EXCLUDED.changed, failed = EXCLUDED.failed,
+    unreachable = EXCLUDED.unreachable, skipped = EXCLUDED.skipped, rescued = EXCLUDED.rescued,
+    ignored = EXCLUDED.ignored
+`
+
+type SetRunHostStatsParams struct {
+	RunID       uuid.UUID
+	Host        string
+	Ok          int32
+	Changed     int32
+	Failed      int32
+	Unreachable int32
+	Skipped     int32
+	Rescued     int32
+	Ignored     int32
+}
+
+// Final per-host counters from the stats event; changed_tasks is kept.
+func (q *Queries) SetRunHostStats(ctx context.Context, arg SetRunHostStatsParams) error {
+	_, err := q.db.Exec(ctx, setRunHostStats,
+		arg.RunID,
+		arg.Host,
+		arg.Ok,
+		arg.Changed,
+		arg.Failed,
+		arg.Unreachable,
+		arg.Skipped,
+		arg.Rescued,
+		arg.Ignored,
+	)
+	return err
 }
 
 const upsertRunHostResult = `-- name: UpsertRunHostResult :exec

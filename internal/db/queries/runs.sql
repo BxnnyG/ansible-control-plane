@@ -41,14 +41,15 @@ WHERE id = $1 AND workspace_id = $2 AND status = 'running'
 RETURNING *;
 
 -- name: CancelQueuedRun :one
-UPDATE runs SET status = 'cancelled', cancel_requested_at = now(), finished_at = now()
+UPDATE runs SET status = 'cancelled', cancel_requested_at = now(), finished_at = now(),
+    params = params - 'secret_vars_enc'
 WHERE id = $1 AND workspace_id = $2 AND status = 'queued'
 RETURNING *;
 
 -- name: FinishRun :one
 -- Host summary counts are derived from run_host_results.
 UPDATE runs r
-SET status = $3, exit_code = $4, finished_at = now(),
+SET status = $3, exit_code = $4, finished_at = now(), params = r.params - 'secret_vars_enc',
     hosts_ok = s.ok, hosts_changed = s.changed, hosts_failed = s.failed, hosts_unreachable = s.unreachable
 FROM (
     SELECT count(*) FILTER (WHERE failed = 0 AND unreachable = 0) AS ok,
@@ -61,7 +62,7 @@ WHERE r.id = $1 AND r.lease_id = $2 AND r.status = 'running'
 RETURNING r.*;
 
 -- name: MarkLostRuns :many
-UPDATE runs SET status = 'lost', finished_at = now()
+UPDATE runs SET status = 'lost', finished_at = now(), params = params - 'secret_vars_enc'
 WHERE status = 'running' AND last_heartbeat_at < now() - make_interval(secs => sqlc.arg(stale_seconds)::float8)
 RETURNING *;
 
@@ -112,6 +113,57 @@ SELECT count(*) FROM runs WHERE template_id = $1 AND status = 'running';
 -- name: CancelQueuedRunsForTemplate :many
 -- Used when a template is deleted: queued runs would never become claimable
 -- again (claiming joins the template), so they are cancelled in the same transaction.
-UPDATE runs SET status = 'cancelled', cancel_requested_at = now(), finished_at = now()
+UPDATE runs SET status = 'cancelled', cancel_requested_at = now(), finished_at = now(),
+    params = params - 'secret_vars_enc'
 WHERE template_id = $1 AND workspace_id = $2 AND status = 'queued'
 RETURNING id;
+
+-- name: MarkRunBundleServed :one
+-- Succeeds once per lease: the bundle carries decrypted credentials.
+UPDATE runs SET bundle_served_at = now()
+WHERE id = $1 AND lease_id = $2 AND status = 'running' AND bundle_served_at IS NULL
+RETURNING *;
+
+-- name: GetRunForLease :one
+SELECT * FROM runs WHERE id = $1 AND lease_id = $2 AND status = 'running';
+
+-- name: RequestCancelOrphanRuns :many
+-- Running runs whose template was deleted are stopped (the worker sees the
+-- cancel flag with its next heartbeat).
+UPDATE runs SET cancel_requested_at = now()
+WHERE status = 'running' AND template_id IS NULL AND cancel_requested_at IS NULL
+RETURNING id;
+
+-- name: MarkRunHostEvent :exec
+-- Idempotent progress marker from a callback event; the final counters come
+-- from SetRunHostStats. kind is one of ok, changed, failed, unreachable.
+INSERT INTO run_host_results (run_id, host, changed, failed, unreachable, changed_tasks)
+VALUES (
+    sqlc.arg(run_id), sqlc.arg(host),
+    CASE WHEN sqlc.arg(kind)::text = 'changed' THEN 1 ELSE 0 END,
+    CASE WHEN sqlc.arg(kind)::text = 'failed' THEN 1 ELSE 0 END,
+    CASE WHEN sqlc.arg(kind)::text = 'unreachable' THEN 1 ELSE 0 END,
+    CASE WHEN sqlc.arg(kind)::text = 'changed' THEN jsonb_build_array(sqlc.arg(task)::text) ELSE '[]'::jsonb END
+)
+ON CONFLICT (run_id, host) DO UPDATE SET
+    changed = GREATEST(run_host_results.changed, EXCLUDED.changed),
+    failed = GREATEST(run_host_results.failed, EXCLUDED.failed),
+    unreachable = GREATEST(run_host_results.unreachable, EXCLUDED.unreachable),
+    changed_tasks = CASE
+        WHEN sqlc.arg(kind)::text = 'changed'
+         AND jsonb_array_length(run_host_results.changed_tasks) < 200
+         AND NOT run_host_results.changed_tasks ? sqlc.arg(task)::text
+        THEN run_host_results.changed_tasks || jsonb_build_array(sqlc.arg(task)::text)
+        ELSE run_host_results.changed_tasks END;
+
+-- name: SetRunHostStats :exec
+-- Final per-host counters from the stats event; changed_tasks is kept.
+INSERT INTO run_host_results (run_id, host, ok, changed, failed, unreachable, skipped, rescued, ignored)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+ON CONFLICT (run_id, host) DO UPDATE SET
+    ok = EXCLUDED.ok, changed = EXCLUDED.changed, failed = EXCLUDED.failed,
+    unreachable = EXCLUDED.unreachable, skipped = EXCLUDED.skipped, rescued = EXCLUDED.rescued,
+    ignored = EXCLUDED.ignored;
+
+-- name: NotifyRun :exec
+SELECT pg_notify(sqlc.arg(channel)::text, sqlc.arg(payload)::text);

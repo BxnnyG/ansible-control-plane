@@ -87,6 +87,14 @@ var forbiddenEnv = map[string]bool{
 	"LD_PRELOAD": true, "LD_LIBRARY_PATH": true,
 }
 
+// envDenied reports whether a template may not set the variable: the exact
+// names above, the worker's own ACP_* variables and everything that selects
+// or configures Ansible callbacks (the acp event callback must stay active).
+func envDenied(k string) bool {
+	return forbiddenEnv[k] || strings.HasPrefix(k, "ACP_") ||
+		strings.HasPrefix(k, "ANSIBLE_CALLBACK") || strings.HasPrefix(k, "ANSIBLE_STDOUT_CALLBACK")
+}
+
 func (s *Service) toTemplate(ctx context.Context, q *dbgen.Queries, t dbgen.Template) (Template, error) {
 	ex, err := decodeObject(t.ExtraVars)
 	if err != nil {
@@ -310,7 +318,7 @@ func (s *Service) apply(ctx context.Context, q *dbgen.Queries, ws uuid.UUID, r *
 	}
 	if in.EnvVars != nil {
 		for k, v := range in.EnvVars {
-			if !envNameRe.MatchString(k) || forbiddenEnv[k] {
+			if !envNameRe.MatchString(k) || envDenied(k) {
 				return fmt.Errorf("%w: environment variable name %q is not allowed", ErrInvalid, k)
 			}
 			switch v.(type) {

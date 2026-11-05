@@ -23,6 +23,7 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/db/dbgen"
 	"github.com/BxnnyG/ansible-control-plane/internal/policy"
 	"github.com/BxnnyG/ansible-control-plane/internal/scan"
+	"github.com/BxnnyG/ansible-control-plane/internal/secrets"
 )
 
 // DB is the database access of the Service; *pgxpool.Pool implements it.
@@ -43,6 +44,8 @@ type Options struct {
 	// Graphs loads the inventory structure for limit matching; *inventory.Service implements it.
 	Graphs policy.GraphSource
 	Authz  Authorizer
+	// Sealer encrypts the values of secret survey fields stored in runs.params.
+	Sealer secrets.Provider
 }
 
 // Service manages templates and runs.
@@ -51,11 +54,12 @@ type Service struct {
 	q  *dbgen.Queries
 	gs policy.GraphSource
 	az Authorizer
+	sp secrets.Provider
 }
 
 // New builds a Service.
 func New(o Options) *Service {
-	return &Service{db: o.DB, q: dbgen.New(o.DB), gs: o.Graphs, az: o.Authz}
+	return &Service{db: o.DB, q: dbgen.New(o.DB), gs: o.Graphs, az: o.Authz, sp: o.Sealer}
 }
 
 func mapErr(err error) error {
@@ -229,6 +233,9 @@ func (s *Service) Enqueue(ctx context.Context, ws, templateID uuid.UUID, ov Over
 		}
 	}
 
+	if err := p.SealSecretVars(s.sp, ws); err != nil {
+		return Run{}, err
+	}
 	ovStored := ov
 	ovStored.ExtraVars = maskVars(ov.ExtraVars, p.SecretVars)
 	ovJSON, err := json.Marshal(ovStored)

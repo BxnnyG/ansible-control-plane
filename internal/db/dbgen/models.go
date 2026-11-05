@@ -139,6 +139,7 @@ type Run struct {
 	HostsFailed       int32
 	HostsUnreachable  int32
 	CreatedAt         pgtype.Timestamptz
+	BundleServedAt    pgtype.Timestamptz
 }
 
 type RunHostResult struct {

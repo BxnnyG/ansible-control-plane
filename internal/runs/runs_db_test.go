@@ -18,7 +18,21 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/db/dbgen"
 	"github.com/BxnnyG/ansible-control-plane/internal/inventory"
 	"github.com/BxnnyG/ansible-control-plane/internal/policy"
+	"github.com/BxnnyG/ansible-control-plane/internal/secrets"
 )
+
+func testProvider(t *testing.T) secrets.Provider {
+	t.Helper()
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i*7 + 1)
+	}
+	p, err := secrets.NewLocalProvider(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
 
 // fakeAuthz allows only the listed hosts.
 type fakeAuthz struct {
@@ -41,6 +55,7 @@ func (f *fakeAuthz) AuthorizeHosts(_ context.Context, _ auth.Principal, _ uuid.U
 
 type env struct {
 	svc       *Service
+	sp        secrets.Provider
 	q         *dbgen.Queries
 	az        *fakeAuthz
 	ws        uuid.UUID
@@ -109,9 +124,10 @@ func setup(t *testing.T) *env {
 			t.Fatal(err)
 		}
 	}
+	sp := testProvider(t)
 	az := &fakeAuthz{allowed: map[string]bool{"web1.example.test": true, "web2.example.test": true}}
 	return &env{
-		svc: New(Options{DB: pool, Graphs: inv, Authz: az}), q: q, az: az, ws: ws.ID, project: prj.ID, inventory: iv.ID,
+		svc: New(Options{DB: pool, Graphs: inv, Authz: az, Sealer: sp}), sp: sp, q: q, az: az, ws: ws.ID, project: prj.ID, inventory: iv.ID,
 		user: user, principal: auth.Principal{User: user},
 	}
 }
@@ -150,6 +166,8 @@ func TestTemplateValidation(t *testing.T) {
 			in.Survey.Set, in.Survey.Value = true, rawPtr(`[{"name":"a","type":"zzz"}]`)
 		}, "unknown type"},
 		{"bad env name", func(in *TemplateInput) { in.EnvVars = map[string]any{"PATH": "/x"} }, "not allowed"},
+		{"callback env", func(in *TemplateInput) { in.EnvVars = map[string]any{"ANSIBLE_STDOUT_CALLBACK": "json"} }, "not allowed"},
+		{"callbacks enabled env", func(in *TemplateInput) { in.EnvVars = map[string]any{"ANSIBLE_CALLBACKS_ENABLED": "x"} }, "not allowed"},
 		{"bad env value", func(in *TemplateInput) { in.EnvVars = map[string]any{"A": []any{1}} }, "must be a string"},
 		{"bad max concurrent", func(in *TemplateInput) { in.MaxConcurrent = ip(0) }, "max_concurrent"},
 	}
@@ -237,14 +255,18 @@ func TestEnqueue(t *testing.T) {
 		if run.Params.ExtraVars["pw"] != MaskedValue || strings.Contains(string(run.Overrides), "s3cr3t") {
 			t.Errorf("secret survey value leaked: %v / %s", run.Params.ExtraVars["pw"], run.Overrides)
 		}
-		// The stored (unmasked) snapshot keeps the value for the worker bundle.
+		// The stored snapshot holds the value only inside the envelope.
 		raw, err := e.q.GetRun(ctx, dbgen.GetRunParams{ID: run.ID, WorkspaceID: e.ws})
 		if err != nil {
 			t.Fatal(err)
 		}
 		p, _ := DecodeParams(raw.Params)
-		if p.ExtraVars["pw"] != "s3cr3t" || !slices.Equal(p.SecretVars, []string{"pw"}) {
-			t.Errorf("stored params: %v", p.SecretVars)
+		if p.ExtraVars["pw"] != MaskedValue || !slices.Equal(p.SecretVars, []string{"pw"}) || p.SecretVarsEnc == nil || strings.Contains(string(raw.Params), "s3cr3t") {
+			t.Errorf("stored params: %v / %s", p.SecretVars, raw.Params)
+		}
+		opened, err := p.OpenSecretVars(e.sp, e.ws)
+		if err != nil || opened["pw"] != "s3cr3t" || opened["env"] != "prod" {
+			t.Errorf("opened vars: %v %v", opened, err)
 		}
 	})
 	t.Run("limit without match", func(t *testing.T) {
