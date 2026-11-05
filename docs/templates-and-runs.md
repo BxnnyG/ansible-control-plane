@@ -193,3 +193,14 @@ Example (generic scheme):
     body='{"limit":"web"}'
     sig=$(printf '%s' "$body" | openssl dgst -sha256 -hmac "$SECRET" -hex | sed 's/^.* //')
     curl -X POST -H "X-ACP-Signature: sha256=$sig" -d "$body" "$ACP_PUBLIC_URL/api/hooks/templates/$TEMPLATE_ID"
+
+## Web UI
+
+- `/templates`: list and create; `/templates/{id}`: details, edit, delete, run dialog, recent runs, schedules
+  and webhook (secret shown once). The run dialog offers only the overrides the template allows and renders the
+  template survey (secret fields as password inputs). The effective host count is not shown before the start
+  because the API has no dry-resolve endpoint; it appears on the run page.
+- `/runs`: history with filters (template, status, trigger, user id, host), cursor pagination and live
+  updates through `runs/events` (reload after a reconnect). `/runs/{id}`: status header, cancel, live log
+  (SSE, ANSI rendered as escaped text segments, search, auto-scroll, download) and per-host results.
+- Schedule overrides are not editable in the UI yet; existing overrides are kept on edit.
