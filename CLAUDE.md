@@ -65,7 +65,7 @@ Self-hosted web platform to run, organize and monitor Ansible; replacement for t
 ## Build / test commands
 
 - No Go/Node on the host: everything runs in containers. `make` may be missing on the host – the Makefile targets are thin docker wrappers and can be run by hand.
-- `make init` – create `.env` (random DB password), `secrets/master.key`, enable git hooks (`core.hooksPath scripts/hooks`).
+- `make init` – create `.env` (random DB password), `secrets/master.key`, `secrets/worker.token`, enable git hooks (`core.hooksPath scripts/hooks`).
 - `make test` – `go vet` + `go test` for `./cmd/... ./internal/...` (never `./...`: `web/node_modules` contains stray Go files). The Go container installs `git openssh-client-default` via apk first (gitops tests need git and ssh-keyscan); `scripts/test-db.sh` does the same, CI installs them via apt.
 - `make test-db` (`scripts/test-db.sh`) – DB-backed tests (db, auth, admin, server) against a throwaway Postgres, one database per package, cleaned up on exit.
 - `make lint` – golangci-lint; web: `docker run --rm -v $PWD/web:/app -w /app node:24-alpine sh -c 'npm ci && npm run lint && npm run check && npm test -- --run && npm run build'`.
@@ -75,7 +75,7 @@ Self-hosted web platform to run, organize and monitor Ansible; replacement for t
 ## Known pitfalls
 
 - Pinned versions: Go 1.27.2, Node 24 (Docker build) / 22 (lockfile created with), Python 3.14, ansible 14.6.0 (full community package, bundles ansible-core 2.21.6), PostgreSQL 18.6, gitleaks 8.21.2.
-- Compose file secrets are bind mounts that keep host ownership: private keys read by the app (`secrets/master.key`, TLS key) must be owned by uid 10001 (`acp`), mode 600. `make init` does this for the master key.
+- Compose file secrets are bind mounts that keep host ownership: private keys read by the app (`secrets/master.key`, `secrets/worker.token`, TLS key) must be owned by uid 10001 (`acp`), mode 600. `make init` does this for master key and worker token.
 - `ACP_PUBLIC_URL` is the only source for redirect targets (HTTPS redirect, OIDC) – never derive hosts from request headers.
 - A goose "relation goose_db_version does not exist" error in the Postgres log on first start is expected.
 

@@ -10,6 +10,8 @@ init: ## create .env and master key if missing
 	@mkdir -p secrets
 	@test -f secrets/master.key || { (umask 077; head -c 32 /dev/urandom | base64 > secrets/master.key); }
 	@chown 10001:10001 secrets/master.key 2>/dev/null || true
+	@test -f secrets/worker.token || { (umask 077; head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > secrets/worker.token); }
+	@chown 10001:10001 secrets/worker.token 2>/dev/null || true
 	@git config core.hooksPath scripts/hooks 2>/dev/null || true
 
 lint:

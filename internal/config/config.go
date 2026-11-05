@@ -12,16 +12,21 @@ import (
 
 // Config is the runtime configuration.
 type Config struct {
-	HTTPAddr      string
-	HTTPSAddr     string
-	TLSCertFile   string
-	TLSKeyFile    string
-	DatabaseURL   string
-	LogLevel      string
-	AppURL        string // worker: base URL of the app
-	WorkerAddr    string // worker: health listen address
-	WorkerPoll    time.Duration
-	MasterKeyFile string
+	HTTPAddr    string
+	HTTPSAddr   string
+	TLSCertFile string
+	TLSKeyFile  string
+	DatabaseURL string
+	LogLevel    string
+	AppURL      string // worker: base URL of the app
+	WorkerAddr  string // worker: health listen address
+	WorkerPoll  time.Duration
+	// WorkerTokenFile holds the shared bearer token of the internal worker API
+	// (app and worker). Empty on the app disables the API.
+	WorkerTokenFile   string
+	WorkerConcurrency int
+	WorkerCacheDir    string
+	MasterKeyFile     string
 	// DataDir holds app state outside the database, e.g. Git clones in <DataDir>/projects.
 	DataDir       string
 	ShutdownGrace time.Duration
@@ -67,17 +72,19 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 		keyFile = DefaultMasterKeyFile
 	}
 	c := Config{
-		HTTPAddr:      get("HTTP_ADDR", ":8080"),
-		HTTPSAddr:     get("HTTPS_ADDR", ":8443"),
-		TLSCertFile:   get("TLS_CERT_FILE", ""),
-		TLSKeyFile:    get("TLS_KEY_FILE", ""),
-		DatabaseURL:   get("DATABASE_URL", ""),
-		LogLevel:      strings.ToLower(get("LOG_LEVEL", "info")),
-		AppURL:        get("APP_URL", "http://app:8080"),
-		WorkerAddr:    get("WORKER_ADDR", ":8081"),
-		MasterKeyFile: keyFile,
-		DataDir:       strings.TrimRight(get("DATA_DIR", DefaultDataDir), "/"),
-		PublicURL:     strings.TrimRight(get("PUBLIC_URL", ""), "/"),
+		HTTPAddr:        get("HTTP_ADDR", ":8080"),
+		HTTPSAddr:       get("HTTPS_ADDR", ":8443"),
+		TLSCertFile:     get("TLS_CERT_FILE", ""),
+		TLSKeyFile:      get("TLS_KEY_FILE", ""),
+		DatabaseURL:     get("DATABASE_URL", ""),
+		LogLevel:        strings.ToLower(get("LOG_LEVEL", "info")),
+		AppURL:          get("APP_URL", "http://app:8080"),
+		WorkerAddr:      get("WORKER_ADDR", ":8081"),
+		MasterKeyFile:   keyFile,
+		WorkerTokenFile: get("WORKER_TOKEN_FILE", ""),
+		WorkerCacheDir:  get("WORKER_CACHE_DIR", "/var/cache/acp"),
+		DataDir:         strings.TrimRight(get("DATA_DIR", DefaultDataDir), "/"),
+		PublicURL:       strings.TrimRight(get("PUBLIC_URL", ""), "/"),
 
 		OIDCIssuer:     strings.TrimRight(get("OIDC_ISSUER", ""), "/"),
 		OIDCClientID:   get("OIDC_CLIENT_ID", ""),
@@ -90,6 +97,9 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 	}
 	if c.WorkerPoll, err = parseDur(get("WORKER_POLL_INTERVAL", "15s")); err != nil {
 		return c, fmt.Errorf("ACP_WORKER_POLL_INTERVAL: %w", err)
+	}
+	if c.WorkerConcurrency, err = parseInt(get("WORKER_CONCURRENCY", "2"), 1, 16); err != nil {
+		return c, fmt.Errorf("ACP_WORKER_CONCURRENCY: %w", err)
 	}
 	if c.ShutdownGrace, err = parseDur(get("SHUTDOWN_GRACE", "15s")); err != nil {
 		return c, fmt.Errorf("ACP_SHUTDOWN_GRACE: %w", err)
@@ -113,6 +123,14 @@ func parseBool(s string) (bool, error) {
 
 // AuthEnabled reports whether any login method is configured.
 func (c Config) AuthEnabled() bool { return c.OIDCEnabled() || c.BreakGlassEnabled }
+
+func parseInt(s string, lo, hi int) (int, error) {
+	n, err := strconv.Atoi(s)
+	if err != nil || n < lo || n > hi {
+		return 0, fmt.Errorf("must be an integer between %d and %d", lo, hi)
+	}
+	return n, nil
+}
 
 func parseDur(s string) (time.Duration, error) {
 	d, err := time.ParseDuration(s)
