@@ -51,7 +51,7 @@ SELECT id, workspace_id, template_id, name, cron_expr, timezone, enabled, missed
 WHERE enabled AND next_run_at IS NOT NULL AND next_run_at <= now()
 ORDER BY next_run_at, id
 LIMIT $1
-FOR UPDATE SKIP LOCKED
+FOR NO KEY UPDATE SKIP LOCKED
 `
 
 // Must run inside a transaction together with AdvanceSchedule; the row locks
@@ -293,6 +293,15 @@ func (q *Queries) DeleteTemplate(ctx context.Context, arg DeleteTemplateParams) 
 	return result.RowsAffected(), nil
 }
 
+const disableSchedule = `-- name: DisableSchedule :exec
+UPDATE schedules SET enabled = false, next_run_at = NULL, updated_at = now() WHERE id = $1
+`
+
+func (q *Queries) DisableSchedule(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, disableSchedule, id)
+	return err
+}
+
 const getSchedule = `-- name: GetSchedule :one
 SELECT id, workspace_id, template_id, name, cron_expr, timezone, enabled, missed_policy, overrides, next_run_at, last_run_at, created_by, created_at, updated_at FROM schedules WHERE id = $1 AND workspace_id = $2
 `
@@ -335,6 +344,49 @@ type GetTemplateParams struct {
 
 func (q *Queries) GetTemplate(ctx context.Context, arg GetTemplateParams) (Template, error) {
 	row := q.db.QueryRow(ctx, getTemplate, arg.ID, arg.WorkspaceID)
+	var i Template
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ProjectID,
+		&i.InventoryID,
+		&i.Name,
+		&i.Slug,
+		&i.Description,
+		&i.Playbook,
+		&i.ExtraVars,
+		&i.EnvVars,
+		&i.SshSecretID,
+		&i.BecomeSecretID,
+		&i.DefaultLimit,
+		&i.DefaultTags,
+		&i.DefaultSkipTags,
+		&i.Verbosity,
+		&i.CheckMode,
+		&i.DiffMode,
+		&i.Survey,
+		&i.MaxConcurrent,
+		&i.AllowLimitOverride,
+		&i.AllowTagsOverride,
+		&i.AllowVarsOverride,
+		&i.AllowCheckOverride,
+		&i.AllowDiffOverride,
+		&i.AllowVerbosityOverride,
+		&i.WebhookEnabled,
+		&i.WebhookSecretID,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getTemplateByID = `-- name: GetTemplateByID :one
+SELECT id, workspace_id, project_id, inventory_id, name, slug, description, playbook, extra_vars, env_vars, ssh_secret_id, become_secret_id, default_limit, default_tags, default_skip_tags, verbosity, check_mode, diff_mode, survey, max_concurrent, allow_limit_override, allow_tags_override, allow_vars_override, allow_check_override, allow_diff_override, allow_verbosity_override, webhook_enabled, webhook_secret_id, created_by, created_at, updated_at FROM templates WHERE id = $1
+`
+
+func (q *Queries) GetTemplateByID(ctx context.Context, id uuid.UUID) (Template, error) {
+	row := q.db.QueryRow(ctx, getTemplateByID, id)
 	var i Template
 	err := row.Scan(
 		&i.ID,

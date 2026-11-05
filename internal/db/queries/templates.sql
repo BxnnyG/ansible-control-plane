@@ -11,6 +11,9 @@ RETURNING *;
 -- name: GetTemplate :one
 SELECT * FROM templates WHERE id = $1 AND workspace_id = $2;
 
+-- name: GetTemplateByID :one
+SELECT * FROM templates WHERE id = $1;
+
 -- name: ListTemplates :many
 SELECT * FROM templates WHERE workspace_id = $1 ORDER BY name;
 
@@ -76,13 +79,18 @@ DELETE FROM schedules WHERE id = $1 AND workspace_id = $2;
 -- name: ClaimDueSchedules :many
 -- Must run inside a transaction together with AdvanceSchedule; the row locks
 -- keep other scheduler instances from claiming the same schedules.
+-- FOR NO KEY UPDATE (not FOR UPDATE): the run insert on another connection
+-- takes a KEY SHARE lock through the schedule_id foreign key.
 SELECT * FROM schedules
 WHERE enabled AND next_run_at IS NOT NULL AND next_run_at <= now()
 ORDER BY next_run_at, id
 LIMIT $1
-FOR UPDATE SKIP LOCKED;
+FOR NO KEY UPDATE SKIP LOCKED;
 
 -- name: AdvanceSchedule :exec
 UPDATE schedules
 SET next_run_at = $2, last_run_at = COALESCE(sqlc.narg(last_run_at), last_run_at), updated_at = now()
 WHERE id = $1;
+
+-- name: DisableSchedule :exec
+UPDATE schedules SET enabled = false, next_run_at = NULL, updated_at = now() WHERE id = $1;

@@ -622,3 +622,28 @@ func (s *Service) CancelRun(ctx context.Context, ws, id uuid.UUID) (Run, error) 
 	s.notifyList(ctx, r.ID)
 	return toRun(r)
 }
+
+// ValidateOverrides checks overrides against the template with the same rules
+// as Enqueue (allowed overrides, limit pattern, survey) without creating a
+// run. Used for schedule and webhook configuration. When the project has not
+// been synced yet the survey checks are skipped.
+func (s *Service) ValidateOverrides(ctx context.Context, ws, templateID uuid.UUID, ov Overrides) error {
+	t, err := s.q.GetTemplate(ctx, dbgen.GetTemplateParams{ID: templateID, WorkspaceID: ws})
+	if err != nil {
+		return mapErr(err)
+	}
+	var fields []scan.Field
+	strict := false
+	_, res, err := s.revisionScan(ctx, t.ProjectID)
+	switch {
+	case err == nil:
+		if fields, strict, err = s.surveyFor(t, res); err != nil {
+			return err
+		}
+	case errors.Is(err, ErrNotSynced):
+	default:
+		return err
+	}
+	_, err = mergeParams(t, ov, fields, strict)
+	return err
+}
