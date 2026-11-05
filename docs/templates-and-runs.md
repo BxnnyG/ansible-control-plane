@@ -215,3 +215,22 @@ Example (generic scheme):
   updates through `runs/events` (reload after a reconnect). `/runs/{id}`: status header, cancel, live log
   (SSE, ANSI rendered as escaped text segments, search, auto-scroll, download) and per-host results.
 - Schedule overrides are not editable in the UI yet; existing overrides are kept on edit.
+
+## Admin CLI (templates and runs)
+
+For operators and live ops, run via `docker compose exec app acp admin ...`. All commands take
+`--workspace SLUG` (default `default`), print plain text and never print secret values (secret
+survey variables are masked, extra variable values are not echoed). Create and start are audited
+with actor `cli`.
+
+- `template list`
+- `template create --name N --project SLUG|ID --playbook PATH --inventory NAME|ID [--ssh-key-secret NAME]
+  [--become-secret NAME] [--vault-identity LABEL]... [--limit PATTERN] [--max-concurrent N]`: same
+  validation as the API (playbook must exist in the last project scan, secret types, workspace scope).
+- `run start --template NAME|ID [--limit P] [--tags T] [--check] [--diff] [-e key=value]... [--wait]`:
+  prints `run_id`. The run has trigger `api` and no `triggered_by` user (the CLI has workspace authority, no
+  per-host scope check). With `--wait` the masked, ANSI-stripped log is followed until the run
+  finishes; the exit code is non-zero unless the status is `succeeded`.
+- `run show RUN_ID [--log] [--tail N]`: status, timestamps, host summary and per-host results; `--log`
+  prints the stored log, `--tail N` only the last N lines.
+- `run list [--template NAME|ID] [--status S] [--limit N]`

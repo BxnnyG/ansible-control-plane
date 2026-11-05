@@ -238,10 +238,13 @@ func (s *Service) prepare(ctx context.Context, ws, templateID uuid.UUID, ov Over
 // set for scheduled runs.
 func (s *Service) Enqueue(ctx context.Context, ws, templateID uuid.UUID, ov Overrides, trigger string, actor Actor, scheduleID *uuid.UUID) (Run, error) {
 	switch trigger {
-	case TriggerManual, TriggerAPI:
+	case TriggerManual:
 		if actor.Principal == nil {
 			return Run{}, fmt.Errorf("%w: interactive runs need an authenticated actor", ErrInvalid)
 		}
+	case TriggerAPI:
+		// The HTTP API always passes a principal. A nil Principal is the
+		// operator CLI (acp admin run start), which has workspace authority.
 	case TriggerSchedule, TriggerWebhook:
 	default:
 		return Run{}, fmt.Errorf("%w: unknown trigger", ErrInvalid)

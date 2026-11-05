@@ -338,6 +338,15 @@ func TestEnqueue(t *testing.T) {
 			t.Errorf("err = %v", err)
 		}
 	})
+	t.Run("api trigger without principal (operator CLI)", func(t *testing.T) {
+		run, err := e.svc.Enqueue(ctx, e.ws, tpl.ID, Overrides{ExtraVars: map[string]any{"pw": "x"}}, TriggerAPI, Actor{}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if run.Trigger != TriggerAPI || run.TriggeredBy != nil {
+			t.Errorf("trigger=%q by=%v", run.Trigger, run.TriggeredBy)
+		}
+	})
 	t.Run("pins revision at enqueue time", func(t *testing.T) {
 		run, err := e.svc.Enqueue(ctx, e.ws, tpl.ID, Overrides{Limit: sp("web1.example.test"), ExtraVars: map[string]any{"pw": "x"}}, TriggerManual, e.actor(), nil)
 		if err != nil {
