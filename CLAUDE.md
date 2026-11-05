@@ -32,6 +32,8 @@ Self-hosted web platform to run, organize and monitor Ansible; replacement for t
 
 ## Milestones
 
+Execution order: M4 → M7 → M5 → M6 → M8 (numbers unchanged, see `PLAN.md` §11).
+
 - M0 Git init, orchestrator setup, discovery + questions
 - M1 Plan, license, repo skeleton, `.gitignore` + gitleaks, compose stack, CI
 - M2 Auth (OIDC + break-glass admin), workspaces, roles, secrets store
