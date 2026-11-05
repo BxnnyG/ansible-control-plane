@@ -56,6 +56,8 @@ FOR NO KEY UPDATE SKIP LOCKED
 
 // Must run inside a transaction together with AdvanceSchedule; the row locks
 // keep other scheduler instances from claiming the same schedules.
+// FOR NO KEY UPDATE (not FOR UPDATE): the run insert on another connection
+// takes a KEY SHARE lock through the schedule_id foreign key.
 func (q *Queries) ClaimDueSchedules(ctx context.Context, limit int32) ([]Schedule, error) {
 	rows, err := q.db.Query(ctx, claimDueSchedules, limit)
 	if err != nil {
