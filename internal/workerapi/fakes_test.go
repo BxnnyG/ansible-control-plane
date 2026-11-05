@@ -35,7 +35,12 @@ func (f *fakeTrees) WriteTree(_ context.Context, _, _ uuid.UUID, rev, prefix str
 	if _, err := tw.Write(body); err != nil {
 		return err
 	}
-	return tw.Close()
+	if err := tw.Close(); err != nil {
+		return err
+	}
+	// Like git archive: pad with zero blocks past the tar end marker.
+	_, err := w.Write(make([]byte, 10240))
+	return err
 }
 
 type fakeInventories struct{}

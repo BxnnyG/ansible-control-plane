@@ -284,6 +284,9 @@ func (b *Builder) copyTree(ctx context.Context, run dbgen.Run, p runs.Params, tw
 			return fmt.Errorf("write bundle: %w", err)
 		}
 	}
+	// git archive pads the stream with zero blocks after the tar end marker;
+	// drain them or the writer blocks forever.
+	_, _ = io.Copy(io.Discard, pr)
 	if err := <-done; err != nil {
 		return fmt.Errorf("%w: project tree: %w", ErrBundle, err)
 	}
