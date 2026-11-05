@@ -21,6 +21,7 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/inventory"
 	"github.com/BxnnyG/ansible-control-plane/internal/policy"
 	"github.com/BxnnyG/ansible-control-plane/internal/projects"
+	"github.com/BxnnyG/ansible-control-plane/internal/runs"
 	"github.com/BxnnyG/ansible-control-plane/internal/scan"
 	"github.com/BxnnyG/ansible-control-plane/internal/secrets"
 	"github.com/BxnnyG/ansible-control-plane/internal/server"
@@ -101,9 +102,11 @@ func run(args []string) error {
 		invSvc := inventory.New(inventory.Options{DB: pool, Checkouts: prj, Writer: prj})
 		vids := vaultids.New(q, sec)
 		vops := vaultops.New(prj, vids)
-		opts = append(opts, server.WithAuth(svc), server.WithPolicy(policy.New(q, policy.InventoryResolver{Source: invSvc}, svc.Require, log), q),
+		az := policy.New(q, policy.InventoryResolver{Source: invSvc}, svc.Require, log)
+		runSvc := runs.New(runs.Options{DB: pool, Graphs: invSvc, Authz: az})
+		opts = append(opts, server.WithAuth(svc), server.WithPolicy(az, q),
 			server.WithSecrets(sec), server.WithProjects(prj), server.WithPublicURL(cfg.PublicURL),
-			server.WithInventories(invSvc), server.WithVault(vids, vops))
+			server.WithInventories(invSvc), server.WithVault(vids, vops), server.WithRuns(runSvc))
 		go auth.RunSessionCleanup(ctx, q, auth.DefaultCleanupInterval, log)
 		go prj.RunScheduler(ctx, projects.DefaultScheduleTick, projects.DefaultScheduleConcurrency, log)
 		log.Info("login enabled", "oidc", cfg.OIDCEnabled(), "breakglass", cfg.BreakGlassEnabled)

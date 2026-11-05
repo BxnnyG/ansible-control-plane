@@ -45,6 +45,7 @@ type routerOpts struct {
 	inventories InventoriesAPI
 	vaultIDs    VaultIdentitiesAPI
 	vaultOps    VaultOpsAPI
+	runs        RunsAPI
 	publicURL   string
 }
 
@@ -90,6 +91,9 @@ func Router(log *slog.Logger, db Pinger, static fs.FS, opts ...Option) http.Hand
 		if ro.projects != nil {
 			projectRoutes(r, ro.az, ro.store, ro.projects, log)
 			webhookRoutes(r, ro.az, ro.store, ro.projects, ro.publicURL, log)
+		}
+		if ro.runs != nil {
+			runRoutes(r, ro.az, ro.store, ro.runs, log)
 		}
 		if ro.inventories != nil {
 			inventoryRoutes(r, ro.az, ro.store, ro.inventories, log)
