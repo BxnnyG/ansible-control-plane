@@ -76,6 +76,7 @@ services:
       ACP_APP_URL: http://app:8080
       ACP_WORKER_ADDR: ":8081"
       ACP_LOG_LEVEL: ${ACP_LOG_LEVEL:-info}
+      ACP_WORKER_CACHE_DIR: /var/cache/acp
       HOME: /home/acp
     read_only: true
     cap_drop: [ALL]
@@ -83,6 +84,8 @@ services:
     tmpfs:
       - /tmp:size=256m,mode=1777,exec
       - /home/acp:size=64m,uid=10001,gid=10001,mode=0700
+    volumes:
+      - acpworker-cache:/var/cache/acp
     networks: [internal]
     mem_limit: 512m
     pids_limit: 256
@@ -100,6 +103,7 @@ networks:
 volumes:
   pgdata:
   acpdata:
+  acpworker-cache:
 
 secrets:
   master_key:
