@@ -36,3 +36,71 @@ host). The run row stores the full parameter snapshot (`runs.params`) so later t
 affect queued runs. Values of survey fields flagged `secret` are masked in every API response.
 
 Scoped memberships only see runs whose whole host set lies in their scope (others are 404).
+
+## Run execution (operator view)
+
+Runs are executed by the separate `worker` container (ADR-0004, ADR-0016). The worker holds no database
+credentials and no master key; it talks to the app over the internal compose network only.
+
+### Worker token
+
+App and worker share a bearer token, mounted as the Docker secret `worker_token` from
+`./secrets/worker.token` (`make init` creates it with uid 10001, mode 600; the app reads it through
+`ACP_WORKER_TOKEN_FILE`, the worker through the same variable). Without the token file the app does not
+mount the worker API at all (`/api/internal/worker/*` answers 404), and queued runs stay queued. The routes
+are not part of the user permission model (`/api/v1/...`); they accept only this token, compared in
+constant time. They are served over plain HTTP on the app port so the worker needs no certificates: do not
+publish `/api/internal/` through a reverse proxy.
+
+### Lifecycle
+
+1. `ACP_WORKER_CONCURRENCY` (default 2) claim loops in the worker long-poll `POST claim` (up to 25 s). The
+   app claims through `db.ClaimRun` (advisory lock, per-template `max_concurrent`).
+2. The worker fetches the bundle once per lease: project tree at the pinned revision (`git archive` from
+   the app's cache clone), the unmasked inventory, `extra_vars.json` (including the decrypted secret survey
+   values), the SSH key, the become password and one password file per vault identity. It is unpacked to
+   `/tmp/runs/<run id>` (tmpfs, mode 0700) and deleted afterwards.
+3. If the project has `requirements.yml`, `collections/requirements.yml` or `roles/requirements.yml`, the
+   worker runs `ansible-galaxy` into `$ACP_WORKER_CACHE_DIR/galaxy/<sha256 of the files>` and reuses the
+   result for later runs with identical files (file lock; no secrets in that cache).
+4. `ansible-playbook` runs without a shell, as uid 10001, in its own process group, from the project
+   directory (so the project's `ansible.cfg` applies). The inventory is a tiny script printing the
+   rendered `--list` JSON. Environment order: passthrough of `PATH`, `HOME`, `LC_*`, proxy and `ANSIBLE_*`
+   image settings, then the template's `env_vars`, then worker-enforced variables last (event callback
+   `acp`, `ANSIBLE_FORCE_COLOR`, events file, temp directories). Templates cannot set `ACP_*`,
+   `ANSIBLE_CALLBACK*` or `ANSIBLE_STDOUT_CALLBACK`. Host key checking is not changed: set
+   `ANSIBLE_HOST_KEY_CHECKING` in the template's `env_vars` or in the project's `ansible.cfg` if needed.
+5. stdout and stderr are streamed in chunks (at most 64 KiB, flushed every 500 ms, numbered by `seq`);
+   callback events become per-host results with the names of changed tasks. A heartbeat every 5 s carries
+   the cancel flag.
+6. Cancel sends SIGTERM to the process group and SIGKILL after 10 s; the run ends as `cancelled`. Exit code 0
+   is `succeeded`, any other exit `failed`. Failures before the playbook starts (bundle, Galaxy) end as
+   `failed` with the reason in the log.
+
+### Liveness and cleanup
+
+- The app marks a running run as `lost` after 60 s without heartbeat (checked every 15 s) and requests
+  cancellation of running runs whose template was deleted.
+- A worker that loses its lease (HTTP 409) stops the process and does not report a result.
+- Values of secret survey fields are stored envelope-encrypted inside `runs.params` (`secret_vars_enc`),
+  only the bundle builder decrypts them, and the envelope is removed when the run finishes, is cancelled or
+  is marked lost. The API keeps showing `***`.
+
+### Log masking
+
+Known secret values (SSH key and its lines, become password, vault passwords, secret survey values) are
+replaced by `***` in the worker before sending and again in the app before persisting
+(`run_log_chunks`). Values shorter than 4 characters are not masked. Anything a playbook prints that is not
+one of these values (for example a password a task derives) is not recognized: use `no_log` for such tasks.
+After each batch the app issues `NOTIFY acp_run_<run id without dashes>` (payload `log:<last seq>` or
+`status:<status>`) for the SSE stream.
+
+### End-to-end smoke test
+
+`scripts/test-run-e2e.sh` starts a throwaway compose project (`scripts/e2e/compose.yml`, project name
+`acp-e2e-<pid>`, own network and volumes, no published ports, images `acp-e2e-*:test`) with postgres, a
+dumb-HTTP git server serving `scripts/e2e/fixture`, app and worker. It seeds a workspace, project,
+inventory and templates via SQL, syncs the project with `acp admin project sync`, then asserts a
+successful run (status, host summary, log, changed tasks, run directory removed) and a cancelled run. It
+does not exercise Galaxy installs (needs internet) or credentials; those are covered by unit tests.
+`KEEP=1` leaves the stack up for debugging. The live stack is never touched.

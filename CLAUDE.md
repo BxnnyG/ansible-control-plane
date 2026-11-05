@@ -69,6 +69,7 @@ Self-hosted web platform to run, organize and monitor Ansible; replacement for t
 - `make test` – `go vet` + `go test` for `./cmd/... ./internal/...` (never `./...`: `web/node_modules` contains stray Go files). The Go container installs `git openssh-client-default` via apk first (gitops tests need git and ssh-keyscan); `scripts/test-db.sh` does the same, CI installs them via apt.
 - `make test-db` (`scripts/test-db.sh`) – DB-backed tests (db, auth, admin, server) against a throwaway Postgres, one database per package, cleaned up on exit.
 - `make lint` – golangci-lint; web: `docker run --rm -v $PWD/web:/app -w /app node:24-alpine sh -c 'npm ci && npm run lint && npm run check && npm test -- --run && npm run build'`.
+- `scripts/test-run-e2e.sh` – run-execution smoke test on a throwaway compose project (builds `acp-e2e-*` images, ~3-5 min; never touches the live stack).
 - `make up` / `make down` – compose stack (`docker compose up -d --build`); ports from `.env` (`ACP_HTTP_PORT`, `ACP_HTTPS_PORT`).
 - Full-history secret scan: `docker run --rm -v $PWD:/repo ghcr.io/gitleaks/gitleaks:v8.21.2 git /repo --redact --config /repo/.gitleaks.toml`.
 

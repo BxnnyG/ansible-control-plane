@@ -1,0 +1,12 @@
+- name: e2e site playbook
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Ping
+      ansible.builtin.ping:
+    - name: Change something
+      ansible.builtin.command: /bin/true
+      changed_when: true
+    - name: Print
+      ansible.builtin.debug:
+        msg: "e2e run ok on {{ inventory_hostname }}"
