@@ -56,6 +56,7 @@
 - TLS chain: server cert served without intermediate; need intermediate + root CA cert (public) from user to serve full chain / trust in worker.
 
 ## Decisions (with short rationale)
+- Roadmap order (user + Claude, 2026-11-05): M4 → M7 (migration) → M5 → M6 → M8; numbers unchanged. Reason: real runs need migrated SSH keys. M7 starts with a fresh Semaphore backup (hard rule 2).
 - M4 (user, 2026-11-05): worker uses the full current `ansible` community package (compat with Semaphore's 93 collections); RUN-8 notifications deferred to M6/M8.
 - M3 (user, 2026-11-04): ACP gets its own read-write deploy key for the Ansible repo (`secrets/acp_git_deploy_ed25519`, public key to be added on the Git server by the user); Git server is Gitea/Forgejo (webhook HMAC); write branch configurable per inventory, default `acp/<inventory-slug>`, never force-push.
 - M3: ADR-0013 (project cache clone + scan in Go, TOFU-with-confirmation known_hosts), ADR-0014 (single relational inventory model for both modes), ADR-0015 (vault format in Go). GIT-4 (requirements install) moves to M4 (needs ansible-galaxy in worker).

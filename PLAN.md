@@ -227,10 +227,12 @@ Stack decisions are recorded in `docs/adr/`.
 | M2 ✅ | Auth (OIDC + break-glass), setup wizard (SETUP-1/3/4), workspaces, roles + scopes, secrets store, audit |
 | M3 ✅ | Git projects, inventories (DB + Git-synced), vault integration, surveys from `argument_specs` (GIT-4 requirements install moved to M4) |
 | M4 | Worker, templates, `requirements.yml` install (GIT-4), live logs, run history, per-host results, schedules, webhooks |
+| M7 (next after M4) | Semaphore migration: dry run → import → comparison → cutover |
 | M5 | Connector framework, OPNsense (Kea/dnsmasq/ISC), Proxmox VE, host merge, conflicts, group rules |
 | M6 | NetBox, monitoring adapters (Checkmk first), fleet view, unmanaged list, remediation |
-| M7 | Semaphore migration: dry run → import → comparison → cutover |
 | M8 | Hardening: security review, backup/restore, docs, release `v1.0.0` |
+
+Execution order (decided 2026-11-05): M4 → M7 → M5 → M6 → M8. Migration comes first because real runs need the migrated SSH keys and ACP should replace Semaphore in daily use before connectors add value. Milestone numbers stay unchanged so branches and tags remain stable.
 
 ## 12. Risks
 
