@@ -1,10 +1,13 @@
 # Handoff
 
 ## Goal
-- Next: M4 (worker, templates, live logs, run history, schedules, webhooks; GIT-4 requirements install).
+- Next: M7 on `feat/m7-migration`, start with a fresh Semaphore backup (rule 2).
 - M3 (done, merged): Git projects (sync/scan/webhooks), inventories (DB + Git-synced, import, preview), vault (Go-native), surveys from argument_specs, inventory-backed ScopeResolver, secrets API.
 
 ## Done
+- M4 done (branch `feat/m4-runner`, ADR-0016): packages internal/runs, runproto, runmask, workerapi, worker, schedules; worker image ansible 14.6.0 (core 2.21.6) with `acp` callback; worker token `secrets/worker.token` (`make init`); worker API on internal listener :8082 (not published); worker reaches hosts via egress network; SSE logs, retention 90d; schedules + template webhooks; UI templates/runs; admin CLI `template`/`run`; migrations 00011-00012. Use `db.ClaimRun`, never raw sqlc ClaimRun. test-db.sh uses tmpfs; full test-db ~10 min (run in background); never run Go test containers in parallel (disk-full incident 2026-11-05).
+- M4 live: deployed 2026-11-05 (DB backup /opt/backups/acp-2026-11-05-1836/, migrations 11-12); smoke template "ping (M4 smoke)" runs end-to-end; SSH auth fails until keys are migrated (M7).
+- M7 notes: Ansible repo references `~/.ssh/ansible_infra`; migrated templates must override it (inventory/group vars beat --private-key). Open from M4: schedule overrides not editable in UI, survey override is a JSON textarea, argument_specs only for entry point main.
 - Repository initialized (`main`), orchestrator setup, `.gitignore`.
 - Discovery done (branch `feat/m0-discovery`): `docs/discovery.md` (sanitized), `docs/local/discovery.md` (raw, git-ignored).
 - Semaphore backup created outside the repo (path in `docs/local/discovery.md`).
@@ -19,17 +22,6 @@
 - Checkmk 2.5 reachable (site/user in docs/local).
 
 ## Open / Next step
-- M4 on `feat/m4-runner`, design in ADR-0016. Steps: (1) worker image (full ansible pkg) + callback plugin, (2) schema 00011 templates/runs/log chunks/host results/schedules + sqlc, (3) templates API, (4) worker API + bundle + queue/claim + masking, (5) worker supervisor (exec, cancel, requirements cache GIT-4), (6) SSE logs + run history/filters + retention, (7) schedules + template webhooks, (8) UI (templates, run dialog w/ survey, live log, history, schedules), (9) docs + live deploy + first live run.
-- M4 done: (1) worker image ansible 14.6.0 (core 2.21.6), `acp` JSON-event callback (ACP_EVENTS_FILE, no_log-safe), smoke test scripts/test-worker-image.sh, cache volume acpworker-cache at /var/cache/acp; (2) migration 00011 (templates w/ webhook fields, template_vault_identities, schedules, runs, run_log_chunks, run_host_results) + sqlc; use `db.ClaimRun` helper (advisory lock enforces max_concurrent), never raw sqlc ClaimRun. Open: template delete must cancel queued runs; scheduler computes next cron run in Go and AdvanceSchedule in same tx as ClaimDueSchedules.
-- M4 done: (3) internal/runs (Service.Enqueue w/ Overrides/Actor, Params snapshot, Ansible limit-pattern matcher ResolveLimit), REST templates CRUD, start run, history/filters, cancel (internal/server/runs_api.go), docs/templates-and-runs.md. Decision: secret survey values in runs.params get envelope-encrypted and wiped after the run (done in step 4). Open: argument_specs only for role entry point main; env_vars deny list is our own choice.
-- M4 done: (4+5) internal worker API (internal/workerapi: claim long-poll, bundle once per lease, events w/ masking + host results, heartbeat/cancel, finish, lost-run + orphan job every 15s), worker supervisor (internal/worker: bundle unpack via os.Root, Galaxy cache keyed by sha256 of requirements, streaming, SIGTERM/SIGKILL cancel), shared internal/runproto + internal/runmask, worker token secret (`secrets/worker.token`, `make init`; existing installs must run `make init` before `docker compose up`), migration 00012 (bundle_served_at), secret survey values sealed in runs.params (wiped at end). e2e: scripts/test-run-e2e.sh passes. Next: (6) SSE logs (NOTIFY channel acp_run_<id> already emitted) + retention job, then (7) schedules/webhooks, (8) UI, (9) docs + live deploy.
-- M4 done: (6) worker API on separate internal listener ACP_WORKER_API_ADDR :8082 (not published), SSE runs/{id}/log + runs/events via shared LISTEN hub (log data is a JSON string), log.txt download, retention ACP_RUN_LOG_RETENTION_DAYS (default 90).
-- 2026-11-05 incident: host disk full (parallel Go containers + leaked anonymous test-PG volumes). Cleaned test artifacts/build cache; test-db.sh now uses tmpfs. 58 leftover anonymous test volumes need removal by user (blocked for Claude). Rule: never run Go test containers in parallel.
-- M4 done: (7) internal/schedules (cron 5-field + IANA tz, DST: repeated wall time fires on first occurrence, missed policy skip/run_once, 30s scheduler loop), schedule API + preview, template webhooks POST /api/hooks/templates/{id}; claim uses FOR NO KEY UPDATE SKIP LOCKED (FOR UPDATE deadlocked with runs.schedule_id FK). test-db.sh has -timeout 150s; full test-db run takes ~10 min – run in background.
-- M4 done: (8) UI: /templates, /templates/[id] (form, RunDialog, schedules, webhook panel), /runs, /runs/[id] (LogViewer w/ own ANSI converter, no innerHTML, max 20k lines; HostResults); 81 vitest green; not yet tested in a browser. Open: schedule overrides not editable in UI, survey override is a JSON textarea.
-- M4 done: API gaps closed (triggered_by_name on runs, POST templates/{id}/runs/preview with host count/first 50 hosts).
-- M4 deploy pending: ACP DB backup /opt/backups/acp-2026-11-05-1836/ (DB at migration 10). Live deploy (make init → worker.token, docker compose up -d --build → migrations 11–12) was blocked by the permission classifier; needs user to run it or allow it.
-- M4 next: (9) docs + live deploy (make init for worker.token first) + first live run.
 - M3 plan: (1) secrets API, (2) gitops package, (3) projects schema+API+sync+scan, (4) argument_specs → survey schema, (5) vault package + vault identities, (6) inventory schema+CRUD+render+import, (7) git-synced write-back, (8) ScopeResolver, (9) webhooks + scheduled sync, (10) UI pages.
 - M3 done: (1) secrets API (migration 00006 secret types+metadata; secrets.write admin/owner only; known gap: concurrent PUT not locked), (2) internal/gitops, (5a) internal/vault; Go tests install git+openssh via apk (Makefile, test-db.sh, CI). Commit 64aa7aa has trailers in subject – fix via squash-merge (no history rewrite).
 - M3 done: (3) projects (migration 00007, internal/projects, API, hostkey TOFU scan/confirm, sync with revisions, ACP_DATA_DIR + acpdata volume – verify volume ownership on next `make up`), (4) internal/scan (playbooks/roles/requirements/vars/inventories/vault detection, surveys from argument_specs) wired via scan.JSONScanner. Permissions: project.read viewer, project.write editor, project.sync operator.
@@ -57,7 +49,6 @@
 
 ## Decisions (with short rationale)
 - Roadmap order (user + Claude, 2026-11-05): M4 → M7 (migration) → M5 → M6 → M8; numbers unchanged. Reason: real runs need migrated SSH keys. M7 starts with a fresh Semaphore backup (hard rule 2).
-- M4 (user, 2026-11-05): worker uses the full current `ansible` community package (compat with Semaphore's 93 collections); RUN-8 notifications deferred to M6/M8.
 - M3 (user, 2026-11-04): ACP gets its own read-write deploy key for the Ansible repo (`secrets/acp_git_deploy_ed25519`, public key to be added on the Git server by the user); Git server is Gitea/Forgejo (webhook HMAC); write branch configurable per inventory, default `acp/<inventory-slug>`, never force-push.
 - M3: ADR-0013 (project cache clone + scan in Go, TOFU-with-confirmation known_hosts), ADR-0014 (single relational inventory model for both modes), ADR-0015 (vault format in Go). GIT-4 (requirements install) moves to M4 (needs ansible-galaxy in worker).
 - Semaphore source DB is MySQL 8.0 → migration tool must read MySQL (or the API).
