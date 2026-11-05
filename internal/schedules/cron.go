@@ -172,6 +172,14 @@ func (c *Cron) Next(t time.Time) time.Time {
 				if cand.Hour() != h || cand.Minute() != m { // nonexistent local time
 					continue
 				}
+				// Go resolves a repeated wall-clock time (fall-back) to either
+				// occurrence; always use the first one.
+				for _, back := range []time.Duration{time.Hour, 30 * time.Minute} {
+					if e := cand.Add(-back); e.Hour() == h && e.Minute() == m {
+						cand = e
+						break
+					}
+				}
 				if cand.After(t) {
 					return cand
 				}
