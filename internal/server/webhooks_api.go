@@ -78,9 +78,8 @@ func (l *hookLimiter) allow(key string, now time.Time) bool {
 }
 
 // webhookRoutes registers the public hook endpoint and the management API.
-func webhookRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc WebhooksAPI, publicURL string, log *slog.Logger) {
+func webhookRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc WebhooksAPI, publicURL string, lim *hookLimiter, log *slog.Logger) {
 	// Public endpoint: authenticated by signature only, no session and no CSRF.
-	lim := newHookLimiter(60, time.Minute)
 	r.Post("/api/hooks/projects/{id}", func(w http.ResponseWriter, req *http.Request) {
 		host, _, err := net.SplitHostPort(req.RemoteAddr)
 		if err != nil {

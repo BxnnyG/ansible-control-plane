@@ -46,6 +46,7 @@ type routerOpts struct {
 	vaultIDs    VaultIdentitiesAPI
 	vaultOps    VaultOpsAPI
 	runs        RunsAPI
+	schedules   SchedulesAPI
 	stream      *runStream
 	publicURL   string
 }
@@ -59,6 +60,7 @@ func Router(log *slog.Logger, db Pinger, static fs.FS, opts ...Option) http.Hand
 	for _, o := range opts {
 		o(&ro)
 	}
+	hookLim := newHookLimiter(60, time.Minute) // shared by all public hook endpoints
 	r := chi.NewRouter()
 	// Note: no RealIP middleware; trusted proxy handling is added explicitly later.
 	r.Use(middleware.Recoverer, accessLog(log))
@@ -91,10 +93,13 @@ func Router(log *slog.Logger, db Pinger, static fs.FS, opts ...Option) http.Hand
 		}
 		if ro.projects != nil {
 			projectRoutes(r, ro.az, ro.store, ro.projects, log)
-			webhookRoutes(r, ro.az, ro.store, ro.projects, ro.publicURL, log)
+			webhookRoutes(r, ro.az, ro.store, ro.projects, ro.publicURL, hookLim, log)
 		}
 		if ro.runs != nil {
 			runRoutes(r, ro.az, ro.store, ro.runs, ro.stream, log)
+		}
+		if ro.schedules != nil {
+			scheduleRoutes(r, ro.az, ro.store, ro.schedules, hookLim, ro.publicURL, log)
 		}
 		if ro.inventories != nil {
 			inventoryRoutes(r, ro.az, ro.store, ro.inventories, log)

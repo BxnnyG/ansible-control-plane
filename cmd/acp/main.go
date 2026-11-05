@@ -25,6 +25,7 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/runs"
 	"github.com/BxnnyG/ansible-control-plane/internal/runstream"
 	"github.com/BxnnyG/ansible-control-plane/internal/scan"
+	"github.com/BxnnyG/ansible-control-plane/internal/schedules"
 	"github.com/BxnnyG/ansible-control-plane/internal/secrets"
 	"github.com/BxnnyG/ansible-control-plane/internal/server"
 	"github.com/BxnnyG/ansible-control-plane/internal/vaultids"
@@ -109,6 +110,7 @@ func run(args []string) error {
 		vops := vaultops.New(prj, vids)
 		az := policy.New(q, policy.InventoryResolver{Source: invSvc}, svc.Require, log)
 		runSvc := runs.New(runs.Options{DB: pool, Graphs: invSvc, Authz: az, Sealer: sp})
+		schedSvc := schedules.New(schedules.Options{DB: pool, Runs: runSvc, Secret: sec})
 		if cfg.WorkerTokenFile != "" {
 			token, err := workerapi.TokenFromFile(cfg.WorkerTokenFile, os.ReadFile)
 			if err != nil {
@@ -139,8 +141,9 @@ func run(args []string) error {
 		go runs.RunLogRetention(ctx, q, cfg.RunLogRetentionDays, runs.RetentionInterval, log)
 		opts = append(opts, server.WithAuth(svc), server.WithPolicy(az, q),
 			server.WithSecrets(sec), server.WithProjects(prj), server.WithPublicURL(cfg.PublicURL),
-			server.WithInventories(invSvc), server.WithVault(vids, vops), server.WithRuns(runSvc))
+			server.WithInventories(invSvc), server.WithVault(vids, vops), server.WithRuns(runSvc), server.WithSchedules(schedSvc))
 		go auth.RunSessionCleanup(ctx, q, auth.DefaultCleanupInterval, log)
+		go schedSvc.Run(ctx, schedules.DefaultTick, log)
 		go prj.RunScheduler(ctx, projects.DefaultScheduleTick, projects.DefaultScheduleConcurrency, log)
 		log.Info("login enabled", "oidc", cfg.OIDCEnabled(), "breakglass", cfg.BreakGlassEnabled)
 	case cfg.AuthEnabled():
