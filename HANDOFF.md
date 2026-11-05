@@ -19,6 +19,7 @@
 - Checkmk 2.5 reachable (site/user in docs/local).
 
 ## Open / Next step
+- M4 on `feat/m4-runner`, design in ADR-0016. Steps: (1) worker image (full ansible pkg) + callback plugin, (2) schema 00011 templates/runs/log chunks/host results/schedules + sqlc, (3) templates API, (4) worker API + bundle + queue/claim + masking, (5) worker supervisor (exec, cancel, requirements cache GIT-4), (6) SSE logs + run history/filters + retention, (7) schedules + template webhooks, (8) UI (templates, run dialog w/ survey, live log, history, schedules), (9) docs + live deploy + first live run.
 - M3 plan: (1) secrets API, (2) gitops package, (3) projects schema+API+sync+scan, (4) argument_specs → survey schema, (5) vault package + vault identities, (6) inventory schema+CRUD+render+import, (7) git-synced write-back, (8) ScopeResolver, (9) webhooks + scheduled sync, (10) UI pages.
 - M3 done: (1) secrets API (migration 00006 secret types+metadata; secrets.write admin/owner only; known gap: concurrent PUT not locked), (2) internal/gitops, (5a) internal/vault; Go tests install git+openssh via apk (Makefile, test-db.sh, CI). Commit 64aa7aa has trailers in subject – fix via squash-merge (no history rewrite).
 - M3 done: (3) projects (migration 00007, internal/projects, API, hostkey TOFU scan/confirm, sync with revisions, ACP_DATA_DIR + acpdata volume – verify volume ownership on next `make up`), (4) internal/scan (playbooks/roles/requirements/vars/inventories/vault detection, surveys from argument_specs) wired via scan.JSONScanner. Permissions: project.read viewer, project.write editor, project.sync operator.
@@ -45,6 +46,7 @@
 - TLS chain: server cert served without intermediate; need intermediate + root CA cert (public) from user to serve full chain / trust in worker.
 
 ## Decisions (with short rationale)
+- M4 (user, 2026-11-05): worker uses the full current `ansible` community package (compat with Semaphore's 93 collections); RUN-8 notifications deferred to M6/M8.
 - M3 (user, 2026-11-04): ACP gets its own read-write deploy key for the Ansible repo (`secrets/acp_git_deploy_ed25519`, public key to be added on the Git server by the user); Git server is Gitea/Forgejo (webhook HMAC); write branch configurable per inventory, default `acp/<inventory-slug>`, never force-push.
 - M3: ADR-0013 (project cache clone + scan in Go, TOFU-with-confirmation known_hosts), ADR-0014 (single relational inventory model for both modes), ADR-0015 (vault format in Go). GIT-4 (requirements install) moves to M4 (needs ansible-galaxy in worker).
 - Semaphore source DB is MySQL 8.0 → migration tool must read MySQL (or the API).
