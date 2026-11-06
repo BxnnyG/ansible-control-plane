@@ -18,6 +18,9 @@ M5 implements CON-1..5, CON-8/9, FLEET-2/3 and INV-5 on top of ADR-0009 (connect
 - **Group rules (INV-5):** rules (`subnet` | `proxmox_tag` | later NetBox role/site/tag) map matching fleet hosts into one DB inventory group. A rule has a preview (add/remove list) and is applied explicitly; Git-synced inventories are changed only through the existing write-back flow, never silently.
 
 ## Consequences
+- **Hosts without observations are deleted**, not marked gone: the merge result is derived data, so a host exists exactly as long as at least one observation does. The 24 h "host disappeared" conflict covers the window until the observation is pruned (30 days); afterwards the host row is removed and its conflict resolves. Host ids are therefore not retained for hosts that are gone for good.
+- A MAC-less observation joins a MAC-bearing host by name or IP only when exactly one such host matches; with several candidates it stays a separate host and the duplicate shows up as a conflict. Loopback, link-local, unspecified and multicast addresses never act as match keys. Source priority is a number (higher wins; NetBox 400 > Proxmox 300 > OPNsense 200 > everything else 100) and can be overridden per connector with the integer config key `priority`.
+- Conflict fingerprints use the conflicting key (IP or name) plus the strongest key of each involved host, so a host gaining a second IP or tag does not reset an acknowledgement. A conflict that reappears after being resolved reopens the same row with the acknowledgement cleared.
 - Re-merging is cheap at homelab scale (hundreds of hosts) and always reproducible after priority changes.
 - Observation history beyond `first_seen`/`last_seen` is not kept; `connector_syncs` keeps counts only.
 - A connector configured in two workspaces is synced twice.
