@@ -90,44 +90,53 @@ func (s *Service) Commit(ctx context.Context, ws, id uuid.UUID, in CommitInput, 
 	}
 	var res CommitResult
 	_, err = s.mutateRaw(ctx, ws, id, ifMatch, false, func(q *dbgen.Queries, cur dbgen.Inventory) error {
-		project, branch, err := gitTarget(cur)
-		if err != nil {
-			return err
-		}
-		snap, err := loadSnapshot(ctx, q, id)
-		if err != nil {
-			return err
-		}
-		doc, err := snap.doc()
-		if err != nil {
-			return err
-		}
-		msg := strings.TrimSpace(in.Message)
-		if msg == "" {
-			msg = "Update inventory " + cur.Name + " via ansible-control-plane"
-		}
-		wr, err := s.w.WriteBack(ctx, ws, project, projects.WriteRequest{
-			Branch: branch, BaseSHA: cur.BaseSha, Message: msg, Author: author, Plan: planFor(cur, doc)})
-		if err != nil {
-			return err
-		}
-		row := cur
-		if !wr.NoOp && wr.SHA != cur.BaseSha {
-			if row, err = q.SetInventoryBaseSHA(ctx, dbgen.SetInventoryBaseSHAParams{ID: id, BaseSha: wr.SHA}); err != nil {
-				return fmt.Errorf("record base revision: %w", err)
-			}
-		}
-		view, err := s.view(ctx, q, row)
-		if err != nil {
-			return err
-		}
-		res = CommitResult{Inventory: view, Branch: wr.Branch, SHA: wr.SHA, Paths: wr.Paths, Created: wr.Created, NoOp: wr.NoOp}
-		if res.Paths == nil {
-			res.Paths = []string{}
-		}
-		return nil
+		var err error
+		res, err = s.writeBack(ctx, q, ws, cur, in.Message, author)
+		return err
 	})
 	return res, err
+}
+
+// writeBack serializes the stored content of the locked inventory cur into its
+// project's write branch and records the new base revision. Callers hold the
+// inventory row lock in the transaction behind q.
+func (s *Service) writeBack(ctx context.Context, q *dbgen.Queries, ws uuid.UUID, cur dbgen.Inventory, message string, author projects.Author) (CommitResult, error) {
+	project, branch, err := gitTarget(cur)
+	if err != nil {
+		return CommitResult{}, err
+	}
+	snap, err := loadSnapshot(ctx, q, cur.ID)
+	if err != nil {
+		return CommitResult{}, err
+	}
+	doc, err := snap.doc()
+	if err != nil {
+		return CommitResult{}, err
+	}
+	msg := strings.TrimSpace(message)
+	if msg == "" {
+		msg = "Update inventory " + cur.Name + " via ansible-control-plane"
+	}
+	wr, err := s.w.WriteBack(ctx, ws, project, projects.WriteRequest{
+		Branch: branch, BaseSHA: cur.BaseSha, Message: msg, Author: author, Plan: planFor(cur, doc)})
+	if err != nil {
+		return CommitResult{}, err
+	}
+	row := cur
+	if !wr.NoOp && wr.SHA != cur.BaseSha {
+		if row, err = q.SetInventoryBaseSHA(ctx, dbgen.SetInventoryBaseSHAParams{ID: cur.ID, BaseSha: wr.SHA}); err != nil {
+			return CommitResult{}, fmt.Errorf("record base revision: %w", err)
+		}
+	}
+	view, err := s.view(ctx, q, row)
+	if err != nil {
+		return CommitResult{}, err
+	}
+	res := CommitResult{Inventory: view, Branch: wr.Branch, SHA: wr.SHA, Paths: wr.Paths, Created: wr.Created, NoOp: wr.NoOp}
+	if res.Paths == nil {
+		res.Paths = []string{}
+	}
+	return res, nil
 }
 
 // Diff previews what Commit would write: a unified diff against the files at

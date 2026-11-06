@@ -1,0 +1,5 @@
+{"data":[
+{"iface":"eno1","type":"eth","active":1},
+{"iface":"vmbr0","type":"bridge","cidr":"192.0.2.2/24","cidr6":"2001:db8:0:1::2/64","gateway":"192.0.2.1"},
+{"iface":"vmbr0.20","type":"vlan","vlan-id":20,"cidr":"198.51.100.2/24","comments":"Lab VLAN"},
+{"iface":"lo","type":"loopback"}]}

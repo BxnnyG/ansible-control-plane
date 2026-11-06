@@ -16,9 +16,12 @@ import (
 
 	"github.com/BxnnyG/ansible-control-plane/internal/auth"
 	"github.com/BxnnyG/ansible-control-plane/internal/config"
+	"github.com/BxnnyG/ansible-control-plane/internal/connectors"
 	"github.com/BxnnyG/ansible-control-plane/internal/db"
 	"github.com/BxnnyG/ansible-control-plane/internal/db/dbgen"
+	"github.com/BxnnyG/ansible-control-plane/internal/fleet"
 	"github.com/BxnnyG/ansible-control-plane/internal/gitops"
+	"github.com/BxnnyG/ansible-control-plane/internal/grouprules"
 	"github.com/BxnnyG/ansible-control-plane/internal/inventory"
 	"github.com/BxnnyG/ansible-control-plane/internal/policy"
 	"github.com/BxnnyG/ansible-control-plane/internal/projects"
@@ -111,7 +114,7 @@ func run(args []string) error {
 		invSvc := inventory.New(inventory.Options{DB: pool, Checkouts: prj, Writer: prj})
 		vids := vaultids.New(q, sec)
 		vops := vaultops.New(prj, vids)
-		az := policy.New(q, policy.InventoryResolver{Source: invSvc}, svc.Require, log)
+		az := policy.New(q, policy.InventoryResolver{Source: invSvc, Networks: policy.DBNetworkSource{Q: q}}, svc.Require, log)
 		runSvc := runs.New(runs.Options{DB: pool, Graphs: invSvc, Authz: az, Sealer: sp})
 		schedSvc := schedules.New(schedules.Options{DB: pool, Runs: runSvc, Secret: sec})
 		if cfg.WorkerTokenFile != "" {
@@ -148,6 +151,11 @@ func run(args []string) error {
 		go auth.RunSessionCleanup(ctx, q, auth.DefaultCleanupInterval, log)
 		go schedSvc.Run(ctx, schedules.DefaultTick, log)
 		go prj.RunScheduler(ctx, projects.DefaultScheduleTick, projects.DefaultScheduleConcurrency, log)
+		fleetStore := fleet.NewStore(pool, nil)
+		conSvc := connectors.New(connectors.Options{DB: pool, Registry: newConnectorRegistry(), Secrets: sec, PostSync: fleetStore})
+		opts = append(opts, server.WithConnectors(conSvc), server.WithFleet(fleetStore),
+			server.WithGroupRules(grouprules.New(grouprules.Options{DB: pool, Fleet: fleetStore, Inventories: invSvc})))
+		go conSvc.RunScheduler(ctx, connectors.DefaultTick, connectors.DefaultConcurrency, log)
 		log.Info("login enabled", "oidc", cfg.OIDCEnabled(), "breakglass", cfg.BreakGlassEnabled)
 	case cfg.AuthEnabled():
 		log.Warn("login disabled: ACP_PUBLIC_URL is not set")

@@ -34,6 +34,8 @@ const (
 	ScheduleWrite   Permission = "schedule.write"
 	ConnectorRead   Permission = "connector.read"
 	ConnectorWrite  Permission = "connector.write"
+	FleetRead       Permission = "fleet.read"
+	FleetManage     Permission = "fleet.manage"
 	VaultRead       Permission = "vault.read"
 	VaultManage     Permission = "vault.manage"
 	VaultDecrypt    Permission = "vault.decrypt"
@@ -54,7 +56,7 @@ var workspaceWide = map[Permission]bool{
 	WorkspaceRead:   false, // reading the workspace itself is allowed when scoped
 	WorkspaceManage: true, WorkspaceDelete: true,
 	MembersRead: true, MembersManage: true,
-	AuditRead: true, ConnectorWrite: true, SecretsWrite: true, SecretsMetaRead: true,
+	AuditRead: true, ConnectorRead: true, ConnectorWrite: true, SecretsWrite: true, SecretsMetaRead: true,
 	VaultRead: true, VaultManage: true, VaultDecrypt: true,
 }
 
@@ -64,7 +66,7 @@ func IsWorkspaceWide(p Permission) bool { return workspaceWide[p] }
 // Viewers read everything that is not administrative. members.read,
 // connector.read, audit.read and secrets.meta.read are granted by higher roles.
 var viewerPerms = []Permission{
-	WorkspaceRead, ProjectRead, InventoryRead, TemplateRead, RunRead, ScheduleRead,
+	WorkspaceRead, ProjectRead, InventoryRead, TemplateRead, RunRead, ScheduleRead, FleetRead,
 }
 
 var matrix = buildMatrix()
@@ -82,7 +84,7 @@ func buildMatrix() map[string]map[Permission]bool {
 	}
 	viewer := grant(nil, viewerPerms...)
 	operator := grant(viewer, RunExecute, RunCancel, ProjectSync)
-	editor := grant(operator, SecretsMetaRead, ProjectWrite, InventoryWrite, TemplateWrite, ScheduleWrite, VaultRead)
+	editor := grant(operator, SecretsMetaRead, ProjectWrite, InventoryWrite, TemplateWrite, ScheduleWrite, VaultRead, FleetManage)
 	admin := grant(editor, SecretsWrite, WorkspaceManage, MembersRead, MembersManage, AuditRead, ConnectorRead, ConnectorWrite, VaultManage, VaultDecrypt)
 	owner := grant(admin, WorkspaceDelete)
 	return map[string]map[Permission]bool{

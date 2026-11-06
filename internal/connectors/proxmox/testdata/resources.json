@@ -1,0 +1,8 @@
+{"data":[
+{"id":"qemu/100","type":"qemu","vmid":100,"name":"vm-agent","node":"pve1","status":"running","tags":"web;prod"},
+{"id":"qemu/101","type":"qemu","vmid":101,"name":"vm-noagent","node":"pve1","status":"running","tags":""},
+{"id":"qemu/102","type":"qemu","vmid":102,"name":"vm-stopped","node":"pve1","status":"stopped","tags":"lab,test"},
+{"id":"qemu/900","type":"qemu","vmid":900,"name":"tmpl","node":"pve1","status":"stopped","template":1},
+{"id":"lxc/200","type":"lxc","vmid":200,"name":"ct-running","node":"pve1","status":"running","tags":"dns"},
+{"id":"lxc/201","type":"lxc","vmid":201,"name":"ct-stopped","node":"pve1","status":"stopped"},
+{"id":"storage/pve1/local","type":"storage","node":"pve1"}]}

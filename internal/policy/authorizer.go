@@ -154,6 +154,18 @@ func (a *Authorizer) InventoryAccess(ctx context.Context, d Decision, inv uuid.U
 	return RefResolver{}.Access(ctx, ws, d.Scopes, inv)
 }
 
+// FleetAccess resolves the part of the fleet the membership may see: all of
+// it for unscoped memberships, otherwise the hosts inside the scoped networks.
+func (a *Authorizer) FleetAccess(ctx context.Context, d Decision) (FleetAccess, error) {
+	if !d.Scoped() {
+		return FleetAccess{All: true}, nil
+	}
+	if fr, ok := a.resolver.(FleetResolver); ok {
+		return fr.FleetAccess(ctx, d.Workspace.ID.String(), d.Scopes)
+	}
+	return FleetAccess{}, nil
+}
+
 // AuthorizeHosts checks that every explicitly named host of the inventory is
 // in the principal's scope (pattern-free: callers pass resolved host names,
 // e.g. the limit set of a run). Scoped memberships are denied when any host

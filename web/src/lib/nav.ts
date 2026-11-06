@@ -3,10 +3,18 @@ export interface NavItem {
   href: string;
   /** SVG path data (24x24 viewbox, stroke icon). */
   icon: string;
+  /** Permission required to see the entry; absent means always visible. */
+  permission?: string;
 }
 
 export const NAV_ITEMS: readonly NavItem[] = [
-  { label: 'Fleet', href: '/fleet', icon: 'M4 6h16M4 12h16M4 18h16' },
+  { label: 'Fleet', href: '/fleet', icon: 'M4 6h16M4 12h16M4 18h16', permission: 'fleet.read' },
+  {
+    label: 'Connectors',
+    href: '/connectors',
+    icon: 'M9 7V3M15 7V3M7 7h10v5a5 5 0 0 1-10 0zM12 17v4',
+    permission: 'connector.read',
+  },
   { label: 'Runs', href: '/runs', icon: 'M8 5v14l11-7z' },
   { label: 'Templates', href: '/templates', icon: 'M5 4h14v6H5zM5 14h6v6H5zM15 14h4v6h-4z' },
   { label: 'Inventories', href: '/inventories', icon: 'M4 7h16M4 12h16M4 17h10' },
@@ -37,4 +45,12 @@ export function filterNav(items: readonly NavItem[], query: string): NavItem[] {
   const q = query.trim().toLowerCase();
   if (!q) return [...items];
   return items.filter((i) => i.label.toLowerCase().includes(q));
+}
+
+/** Entries the caller may see according to the permission hints. */
+export function visibleNav(
+  items: readonly NavItem[],
+  allowed: (permission: string) => boolean,
+): NavItem[] {
+  return items.filter((i) => !i.permission || allowed(i.permission));
 }

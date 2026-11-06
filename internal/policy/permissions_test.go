@@ -9,11 +9,11 @@ func TestMatrix(t *testing.T) {
 	all := []Permission{WorkspaceRead, WorkspaceManage, WorkspaceDelete, MembersRead, MembersManage, AuditRead,
 		SecretsMetaRead, SecretsWrite, ProjectRead, ProjectWrite, ProjectSync, InventoryRead, InventoryWrite, TemplateRead,
 		TemplateWrite, RunRead, RunExecute, RunCancel, ScheduleRead, ScheduleWrite, ConnectorRead, ConnectorWrite,
-		VaultRead, VaultManage, VaultDecrypt}
+		VaultRead, VaultManage, VaultDecrypt, FleetRead, FleetManage}
 	want := map[string][]Permission{
-		RoleViewer:   {WorkspaceRead, ProjectRead, InventoryRead, TemplateRead, RunRead, ScheduleRead},
+		RoleViewer:   {WorkspaceRead, ProjectRead, InventoryRead, TemplateRead, RunRead, ScheduleRead, FleetRead},
 		RoleOperator: {RunExecute, RunCancel, ProjectSync},
-		RoleEditor:   {SecretsMetaRead, ProjectWrite, InventoryWrite, TemplateWrite, ScheduleWrite, VaultRead},
+		RoleEditor:   {SecretsMetaRead, ProjectWrite, InventoryWrite, TemplateWrite, ScheduleWrite, VaultRead, FleetManage},
 		RoleAdmin:    {SecretsWrite, WorkspaceManage, MembersRead, MembersManage, AuditRead, ConnectorRead, ConnectorWrite, VaultManage, VaultDecrypt},
 		RoleOwner:    {WorkspaceDelete},
 	}
@@ -40,7 +40,7 @@ func TestPermissionsScoped(t *testing.T) {
 			t.Errorf("scoped list contains workspace-wide %s", p)
 		}
 	}
-	if len(Permissions(RoleOwner, false)) != 25 {
+	if len(Permissions(RoleOwner, false)) != 27 {
 		t.Errorf("owner has %d permissions", len(Permissions(RoleOwner, false)))
 	}
 }

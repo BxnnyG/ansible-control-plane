@@ -2,6 +2,7 @@ package inventory
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/google/uuid"
@@ -23,12 +24,15 @@ func (s *Service) InventoryGraph(ctx context.Context, ws, inv uuid.UUID) (policy
 	if err != nil {
 		return policy.Graph{}, err
 	}
-	g := policy.Graph{Groups: map[uuid.UUID]string{}, Hosts: map[uuid.UUID]string{}}
+	g := policy.Graph{Groups: map[uuid.UUID]string{}, Hosts: map[uuid.UUID]string{}, HostAddrs: map[uuid.UUID]string{}}
 	for _, x := range snap.groups {
 		g.Groups[x.ID] = x.Name
 	}
 	for _, x := range snap.hosts {
 		g.Hosts[x.ID] = x.Name
+		if addr := ansibleHost(x.Vars); addr != "" {
+			g.HostAddrs[x.ID] = addr
+		}
 	}
 	for _, l := range snap.links {
 		g.Links = append(g.Links, policy.GraphLink{Parent: l.ParentID, Child: l.ChildID})
@@ -93,4 +97,17 @@ func (s *Service) RenderVisible(ctx context.Context, ws, id uuid.UUID, export bo
 		return nil, err
 	}
 	return Render(d, RenderOptions{Export: export, MaskVault: true}), nil
+}
+
+// ansibleHost returns the string value of the ansible_host variable, if any.
+func ansibleHost(vars []byte) string {
+	if len(vars) == 0 {
+		return ""
+	}
+	var m map[string]any
+	if json.Unmarshal(vars, &m) != nil {
+		return ""
+	}
+	s, _ := m["ansible_host"].(string)
+	return s
 }

@@ -57,6 +57,59 @@ func WithInventories(i InventoriesAPI) Option { return func(o *routerOpts) { o.i
 
 const maxInventoryBody = 256 << 10
 
+// inventoryFail maps inventory, project and Git write-back errors to HTTP
+// responses; it is shared by every handler that writes inventories.
+func inventoryFail(log *slog.Logger, w http.ResponseWriter, what string, err error) {
+	switch {
+	case errors.Is(err, inventory.ErrNotFound):
+		policy.WriteJSON(w, http.StatusNotFound, apiError{Error: "inventory resource not found", Code: "not_found"})
+	case errors.Is(err, inventory.ErrConflict):
+		policy.WriteJSON(w, http.StatusConflict, apiError{Error: err.Error(), Code: "conflict"})
+	case errors.Is(err, inventory.ErrPrecondition):
+		policy.WriteJSON(w, http.StatusPreconditionFailed, apiError{Error: err.Error(), Code: "version_conflict"})
+	case errors.Is(err, projects.ErrNotFound):
+		policy.WriteJSON(w, http.StatusConflict, apiError{Error: "the project has not been synced yet", Code: "project_not_synced"})
+	case errors.Is(err, projects.ErrGitConflict):
+		var ce *projects.ConflictError
+		paths := []string{}
+		if errors.As(err, &ce) && ce.Paths != nil {
+			paths = ce.Paths
+		}
+		policy.WriteJSON(w, http.StatusConflict, struct {
+			apiError
+			Paths []string `json:"paths"`
+		}{apiError{Error: err.Error(), Code: "git_conflict"}, paths})
+	case errors.Is(err, inventory.ErrVaultInINI):
+		policy.WriteJSON(w, http.StatusUnprocessableEntity, apiError{
+			Error: "this inventory is in INI format and contains vault-encrypted values, which INI cannot hold; convert the inventory file to YAML and import it again",
+			Code:  "vault_requires_yaml"})
+	case errors.As(err, new(*projects.RemoteError)):
+		policy.WriteJSON(w, http.StatusBadGateway, apiError{Error: "the git remote rejected the operation", Code: "remote_error", Detail: err.Error()})
+	case errors.Is(err, projects.ErrInvalid), errors.Is(err, projects.ErrHostKeyNotPinned):
+		policy.WriteJSON(w, http.StatusUnprocessableEntity, apiError{Error: err.Error(), Code: "invalid"})
+	case errors.Is(err, inventory.ErrInvalid):
+		policy.WriteJSON(w, http.StatusUnprocessableEntity, apiError{Error: err.Error(), Code: "invalid"})
+	default:
+		log.Error(what, "error", err)
+		policy.WriteJSON(w, http.StatusInternalServerError, apiError{Error: "internal error"})
+	}
+}
+
+// parseIfMatch parses the optional If-Match header: a quoted version number.
+// A missing header or "*" skips the optimistic check.
+func parseIfMatch(w http.ResponseWriter, req *http.Request) (*int, bool) {
+	h := strings.TrimSpace(req.Header.Get("If-Match"))
+	if h == "" || h == "*" {
+		return nil, true
+	}
+	v, err := strconv.Atoi(strings.Trim(strings.TrimPrefix(h, "W/"), `"`))
+	if err != nil || v < 0 {
+		policy.WriteJSON(w, http.StatusBadRequest, apiError{Error: "If-Match must be an inventory version", Code: "bad_request"})
+		return nil, false
+	}
+	return &v, true
+}
+
 // inventoryRoutes registers /api/v1/workspaces/{workspace}/inventories.
 func inventoryRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc InventoriesAPI, log *slog.Logger) {
 	const base = "/api/v1/workspaces/{workspace}/inventories"
@@ -64,41 +117,7 @@ func inventoryRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc In
 	notFound := func(w http.ResponseWriter, what string) {
 		policy.WriteJSON(w, http.StatusNotFound, apiError{Error: what + " not found", Code: "not_found"})
 	}
-	fail := func(w http.ResponseWriter, what string, err error) {
-		switch {
-		case errors.Is(err, inventory.ErrNotFound):
-			notFound(w, "inventory resource")
-		case errors.Is(err, inventory.ErrConflict):
-			policy.WriteJSON(w, http.StatusConflict, apiError{Error: err.Error(), Code: "conflict"})
-		case errors.Is(err, inventory.ErrPrecondition):
-			policy.WriteJSON(w, http.StatusPreconditionFailed, apiError{Error: err.Error(), Code: "version_conflict"})
-		case errors.Is(err, projects.ErrNotFound):
-			policy.WriteJSON(w, http.StatusConflict, apiError{Error: "the project has not been synced yet", Code: "project_not_synced"})
-		case errors.Is(err, projects.ErrGitConflict):
-			var ce *projects.ConflictError
-			paths := []string{}
-			if errors.As(err, &ce) && ce.Paths != nil {
-				paths = ce.Paths
-			}
-			policy.WriteJSON(w, http.StatusConflict, struct {
-				apiError
-				Paths []string `json:"paths"`
-			}{apiError{Error: err.Error(), Code: "git_conflict"}, paths})
-		case errors.Is(err, inventory.ErrVaultInINI):
-			policy.WriteJSON(w, http.StatusUnprocessableEntity, apiError{
-				Error: "this inventory is in INI format and contains vault-encrypted values, which INI cannot hold; convert the inventory file to YAML and import it again",
-				Code:  "vault_requires_yaml"})
-		case errors.As(err, new(*projects.RemoteError)):
-			policy.WriteJSON(w, http.StatusBadGateway, apiError{Error: "the git remote rejected the operation", Code: "remote_error", Detail: err.Error()})
-		case errors.Is(err, projects.ErrInvalid), errors.Is(err, projects.ErrHostKeyNotPinned):
-			policy.WriteJSON(w, http.StatusUnprocessableEntity, apiError{Error: err.Error(), Code: "invalid"})
-		case errors.Is(err, inventory.ErrInvalid):
-			policy.WriteJSON(w, http.StatusUnprocessableEntity, apiError{Error: err.Error(), Code: "invalid"})
-		default:
-			log.Error(what, "error", err)
-			policy.WriteJSON(w, http.StatusInternalServerError, apiError{Error: "internal error"})
-		}
-	}
+	fail := func(w http.ResponseWriter, what string, err error) { inventoryFail(log, w, what, err) }
 	decision := func(w http.ResponseWriter, req *http.Request) (policy.Decision, bool) {
 		d, ok := policy.DecisionFromContext(req.Context())
 		if !ok {
@@ -216,20 +235,7 @@ func inventoryRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc In
 		}
 		return true
 	}
-	// ifMatch parses the optional If-Match header: a quoted version number.
-	// A missing header or "*" skips the optimistic check.
-	ifMatch := func(w http.ResponseWriter, req *http.Request) (*int, bool) {
-		h := strings.TrimSpace(req.Header.Get("If-Match"))
-		if h == "" || h == "*" {
-			return nil, true
-		}
-		v, err := strconv.Atoi(strings.Trim(strings.TrimPrefix(h, "W/"), `"`))
-		if err != nil || v < 0 {
-			policy.WriteJSON(w, http.StatusBadRequest, apiError{Error: "If-Match must be an inventory version", Code: "bad_request"})
-			return nil, false
-		}
-		return &v, true
-	}
+	ifMatch := parseIfMatch
 	etag := func(w http.ResponseWriter, version int) { w.Header().Set("ETag", `"`+strconv.Itoa(version)+`"`) }
 
 	az.Handle(r, http.MethodGet, base, policy.InventoryRead, func(w http.ResponseWriter, req *http.Request) {

@@ -101,7 +101,7 @@ Scopes: a membership grants a role either workspace-wide or restricted to a set 
 - **AUTH-9** Audit log of all security-relevant actions (login, permission change, secret access, run start, cutover).
 
 ### Workspaces & organization (ORG)
-- **ORG-1** Multiple workspaces from day one; all objects belong to exactly one workspace (except global connector data).
+- **ORG-1** Multiple workspaces from day one; all objects belong to exactly one workspace, including connectors and fleet data (ADR-0018).
 - **ORG-2** Folders, tags and owners for hosts, playbooks, templates, inventories.
 - **ORG-3** Command palette (Ctrl+K) searching all objects the user may see; dark/light mode.
 
@@ -229,7 +229,7 @@ Stack decisions are recorded in `docs/adr/`.
 | M3 ✅ | Git projects, inventories (DB + Git-synced), vault integration, surveys from `argument_specs` (GIT-4 requirements install moved to M4) |
 | M4 ✅ | Worker, templates, `requirements.yml` install (GIT-4), live logs, run history, per-host results, schedules, webhooks |
 | M7 (done) | Semaphore migration: dry run → import → comparison → cutover |
-| M5 | Connector framework, OPNsense (Kea/dnsmasq/ISC), Proxmox VE, host merge, conflicts, group rules |
+| M5 (implemented, live verification pending) | Connector framework, OPNsense (Kea/dnsmasq/ISC), Proxmox VE, host merge, conflicts, group rules; decisions in ADR-0018, operator guide `docs/connectors-and-fleet.md` |
 | M6 | NetBox, monitoring adapters (Checkmk first), fleet view, unmanaged list, remediation |
 | M8 | Hardening: security review, backup/restore, docs, release `v1.0.0` |
 

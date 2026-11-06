@@ -5,6 +5,8 @@
 package dbgen
 
 import (
+	"net/netip"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -19,6 +21,109 @@ type AuditLog struct {
 	TargetID    string
 	WorkspaceID pgtype.UUID
 	Details     []byte
+}
+
+type Connector struct {
+	ID              uuid.UUID
+	WorkspaceID     uuid.UUID
+	Type            string
+	Name            string
+	BaseUrl         string
+	Config          []byte
+	SecretID        pgtype.UUID
+	IntervalSeconds int32
+	Enabled         bool
+	NextSyncAt      pgtype.Timestamptz
+	BackoffCount    int32
+	LastSyncAt      pgtype.Timestamptz
+	LastSuccessAt   pgtype.Timestamptz
+	LastStatus      string
+	LastError       string
+	LastDurationMs  int32
+	LastCounts      []byte
+	CreatedBy       pgtype.UUID
+	CreatedAt       pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
+}
+
+type ConnectorSync struct {
+	ID          uuid.UUID
+	ConnectorID uuid.UUID
+	WorkspaceID uuid.UUID
+	Trigger     string
+	Status      string
+	StartedAt   pgtype.Timestamptz
+	FinishedAt  pgtype.Timestamptz
+	DurationMs  int32
+	Counts      []byte
+	Error       string
+}
+
+type GroupRule struct {
+	ID            uuid.UUID
+	WorkspaceID   uuid.UUID
+	Name          string
+	Kind          string
+	Params        []byte
+	InventoryID   uuid.UUID
+	GroupName     string
+	Enabled       bool
+	CreatedBy     pgtype.UUID
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+	Mode          string
+	LastAppliedAt pgtype.Timestamptz
+	LastAppliedBy pgtype.UUID
+}
+
+type GroupRuleMember struct {
+	RuleID   uuid.UUID
+	HostName string
+	AddedAt  pgtype.Timestamptz
+}
+
+type Host struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	Name        string
+	Fields      []byte
+	FirstSeen   pgtype.Timestamptz
+	LastSeen    pgtype.Timestamptz
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
+type HostConflict struct {
+	ID             uuid.UUID
+	WorkspaceID    uuid.UUID
+	Type           string
+	Fingerprint    string
+	HostIds        []uuid.UUID
+	Details        []byte
+	State          string
+	AcknowledgedBy pgtype.UUID
+	AcknowledgedAt pgtype.Timestamptz
+	FirstSeen      pgtype.Timestamptz
+	LastSeen       pgtype.Timestamptz
+	ResolvedAt     pgtype.Timestamptz
+}
+
+type HostKey struct {
+	HostID      uuid.UUID
+	WorkspaceID uuid.UUID
+	Kind        string
+	Value       string
+}
+
+type HostObservation struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	ConnectorID uuid.UUID
+	ExternalKey string
+	Kind        string
+	Fields      []byte
+	FirstSeen   pgtype.Timestamptz
+	LastSeen    pgtype.Timestamptz
 }
 
 type Inventory struct {
@@ -87,6 +192,20 @@ type MigrationMapping struct {
 	AcpID       uuid.UUID
 	WorkspaceID uuid.UUID
 	CreatedAt   pgtype.Timestamptz
+}
+
+type Network struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	ConnectorID uuid.UUID
+	ExternalKey string
+	Cidr        netip.Prefix
+	Vlan        pgtype.Int4
+	Interface   string
+	Description string
+	Source      string
+	FirstSeen   pgtype.Timestamptz
+	LastSeen    pgtype.Timestamptz
 }
 
 type Project struct {

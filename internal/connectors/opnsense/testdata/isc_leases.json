@@ -1,0 +1,5 @@
+{"total":3,"rowCount":3,"current":1,"interfaces":{"lan":"LAN"},"rows":[
+{"address":"192.0.2.50","type":"dynamic","mac":"02:00:00:00:02:01","starts":"2026/11/06 10:00:00","ends":"2026/11/06 22:00:00","hostname":"isc-dyn.example.test","descr":"","if":"lan","if_descr":"LAN","state":"active","status":"online","man":""},
+{"address":"192.0.2.51","type":"static","mac":"02:00:00:00:02:02","starts":"","ends":"","hostname":"isc-static","descr":"Printer","if":"lan","if_descr":"LAN","state":"","status":"offline","man":""},
+{"address":"192.0.2.50","type":"dynamic","mac":"02:00:00:00:02:01","hostname":"isc-dyn.example.test","if":"lan","status":"online"}
+]}

@@ -1,0 +1,1 @@
+{"data":{"name":"vm-agent","description":"Web frontend\nowner: team-a","agent":"enabled=1,fstrim_cloned_disks=1","net0":"virtio=02:00:00:00:10:01,bridge=vmbr0,firewall=1","net1":"e1000=02:00:00:00:10:02,bridge=vmbr0,tag=20"}}

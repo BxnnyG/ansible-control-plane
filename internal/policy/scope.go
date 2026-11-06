@@ -74,3 +74,9 @@ func (RefResolver) Access(_ context.Context, _ string, scopes []Scope, inv uuid.
 	}
 	return Access{}, nil
 }
+
+// FleetAccess implements FleetResolver: without a network source nothing is
+// accessible.
+func (RefResolver) FleetAccess(context.Context, string, []Scope) (FleetAccess, error) {
+	return FleetAccess{}, nil
+}

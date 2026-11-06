@@ -5,6 +5,7 @@
   import { session } from '$lib/session.svelte';
   import { SETUP_STEPS, clampStep } from '$lib/setup/steps';
   import { SETUP_WORKSPACE } from '$lib/workspace';
+  import ConnectorsStep from '$lib/components/setup/ConnectorsStep.svelte';
   import AuthStep from '$lib/components/setup/AuthStep.svelte';
   import Stepper from '$lib/components/setup/Stepper.svelte';
   import SummaryStep from '$lib/components/setup/SummaryStep.svelte';
@@ -70,6 +71,8 @@
         />
       {:else if SETUP_STEPS[step].id === 'authentication'}
         <AuthStep {status} onnext={() => go(step + 1)} />
+      {:else if SETUP_STEPS[step].id === 'connectors'}
+        <ConnectorsStep slug={SETUP_WORKSPACE} onnext={() => go(step + 1)} />
       {:else if SETUP_STEPS[step].id === 'summary'}
         <SummaryStep slug={SETUP_WORKSPACE} {status} ondone={done} />
       {/if}

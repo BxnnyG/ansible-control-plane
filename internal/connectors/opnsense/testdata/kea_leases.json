@@ -1,0 +1,1 @@
+{"total":1,"rowCount":1,"current":1,"rows":[{"if_name":"igc1","if_descr":"LAN","address":"192.0.2.70","hwaddr":"02:00:00:00:04:01","valid_lifetime":4000,"expire":1793000000,"subnet_id":1,"hostname":"kea-dyn.example.test","state":"default"}]}

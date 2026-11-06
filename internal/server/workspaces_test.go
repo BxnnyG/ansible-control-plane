@@ -152,7 +152,7 @@ func TestWorkspaceEndpoints(t *testing.T) {
 		Role        string   `json:"role"`
 		Permissions []string `json:"permissions"`
 	}
-	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &ws) != nil || ws.Role != "viewer" || len(ws.Permissions) != 6 {
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &ws) != nil || ws.Role != "viewer" || len(ws.Permissions) != 7 {
 		t.Fatalf("get: %d %s", rec.Code, rec.Body.String())
 	}
 	if c := call("/api/v1/workspaces/default", "X-Other", "1").Code; c != 404 {

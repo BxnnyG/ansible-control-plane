@@ -27,6 +27,10 @@ const (
 	TypeToken         = "token"
 	TypeVaultPassword = "vault_password"
 	TypeFile          = "file"
+	// TypeAPIKeyPair holds a JSON object {"key": "...", "secret": "..."} (connectors).
+	TypeAPIKeyPair = "api_key_pair" //nolint:gosec // type name, not a credential
+	// TypeAPIToken holds a single API token (connectors).
+	TypeAPIToken = "api_token"
 )
 
 const (
@@ -52,7 +56,7 @@ func invalid(format string, a ...any) error {
 // ValidType reports whether t is a known secret type.
 func ValidType(t string) bool {
 	switch t {
-	case TypeSSHKey, TypePassword, TypeToken, TypeVaultPassword, TypeFile:
+	case TypeSSHKey, TypePassword, TypeToken, TypeVaultPassword, TypeFile, TypeAPIKeyPair, TypeAPIToken:
 		return true
 	}
 	return false
@@ -148,7 +152,12 @@ func prepareValue(typ string, v []byte) ([]byte, map[string]any, error) {
 		if v[len(v)-1] != '\n' {
 			v = append(append([]byte(nil), v...), '\n')
 		}
-	case TypePassword, TypeToken, TypeVaultPassword, TypeFile:
+	case TypeAPIKeyPair:
+		var kp struct{ Key, Secret string }
+		if err := json.Unmarshal(v, &kp); err != nil || kp.Key == "" || kp.Secret == "" {
+			return nil, nil, invalid(`api_key_pair value must be a JSON object with "key" and "secret"`)
+		}
+	case TypePassword, TypeToken, TypeVaultPassword, TypeFile, TypeAPIToken:
 	default:
 		return nil, nil, invalid("unknown type")
 	}

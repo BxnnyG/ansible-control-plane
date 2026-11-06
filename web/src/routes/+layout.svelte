@@ -7,7 +7,7 @@
   import { session } from '$lib/session.svelte';
   import UserMenu from '$lib/components/UserMenu.svelte';
   import WorkspaceSwitcher from '$lib/components/WorkspaceSwitcher.svelte';
-  import { NAV_ITEMS } from '$lib/nav';
+  import { NAV_ITEMS, visibleNav } from '$lib/nav';
   import { theme } from '$lib/theme.svelte';
   import CommandPalette from '$lib/components/CommandPalette.svelte';
   import Footer from '$lib/components/Footer.svelte';
@@ -74,7 +74,7 @@
       <a href="/" class="px-4 py-4 text-lg font-semibold">Control Plane</a>
       <nav aria-label="Main" class="flex-1 px-2">
         <ul class="space-y-1">
-          {#each NAV_ITEMS as item (item.href)}
+          {#each visibleNav(NAV_ITEMS, (p) => session.can(p)) as item (item.href)}
             {@const current = page.url.pathname.startsWith(item.href)}
             <li>
               <a
