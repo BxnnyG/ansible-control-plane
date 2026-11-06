@@ -35,7 +35,9 @@ func (f fakeNetworks) NetworkPrefixes(_ context.Context, _ uuid.UUID, ids []uuid
 	return out, nil
 }
 
-func (f fakeNetworks) FleetHosts(context.Context, uuid.UUID) ([]FleetHost, error) { return f.hosts, nil }
+func (f fakeNetworks) FleetHosts(context.Context, uuid.UUID) ([]FleetHost, error) {
+	return f.hosts, nil
+}
 
 func TestNetworkScopeInventoryAccess(t *testing.T) {
 	tg := buildGraph()

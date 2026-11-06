@@ -481,3 +481,178 @@ func (s *Service) RunScheduler(ctx context.Context, tick time.Duration, concurre
 		}
 	}
 }
+
+// UpdateInput changes a connector; nil fields stay as they are. Config
+// replaces the whole option map. ClearSecret removes the credential.
+type UpdateInput struct {
+	Name            *string
+	BaseURL         *string
+	Config          map[string]any
+	SecretID        *uuid.UUID
+	ClearSecret     bool
+	IntervalSeconds *int
+	Enabled         *bool
+}
+
+// Update validates and stores changes. Changes that affect how the remote
+// system is reached make an enabled connector due immediately.
+func (s *Service) Update(ctx context.Context, ws, id uuid.UUID, in UpdateInput) (dbgen.Connector, error) {
+	c, err := s.Get(ctx, ws, id)
+	if err != nil {
+		return dbgen.Connector{}, err
+	}
+	p := dbgen.UpdateConnectorParams{ID: id, WorkspaceID: ws, Name: c.Name, BaseUrl: c.BaseUrl, Config: c.Config,
+		SecretID: c.SecretID, IntervalSeconds: c.IntervalSeconds, Enabled: c.Enabled}
+	connChanged := false
+	if in.Name != nil {
+		p.Name = strings.TrimSpace(*in.Name)
+		if p.Name == "" || len(p.Name) > 100 {
+			return dbgen.Connector{}, invalid("name must be 1-100 characters")
+		}
+	}
+	if in.BaseURL != nil && *in.BaseURL != c.BaseUrl {
+		p.BaseUrl, connChanged = *in.BaseURL, true
+	}
+	cfg := map[string]any{}
+	if len(c.Config) > 0 {
+		if err := json.Unmarshal(c.Config, &cfg); err != nil {
+			return dbgen.Connector{}, fmt.Errorf("decode config: %w", err)
+		}
+	}
+	if in.Config != nil {
+		cfg, connChanged = in.Config, true
+		p.Config, _ = json.Marshal(cfg)
+	}
+	switch {
+	case in.SecretID != nil:
+		p.SecretID, connChanged = pgtype.UUID{Bytes: *in.SecretID, Valid: true}, true
+	case in.ClearSecret:
+		p.SecretID, connChanged = pgtype.UUID{}, true
+	}
+	if in.IntervalSeconds != nil {
+		if time.Duration(*in.IntervalSeconds)*time.Second < MinInterval {
+			return dbgen.Connector{}, invalid("interval must be at least %ds", int(MinInterval/time.Second))
+		}
+		p.IntervalSeconds = int32(*in.IntervalSeconds) //nolint:gosec // lower bound checked, API bounds the upper
+	}
+	if in.Enabled != nil {
+		p.Enabled = *in.Enabled
+	}
+	secretType := ""
+	if p.SecretID.Valid {
+		sec, err := s.q.GetSecret(ctx, dbgen.GetSecretParams{ID: p.SecretID.Bytes, WorkspaceID: ws})
+		if err != nil {
+			return dbgen.Connector{}, invalid("secret not found in workspace")
+		}
+		secretType = sec.Type
+	}
+	if err := s.o.Registry.Validate(c.Type, p.BaseUrl, cfg, secretType, p.SecretID.Valid); err != nil {
+		return dbgen.Connector{}, err
+	}
+	updated, err := s.q.UpdateConnector(ctx, p)
+	if err != nil {
+		if strings.Contains(err.Error(), "connectors_workspace_id_name_key") {
+			return dbgen.Connector{}, ErrConflict
+		}
+		return dbgen.Connector{}, fmt.Errorf("update connector: %w", err)
+	}
+	if (connChanged || (in.Enabled != nil && *in.Enabled && !c.Enabled)) && updated.Enabled {
+		if err := s.RequestSync(ctx, ws, id); err != nil {
+			return dbgen.Connector{}, err
+		}
+	}
+	return updated, nil
+}
+
+// Delete removes a connector together with its networks and observations and
+// re-merges the fleet.
+func (s *Service) Delete(ctx context.Context, ws, id uuid.UUID) error {
+	n, err := s.q.DeleteConnector(ctx, dbgen.DeleteConnectorParams{ID: id, WorkspaceID: ws})
+	if err != nil {
+		return fmt.Errorf("delete connector: %w", err)
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	if s.o.PostSync != nil {
+		if err := s.o.PostSync.AfterSync(ctx, ws, id); err != nil {
+			slog.Error("post-delete hook failed", "connector", id, "error", err)
+		}
+	}
+	return nil
+}
+
+// TestInput describes an unsaved connector configuration to probe.
+type TestInput struct {
+	Type     string
+	BaseURL  string
+	Config   map[string]any
+	SecretID *uuid.UUID
+}
+
+// TestConfig validates and probes a configuration that is not stored
+// (SETUP-2 "test before save"). A probe failure is returned as a sanitized
+// error; validation problems wrap ErrInvalidConfig.
+func (s *Service) TestConfig(ctx context.Context, ws uuid.UUID, in TestInput) error {
+	cfg := in.Config
+	if cfg == nil {
+		cfg = map[string]any{}
+	}
+	secretType := ""
+	c := dbgen.Connector{ID: uuid.New(), WorkspaceID: ws, Type: in.Type, Name: "unsaved", BaseUrl: in.BaseURL}
+	c.Config, _ = json.Marshal(cfg)
+	if in.SecretID != nil {
+		sec, err := s.q.GetSecret(ctx, dbgen.GetSecretParams{ID: *in.SecretID, WorkspaceID: ws})
+		if err != nil {
+			return invalid("secret not found in workspace")
+		}
+		secretType = sec.Type
+		c.SecretID = pgtype.UUID{Bytes: *in.SecretID, Valid: true}
+	}
+	if err := s.o.Registry.Validate(in.Type, in.BaseURL, cfg, secretType, in.SecretID != nil); err != nil {
+		return err
+	}
+	conn, plain, cleanup, err := s.build(ctx, c)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	ctx, cancel := context.WithTimeout(ctx, s.o.Timeout)
+	defer cancel()
+	if err := conn.Test(ctx); err != nil {
+		return errors.New(sanitize(err, plain))
+	}
+	return nil
+}
+
+// ListSyncs returns the newest syncs of a connector, newest first.
+func (s *Service) ListSyncs(ctx context.Context, ws, id uuid.UUID, limit int) ([]dbgen.ConnectorSync, error) {
+	if _, err := s.Get(ctx, ws, id); err != nil {
+		return nil, err
+	}
+	return s.q.ListConnectorSyncs(ctx, dbgen.ListConnectorSyncsParams{ConnectorID: id, WorkspaceID: ws, Limit: int32(limit)}) //nolint:gosec // bounded by the API
+}
+
+// SecretRef is the non-secret description of a connector credential.
+type SecretRef struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+	Type string    `json:"type"`
+}
+
+// SecretRefs returns name and type of the workspace secrets by id (metadata
+// only, never values).
+func (s *Service) SecretRefs(ctx context.Context, ws uuid.UUID) (map[uuid.UUID]SecretRef, error) {
+	rows, err := s.q.ListSecretsMeta(ctx, ws)
+	if err != nil {
+		return nil, fmt.Errorf("list secrets: %w", err)
+	}
+	out := make(map[uuid.UUID]SecretRef, len(rows))
+	for _, r := range rows {
+		out[r.ID] = SecretRef{ID: r.ID, Name: r.Name, Type: r.Type}
+	}
+	return out, nil
+}
+
+// Specs returns the registered connector types with their config schema.
+func (s *Service) Specs() []Spec { return s.o.Registry.Specs() }

@@ -56,7 +56,7 @@ var workspaceWide = map[Permission]bool{
 	WorkspaceRead:   false, // reading the workspace itself is allowed when scoped
 	WorkspaceManage: true, WorkspaceDelete: true,
 	MembersRead: true, MembersManage: true,
-	AuditRead: true, ConnectorWrite: true, SecretsWrite: true, SecretsMetaRead: true,
+	AuditRead: true, ConnectorRead: true, ConnectorWrite: true, SecretsWrite: true, SecretsMetaRead: true,
 	VaultRead: true, VaultManage: true, VaultDecrypt: true,
 }
 

@@ -105,14 +105,22 @@ type Fields struct {
 	Sources   map[string][]Source `json:"sources,omitempty"`
 }
 
+// MemberRef identifies one observation (connector and external key).
+type MemberRef struct {
+	ConnectorID uuid.UUID
+	ExternalKey string
+}
+
 // Host is one merged host.
 type Host struct {
 	Name         string // display name: hostname, else FQDN
 	Fields       Fields
 	Keys         []Key // sorted: mac, name, ip
 	Observations int
-	FirstSeen    time.Time
-	LastSeen     time.Time
+	// Members identifies the observations the host was built from.
+	Members   []MemberRef
+	FirstSeen time.Time
+	LastSeen  time.Time
 }
 
 // Strongest returns the strongest key (MAC > name > IP), or false for a host
@@ -400,6 +408,9 @@ func sourceOf(o obs) Source {
 // buildHost merges the members (already in priority order) of one cluster.
 func buildHost(all []obs, idx []int) Host {
 	h := Host{Observations: len(idx)}
+	for _, i := range idx {
+		h.Members = append(h.Members, MemberRef{ConnectorID: all[i].ConnectorID, ExternalKey: all[i].ExternalKey})
+	}
 	f := &h.Fields
 	f.Sources = map[string][]Source{}
 	addSource := func(field string, s Source) {

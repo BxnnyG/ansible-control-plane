@@ -150,8 +150,9 @@ func run(args []string) error {
 		go auth.RunSessionCleanup(ctx, q, auth.DefaultCleanupInterval, log)
 		go schedSvc.Run(ctx, schedules.DefaultTick, log)
 		go prj.RunScheduler(ctx, projects.DefaultScheduleTick, projects.DefaultScheduleConcurrency, log)
-		conSvc := connectors.New(connectors.Options{DB: pool, Registry: newConnectorRegistry(), Secrets: sec,
-			PostSync: fleet.NewStore(pool, nil)})
+		fleetStore := fleet.NewStore(pool, nil)
+		conSvc := connectors.New(connectors.Options{DB: pool, Registry: newConnectorRegistry(), Secrets: sec, PostSync: fleetStore})
+		opts = append(opts, server.WithConnectors(conSvc), server.WithFleet(fleetStore))
 		go conSvc.RunScheduler(ctx, connectors.DefaultTick, connectors.DefaultConcurrency, log)
 		log.Info("login enabled", "oidc", cfg.OIDCEnabled(), "breakglass", cfg.BreakGlassEnabled)
 	case cfg.AuthEnabled():

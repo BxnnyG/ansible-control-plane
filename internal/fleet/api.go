@@ -1,0 +1,458 @@
+package fleet
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/netip"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/BxnnyG/ansible-control-plane/internal/connectors"
+	"github.com/BxnnyG/ansible-control-plane/internal/db/dbgen"
+)
+
+// Read API errors.
+var (
+	ErrNotFound = errors.New("not found")
+)
+
+// Visible decides from a host's merged addresses whether the caller may see
+// it (network scopes). A nil Visible allows everything.
+type Visible func(ips []string) bool
+
+func (v Visible) ok(ips []string) bool { return v == nil || v(ips) }
+
+func optTime(t pgtype.Timestamptz) *time.Time {
+	if !t.Valid {
+		return nil
+	}
+	u := t.Time.UTC()
+	return &u
+}
+
+// NetworkView is a connector-reported network.
+type NetworkView struct {
+	ID            uuid.UUID `json:"id"`
+	ConnectorID   uuid.UUID `json:"connector_id"`
+	ConnectorName string    `json:"connector"`
+	ExternalKey   string    `json:"external_key"`
+	CIDR          string    `json:"cidr"`
+	VLAN          *int      `json:"vlan"`
+	Interface     string    `json:"interface"`
+	Description   string    `json:"description"`
+	Source        string    `json:"source"`
+	FirstSeen     time.Time `json:"first_seen"`
+	LastSeen      time.Time `json:"last_seen"`
+}
+
+// Networks lists the workspace networks that allow accepts (nil allows all).
+func (s *Store) Networks(ctx context.Context, ws uuid.UUID, allow func(id uuid.UUID, cidr netip.Prefix) bool) ([]NetworkView, error) {
+	rows, err := s.q.ListNetworks(ctx, ws)
+	if err != nil {
+		return nil, fmt.Errorf("list networks: %w", err)
+	}
+	conns, err := s.q.ListConnectors(ctx, ws)
+	if err != nil {
+		return nil, fmt.Errorf("list connectors: %w", err)
+	}
+	names := map[uuid.UUID]string{}
+	for _, c := range conns {
+		names[c.ID] = c.Name
+	}
+	out := make([]NetworkView, 0, len(rows))
+	for _, n := range rows {
+		if allow != nil && !allow(n.ID, n.Cidr) {
+			continue
+		}
+		v := NetworkView{ID: n.ID, ConnectorID: n.ConnectorID, ConnectorName: names[n.ConnectorID], ExternalKey: n.ExternalKey,
+			CIDR: n.Cidr.String(), Interface: n.Interface, Description: n.Description, Source: n.Source,
+			FirstSeen: n.FirstSeen.Time.UTC(), LastSeen: n.LastSeen.Time.UTC()}
+		if n.Vlan.Valid {
+			vl := int(n.Vlan.Int32)
+			v.VLAN = &vl
+		}
+		out = append(out, v)
+	}
+	return out, nil
+}
+
+// HostView is the list representation of a merged host.
+type HostView struct {
+	ID            uuid.UUID `json:"id"`
+	Name          string    `json:"name"`
+	Kind          string    `json:"kind"`
+	Status        string    `json:"status"`
+	Hostname      string    `json:"hostname"`
+	FQDN          string    `json:"fqdn"`
+	IPs           []string  `json:"ips"`
+	MACs          []string  `json:"macs"`
+	Tags          []string  `json:"tags"`
+	Connectors    []string  `json:"connectors"`
+	OpenConflicts int       `json:"open_conflicts"`
+	FirstSeen     time.Time `json:"first_seen"`
+	LastSeen      time.Time `json:"last_seen"`
+}
+
+// ObservationView is one connector observation behind a host.
+type ObservationView struct {
+	ConnectorID   uuid.UUID         `json:"connector_id"`
+	Connector     string            `json:"connector"`
+	ConnectorType string            `json:"connector_type"`
+	ExternalKey   string            `json:"external_key"`
+	Kind          string            `json:"kind"`
+	Fields        connectors.Fields `json:"fields"`
+	FirstSeen     time.Time         `json:"first_seen"`
+	LastSeen      time.Time         `json:"last_seen"`
+}
+
+// HostDetail is one host with per-field sources, keys, observations and its
+// conflicts.
+type HostDetail struct {
+	HostView
+	Fields       Fields            `json:"fields"`
+	Keys         []Key             `json:"keys"`
+	Observations []ObservationView `json:"observations"`
+	Conflicts    []ConflictView    `json:"conflicts"`
+}
+
+// HostFilter narrows the host list.
+type HostFilter struct {
+	NetworkID *uuid.UUID // hosts with an address in this network
+	Q         string     // case-insensitive substring of name, address, MAC or tag
+	Conflicts bool       // only hosts with an open conflict
+}
+
+// ConflictView is a conflict hint. State is open, acknowledged or resolved.
+type ConflictView struct {
+	ID             uuid.UUID       `json:"id"`
+	Type           string          `json:"type"`
+	State          string          `json:"state"`
+	Fingerprint    string          `json:"fingerprint"`
+	HostIDs        []uuid.UUID     `json:"host_ids"`
+	Details        json.RawMessage `json:"details"`
+	AcknowledgedBy *uuid.UUID      `json:"acknowledged_by"`
+	AcknowledgedAt *time.Time      `json:"acknowledged_at"`
+	FirstSeen      time.Time       `json:"first_seen"`
+	LastSeen       time.Time       `json:"last_seen"`
+	ResolvedAt     *time.Time      `json:"resolved_at"`
+}
+
+func conflictView(c dbgen.HostConflict) ConflictView {
+	state := c.State
+	if state == "open" && c.AcknowledgedAt.Valid {
+		state = "acknowledged"
+	}
+	v := ConflictView{ID: c.ID, Type: c.Type, State: state, Fingerprint: c.Fingerprint, HostIDs: c.HostIds, Details: c.Details,
+		AcknowledgedAt: optTime(c.AcknowledgedAt), FirstSeen: c.FirstSeen.Time.UTC(), LastSeen: c.LastSeen.Time.UTC(),
+		ResolvedAt: optTime(c.ResolvedAt)}
+	if v.HostIDs == nil {
+		v.HostIDs = []uuid.UUID{}
+	}
+	if len(v.Details) == 0 {
+		v.Details = json.RawMessage("{}")
+	}
+	if c.AcknowledgedBy.Valid {
+		id := uuid.UUID(c.AcknowledgedBy.Bytes)
+		v.AcknowledgedBy = &id
+	}
+	return v
+}
+
+func nonNil(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
+}
+
+func hostView(h dbgen.Host, open int) (HostView, Fields) {
+	var f Fields
+	_ = json.Unmarshal(h.Fields, &f)
+	seen := map[string]bool{}
+	var conns []string
+	for _, ss := range f.Sources {
+		for _, src := range ss {
+			if !seen[src.ConnectorName] {
+				seen[src.ConnectorName] = true
+				conns = append(conns, src.ConnectorName)
+			}
+		}
+	}
+	slices.Sort(conns)
+	return HostView{ID: h.ID, Name: h.Name, Kind: f.Kind, Status: f.Status, Hostname: f.Hostname, FQDN: f.FQDN,
+		IPs: nonNil(f.IPs), MACs: nonNil(f.MACs), Tags: nonNil(f.Tags), Connectors: nonNil(conns), OpenConflicts: open,
+		FirstSeen: h.FirstSeen.Time.UTC(), LastSeen: h.LastSeen.Time.UTC()}, f
+}
+
+// openConflicts counts open (acknowledged or not) conflicts per host.
+func openConflicts(list []dbgen.HostConflict) map[uuid.UUID]int {
+	out := map[uuid.UUID]int{}
+	for _, c := range list {
+		if c.State != "open" {
+			continue
+		}
+		for _, id := range c.HostIds {
+			out[id]++
+		}
+	}
+	return out
+}
+
+// Hosts lists merged hosts, filtered and limited to what visible allows.
+func (s *Store) Hosts(ctx context.Context, ws uuid.UUID, f HostFilter, visible Visible) ([]HostView, error) {
+	rows, err := s.q.ListHosts(ctx, ws)
+	if err != nil {
+		return nil, fmt.Errorf("list hosts: %w", err)
+	}
+	conflicts, err := s.q.ListHostConflicts(ctx, ws)
+	if err != nil {
+		return nil, fmt.Errorf("list conflicts: %w", err)
+	}
+	var prefix *netip.Prefix
+	if f.NetworkID != nil {
+		nets, err := s.q.ListNetworks(ctx, ws)
+		if err != nil {
+			return nil, fmt.Errorf("list networks: %w", err)
+		}
+		for _, n := range nets {
+			if n.ID == *f.NetworkID {
+				p := n.Cidr
+				prefix = &p
+			}
+		}
+		if prefix == nil {
+			return nil, ErrNotFound
+		}
+	}
+	open := openConflicts(conflicts)
+	q := strings.ToLower(strings.TrimSpace(f.Q))
+	out := []HostView{}
+	for _, h := range rows {
+		v, _ := hostView(h, open[h.ID])
+		if !visible.ok(v.IPs) {
+			continue
+		}
+		if f.Conflicts && v.OpenConflicts == 0 {
+			continue
+		}
+		if prefix != nil && !hasIPIn(v.IPs, *prefix) {
+			continue
+		}
+		if q != "" && !matchesQuery(v, q) {
+			continue
+		}
+		out = append(out, v)
+	}
+	return out, nil
+}
+
+func hasIPIn(ips []string, p netip.Prefix) bool {
+	for _, s := range ips {
+		if a, err := netip.ParseAddr(s); err == nil && p.Contains(a.Unmap()) {
+			return true
+		}
+	}
+	return false
+}
+
+func matchesQuery(v HostView, q string) bool {
+	hay := []string{v.Name, v.Hostname, v.FQDN}
+	hay = append(append(append(hay, v.IPs...), v.MACs...), v.Tags...)
+	for _, s := range hay {
+		if strings.Contains(strings.ToLower(s), q) {
+			return true
+		}
+	}
+	return false
+}
+
+// Host returns one host with its sources, keys, observations and conflicts.
+// Hosts outside visible are reported as ErrNotFound.
+func (s *Store) Host(ctx context.Context, ws, id uuid.UUID, visible Visible) (HostDetail, error) {
+	rows, err := s.q.ListHosts(ctx, ws)
+	if err != nil {
+		return HostDetail{}, fmt.Errorf("list hosts: %w", err)
+	}
+	idx := slices.IndexFunc(rows, func(h dbgen.Host) bool { return h.ID == id })
+	if idx < 0 {
+		return HostDetail{}, ErrNotFound
+	}
+	conflicts, err := s.q.ListHostConflicts(ctx, ws)
+	if err != nil {
+		return HostDetail{}, fmt.Errorf("list conflicts: %w", err)
+	}
+	view, fields := hostView(rows[idx], openConflicts(conflicts)[id])
+	if !visible.ok(view.IPs) {
+		return HostDetail{}, ErrNotFound
+	}
+	keyRows, err := s.q.ListHostKeys(ctx, ws)
+	if err != nil {
+		return HostDetail{}, fmt.Errorf("list host keys: %w", err)
+	}
+	d := HostDetail{HostView: view, Fields: fields, Keys: []Key{}, Observations: []ObservationView{}, Conflicts: []ConflictView{}}
+	for _, k := range keyRows {
+		if k.HostID == id {
+			d.Keys = append(d.Keys, Key{Kind: k.Kind, Value: k.Value})
+		}
+	}
+	for _, c := range conflicts {
+		if slices.Contains(c.HostIds, id) {
+			d.Conflicts = append(d.Conflicts, conflictView(c))
+		}
+	}
+	d.Observations, err = s.observationsOf(ctx, ws, rows, keyRows, id)
+	if err != nil {
+		return HostDetail{}, err
+	}
+	return d, nil
+}
+
+// observationsOf re-runs the (pure) merge and returns the observations of the
+// merged host that maps to the stored host id.
+func (s *Store) observationsOf(ctx context.Context, ws uuid.UUID, rows []dbgen.Host, keyRows []dbgen.HostKey, id uuid.UUID) ([]ObservationView, error) {
+	obs, prio, err := s.load(ctx, s.q, ws)
+	if err != nil {
+		return nil, err
+	}
+	res := Merge(obs, prio, s.now())
+	existing := make([]existingHost, len(rows))
+	pos := map[uuid.UUID]int{}
+	for i, r := range rows {
+		existing[i] = existingHost{row: r, keys: map[Key]bool{}}
+		pos[r.ID] = i
+	}
+	for _, k := range keyRows {
+		if i, ok := pos[k.HostID]; ok {
+			existing[i].keys[Key{Kind: k.Kind, Value: k.Value}] = true
+		}
+	}
+	ids, _ := assignIDs(res.Hosts, existing)
+	at := slices.Index(ids, id)
+	out := []ObservationView{}
+	if at < 0 {
+		return out, nil
+	}
+	byRef := map[MemberRef]Observation{}
+	for _, o := range obs {
+		byRef[MemberRef{ConnectorID: o.ConnectorID, ExternalKey: o.ExternalKey}] = o
+	}
+	for _, m := range res.Hosts[at].Members {
+		o, ok := byRef[m]
+		if !ok {
+			continue
+		}
+		out = append(out, ObservationView{ConnectorID: o.ConnectorID, Connector: o.ConnectorName, ConnectorType: o.ConnectorType,
+			ExternalKey: o.ExternalKey, Kind: o.Kind, Fields: o.Fields, FirstSeen: o.FirstSeen.UTC(), LastSeen: o.LastSeen.UTC()})
+	}
+	return out, nil
+}
+
+// Conflicts states accepted by Conflicts.
+const (
+	StateOpen         = "open"
+	StateAcknowledged = "acknowledged"
+	StateResolved     = "resolved"
+)
+
+// hostsVisible reports whether every host of the conflict is visible. A
+// conflict without hosts is visible to unrestricted callers only.
+func hostsVisible(ids []uuid.UUID, ips map[uuid.UUID][]string, visible Visible) bool {
+	if visible == nil {
+		return true
+	}
+	if len(ids) == 0 {
+		return false
+	}
+	for _, id := range ids {
+		if !visible(ips[id]) {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Store) hostIPs(ctx context.Context, ws uuid.UUID) (map[uuid.UUID][]string, error) {
+	rows, err := s.q.ListHosts(ctx, ws)
+	if err != nil {
+		return nil, fmt.Errorf("list hosts: %w", err)
+	}
+	out := make(map[uuid.UUID][]string, len(rows))
+	for _, h := range rows {
+		v, _ := hostView(h, 0)
+		out[h.ID] = v.IPs
+	}
+	return out, nil
+}
+
+// Conflicts lists conflicts; state is "", open, acknowledged or resolved.
+// A conflict is visible when all its hosts are.
+func (s *Store) Conflicts(ctx context.Context, ws uuid.UUID, state string, visible Visible) ([]ConflictView, error) {
+	rows, err := s.q.ListHostConflicts(ctx, ws)
+	if err != nil {
+		return nil, fmt.Errorf("list conflicts: %w", err)
+	}
+	var ips map[uuid.UUID][]string
+	if visible != nil {
+		if ips, err = s.hostIPs(ctx, ws); err != nil {
+			return nil, err
+		}
+	}
+	out := []ConflictView{}
+	for _, c := range rows {
+		v := conflictView(c)
+		if state != "" && v.State != state {
+			continue
+		}
+		if hostsVisible(c.HostIds, ips, visible) {
+			out = append(out, v)
+		}
+	}
+	return out, nil
+}
+
+// Acknowledge marks an open conflict as acknowledged by the user. Resolved,
+// unknown and invisible conflicts yield ErrNotFound. Acknowledging again
+// refreshes the acknowledgement.
+func (s *Store) Acknowledge(ctx context.Context, ws, id, user uuid.UUID, visible Visible) (ConflictView, error) {
+	rows, err := s.q.ListHostConflicts(ctx, ws)
+	if err != nil {
+		return ConflictView{}, fmt.Errorf("list conflicts: %w", err)
+	}
+	idx := slices.IndexFunc(rows, func(c dbgen.HostConflict) bool { return c.ID == id })
+	if idx < 0 || rows[idx].State != "open" {
+		return ConflictView{}, ErrNotFound
+	}
+	if visible != nil {
+		ips, err := s.hostIPs(ctx, ws)
+		if err != nil {
+			return ConflictView{}, err
+		}
+		if !hostsVisible(rows[idx].HostIds, ips, visible) {
+			return ConflictView{}, ErrNotFound
+		}
+	}
+	n, err := s.q.AcknowledgeHostConflict(ctx, dbgen.AcknowledgeHostConflictParams{ID: id, WorkspaceID: ws,
+		AcknowledgedBy: pgtype.UUID{Bytes: user, Valid: true}, AcknowledgedAt: ts(s.now())})
+	if err != nil {
+		return ConflictView{}, fmt.Errorf("acknowledge conflict: %w", err)
+	}
+	if n == 0 {
+		return ConflictView{}, ErrNotFound
+	}
+	rows, err = s.q.ListHostConflicts(ctx, ws)
+	if err != nil {
+		return ConflictView{}, fmt.Errorf("list conflicts: %w", err)
+	}
+	for _, c := range rows {
+		if c.ID == id {
+			return conflictView(c), nil
+		}
+	}
+	return ConflictView{}, ErrNotFound
+}
