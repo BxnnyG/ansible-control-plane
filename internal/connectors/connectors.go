@@ -149,6 +149,8 @@ type Spec struct {
 	SecretRequired bool     `json:"secret_required"`
 	BaseURL        bool     `json:"base_url"` // instance needs a base URL
 	Fields         []Field  `json:"fields"`
+	// Help explains type-specific setup (credential format, privileges).
+	Help string `json:"help,omitempty"`
 }
 
 // HTTPOptions derives httpx options from the instance (base URL and shared
