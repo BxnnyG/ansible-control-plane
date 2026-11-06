@@ -1,0 +1,4 @@
+{"data":{"result":[
+{"name":"lo","hardware-address":"00:00:00:00:00:00","ip-addresses":[{"ip-address-type":"ipv4","ip-address":"127.0.0.1","prefix":8},{"ip-address-type":"ipv6","ip-address":"::1","prefix":128}]},
+{"name":"eth0","hardware-address":"02:00:00:00:10:01","ip-addresses":[{"ip-address-type":"ipv4","ip-address":"192.0.2.20","prefix":24},{"ip-address-type":"ipv6","ip-address":"2001:db8:0:1::20","prefix":64},{"ip-address-type":"ipv6","ip-address":"fe80::ff:fe00:1001","prefix":64}]},
+{"name":"eth1","hardware-address":"02:00:00:00:10:02","ip-addresses":[{"ip-address-type":"ipv4","ip-address":"198.51.100.20","prefix":24}]}]}}

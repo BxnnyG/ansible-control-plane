@@ -1,0 +1,1 @@
+{"data":{"hostname":"ct-running","description":"DNS container","net0":"name=eth0,bridge=vmbr0,hwaddr=02:00:00:00:20:01,ip=dhcp,type=veth"}}
