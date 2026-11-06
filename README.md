@@ -2,7 +2,7 @@
 
 A self-hosted web platform to run, organize and monitor Ansible – Semaphore's simplicity, AWX's structure, a modern UI, plus a network-aware fleet view fed by connectors (OPNsense, Proxmox VE, NetBox, monitoring).
 
-> **Status:** early development – milestones M0–M4 done (auth, workspaces, secrets, Git projects, inventories, vault, templates and runs). The Semaphore migration (M7) is next. See [`PLAN.md`](PLAN.md) for scope and roadmap.
+> **Status:** early development – milestones M0–M4 and M7 done (auth, workspaces, secrets, Git projects, inventories, vault, templates and runs, Semaphore migration with dry run, apply, compare and cutover), see [`docs/migration-from-semaphore.md`](docs/migration-from-semaphore.md). See [`PLAN.md`](PLAN.md) for scope and roadmap.
 
 ## Features
 
@@ -22,7 +22,7 @@ Planned for v1.0:
 - Network scopes for permissions (fed by connectors)
 - Fleet view per network: online, Ansible-reachable, last run, drift, open monitoring problems, unmanaged devices
 - One-click remediation runs mapped from monitoring alerts
-- Migration tool from Semaphore UI
+- Migration tool from Semaphore UI (see [`docs/migration-from-semaphore.md`](docs/migration-from-semaphore.md))
 
 ## Quickstart
 

@@ -164,15 +164,15 @@ Scopes: a membership grants a role either workspace-wide or restricted to a set 
 - **FLEET-7** Bulk actions on a network/selection (check run, fact gathering, reachability check), permission- and scope-checked.
 
 ### Migration (MIG)
-- **MIG-1** CLI `acp migrate semaphore` reading via API and/or directly from the Semaphore DB (MySQL/MariaDB, Postgres, BoltDB) read-only.
-- **MIG-2** Mandatory backup check before reading (refuses to run without a backup path).
-- **MIG-3** Scope: projects → workspaces, repositories, inventories, environments → variables, key store → secrets, templates, schedules, users (email → OIDC identity).
-- **MIG-4** Key store decryption with `access_key_encryption` from `config.json` in-process; immediate re-encryption; secrets never printed.
-- **MIG-5** Dry-run report: what would be migrated, what cannot be mapped and why.
-- **MIG-6** Comparison report: object counts old/new; one check-mode run per migrated template.
-- **MIG-7** Schedules imported disabled.
-- **MIG-9** (finding from M4) The Ansible repo references `~/.ssh/ansible_infra` (`private_key_file` in ansible.cfg or `ansible_ssh_private_key_file` in vars). Migrated templates must override it; inventory/group vars beat `--private-key`.
-- **MIG-8** Cutover command + documented rollback; source system never modified (only stopped/disabled after explicit confirmation).
+- ✅ **MIG-1** CLI `acp migrate semaphore` reading via API and/or directly from the Semaphore DB (MySQL/MariaDB, Postgres, BoltDB) read-only.
+- ✅ **MIG-2** Mandatory backup check before reading (refuses to run without a backup path).
+- ✅ **MIG-3** Scope: projects → workspaces, repositories, inventories, environments → variables, key store → secrets, templates, schedules, users (email → OIDC identity).
+- ✅ **MIG-4** Key store decryption with `access_key_encryption` from `config.json` in-process; immediate re-encryption; secrets never printed.
+- ✅ **MIG-5** Dry-run report: what would be migrated, what cannot be mapped and why.
+- ✅ **MIG-6** Comparison report: object counts old/new; one check-mode run per migrated template.
+- ✅ **MIG-7** Schedules imported disabled.
+- ✅ **MIG-9** (finding from M4) The Ansible repo references `~/.ssh/ansible_infra` (`private_key_file` in ansible.cfg or `ansible_ssh_private_key_file` in vars). Migrated templates must override it; inventory/group vars beat `--private-key`.
+- **MIG-8** (runbook in `docs/migration-from-semaphore.md`; cutover is a manual step after user confirmation) Cutover command + documented rollback; source system never modified (only stopped/disabled after explicit confirmation).
 
 ## 8. Non-functional requirements
 
@@ -228,7 +228,7 @@ Stack decisions are recorded in `docs/adr/`.
 | M2 ✅ | Auth (OIDC + break-glass), setup wizard (SETUP-1/3/4), workspaces, roles + scopes, secrets store, audit |
 | M3 ✅ | Git projects, inventories (DB + Git-synced), vault integration, surveys from `argument_specs` (GIT-4 requirements install moved to M4) |
 | M4 ✅ | Worker, templates, `requirements.yml` install (GIT-4), live logs, run history, per-host results, schedules, webhooks |
-| M7 (next after M4) | Semaphore migration: dry run → import → comparison → cutover |
+| M7 (done) | Semaphore migration: dry run → import → comparison → cutover |
 | M5 | Connector framework, OPNsense (Kea/dnsmasq/ISC), Proxmox VE, host merge, conflicts, group rules |
 | M6 | NetBox, monitoring adapters (Checkmk first), fleet view, unmanaged list, remediation |
 | M8 | Hardening: security review, backup/restore, docs, release `v1.0.0` |

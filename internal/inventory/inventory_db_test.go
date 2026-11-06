@@ -342,3 +342,37 @@ func TestImport(t *testing.T) {
 		t.Errorf("re-import did not replace: %+v", cur)
 	}
 }
+
+func TestCreateFromText(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	ini := "[web]\nweb1.example.test ansible_host=192.0.2.10\nweb2.example.test\n\n[web:vars]\nhttp_port=8080\n\n[all:children]\nweb\n"
+	res, err := e.svc.CreateFromText(ctx, e.ws, FromTextInput{Name: "semaphore-lab", Format: "ini", Content: ini})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Hosts != 2 || res.Inventory.Mode != ModeDB || res.Inventory.Slug != "semaphore-lab" || res.Inventory.Hosts != 2 {
+		t.Fatalf("unexpected result: %+v", res)
+	}
+	hosts, err := e.svc.ListHosts(ctx, e.ws, res.Inventory.ID)
+	if err != nil || len(hosts) != 2 {
+		t.Fatalf("hosts: %v %v", hosts, err)
+	}
+	yml := "all:\n  hosts:\n    db1.example.test:\n"
+	if _, err := e.svc.CreateFromText(ctx, e.ws, FromTextInput{Name: "semaphore-yaml", Format: "yaml", Content: yml}); err != nil {
+		t.Fatalf("yaml: %v", err)
+	}
+	if _, err := e.svc.CreateFromText(ctx, e.ws, FromTextInput{Name: "semaphore-lab", Format: "ini", Content: ini}); !errors.Is(err, ErrConflict) {
+		t.Errorf("duplicate: %v", err)
+	}
+	if _, err := e.svc.CreateFromText(ctx, e.ws, FromTextInput{Name: "bad", Format: "ini", Content: "[web\n"}); !errors.Is(err, ErrInvalid) {
+		t.Errorf("bad text: %v", err)
+	}
+	if _, err := e.svc.CreateFromText(ctx, e.ws, FromTextInput{Name: "bad2", Format: "toml", Content: ini}); !errors.Is(err, ErrInvalid) {
+		t.Errorf("bad format: %v", err)
+	}
+	list, err := e.svc.List(ctx, e.ws)
+	if err != nil || len(list) != 2 {
+		t.Fatalf("failed attempts must leave nothing behind: %v %v", list, err)
+	}
+}

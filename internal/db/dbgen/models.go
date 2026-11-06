@@ -79,6 +79,16 @@ type MembershipScope struct {
 	RefID        string
 }
 
+type MigrationMapping struct {
+	ID          uuid.UUID
+	Source      string
+	Kind        string
+	SourceID    string
+	AcpID       uuid.UUID
+	WorkspaceID uuid.UUID
+	CreatedAt   pgtype.Timestamptz
+}
+
 type Project struct {
 	ID                  uuid.UUID
 	WorkspaceID         uuid.UUID

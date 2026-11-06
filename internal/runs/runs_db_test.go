@@ -151,6 +151,11 @@ func TestTemplateValidation(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
 	other := uuid.New()
+	pwID := uuid.New()
+	if _, err := e.q.CreateSecret(ctx, dbgen.CreateSecretParams{ID: pwID, WorkspaceID: e.ws, Name: "pw-" + pwID.String()[:6], Type: "password",
+		Metadata: []byte("{}"), EnvVersion: 1, EnvKeyID: "k", EnvWrapNonce: []byte("x"), EnvWrappedDek: []byte("x"), EnvNonce: []byte("x"), EnvCiphertext: []byte("x")}); err != nil {
+		t.Fatal(err)
+	}
 	tests := []struct {
 		name string
 		in   func(*TemplateInput)
@@ -160,6 +165,7 @@ func TestTemplateValidation(t *testing.T) {
 		{"foreign project", func(in *TemplateInput) { in.ProjectID = &other }, "project does not exist"},
 		{"foreign inventory", func(in *TemplateInput) { in.InventoryID = &other }, "inventory does not exist"},
 		{"foreign ssh secret", func(in *TemplateInput) { in.SSHSecretID.Set, in.SSHSecretID.Value = true, &other }, "ssh_secret_id does not exist"},
+		{"password as ssh secret", func(in *TemplateInput) { in.SSHSecretID.Set, in.SSHSecretID.Value = true, &pwID }, "ssh_secret_id has the wrong secret type"},
 		{"foreign vault identity", func(in *TemplateInput) { in.VaultIdentityIDs = &[]uuid.UUID{other} }, "vault identity does not exist"},
 		{"bad limit", func(in *TemplateInput) { in.DefaultLimit = sp("~x") }, "regular expression"},
 		{"bad survey", func(in *TemplateInput) {

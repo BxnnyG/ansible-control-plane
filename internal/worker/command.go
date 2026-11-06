@@ -37,7 +37,10 @@ func buildArgs(sp runproto.Spec, dir string) ([]string, error) {
 	}
 	args := []string{"-i", filepath.Join(dir, inventorySh), "-e", "@" + filepath.Join(dir, runproto.FileExtraVars)}
 	if sp.SSHKey {
-		args = append(args, "--private-key", filepath.Join(dir, runproto.FileSSHKey))
+		key := filepath.Join(dir, runproto.FileSSHKey)
+		// Extra vars beat inventory group vars, so the template secret wins
+		// over ansible_ssh_private_key_file set in the inventory or ansible.cfg.
+		args = append(args, "--private-key", key, "-e", "ansible_ssh_private_key_file="+key)
 	}
 	if sp.Become {
 		args = append(args, "--become-password-file", filepath.Join(dir, runproto.FileBecomePass))

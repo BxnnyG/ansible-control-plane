@@ -178,7 +178,7 @@ func (s *Service) belongs(ctx context.Context, q *dbgen.Queries, ws uuid.UUID, i
 		}
 		return fmt.Errorf("%w: %s has the wrong secret type", ErrInvalid, what)
 	}
-	if err := checkSecret(in.ssh, "ssh_secret_id", secrets.TypeSSHKey, secrets.TypePassword); err != nil {
+	if err := checkSecret(in.ssh, "ssh_secret_id", secrets.TypeSSHKey); err != nil {
 		return err
 	}
 	if err := checkSecret(in.become, "become_secret_id", secrets.TypePassword); err != nil {

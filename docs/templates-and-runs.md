@@ -19,6 +19,10 @@ SSH/become secrets (by id, never by value) and an ordered list of vault identiti
 exists in the latest scanned revision. Update is a partial `PUT`; `null` clears nullable references.
 Deleting a template cancels its queued runs in the same transaction; run history is kept.
 
+The SSH secret must be of type `ssh_key` (other types are rejected on create/update). At run time its key
+file is passed both as `--private-key` and as the extra var `ansible_ssh_private_key_file`, so it overrides
+key paths set in inventory group vars or `ansible.cfg`.
+
 `allow_*_override` flags decide which per-run overrides are accepted (limit, tags/skip_tags, check, diff,
 verbosity, extra vars). Without `allow_vars_override`, only variables defined by the template survey may
 be set at run time. The survey is a list of fields (shape of `scan.Field`) or an object with `fields`;

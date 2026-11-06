@@ -4,7 +4,7 @@
 set -eu
 GO_IMAGE="${GO_IMAGE:-golang:1.27.2-alpine3.24}"
 PG_IMAGE="${PG_IMAGE:-postgres:18.6-alpine}"
-PACKAGES="${TEST_DB_PACKAGES:-db auth admin server projects inventory runs workerapi runstream schedules}"
+PACKAGES="${TEST_DB_PACKAGES:-db auth admin server projects inventory runs workerapi runstream schedules migrate}"
 root="$(cd "$(dirname "$0")/.." && pwd)"
 suffix="$$"
 net="acp-testdb-net-$suffix"

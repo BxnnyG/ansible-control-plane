@@ -25,7 +25,7 @@ func TestBuildArgs(t *testing.T) {
 	}
 	want := []string{
 		"-i", d + "/inventory.sh", "-e", "@" + d + "/extra_vars.json",
-		"--private-key", d + "/secrets/ssh_key", "--become-password-file", d + "/secrets/become_pass",
+		"--private-key", d + "/secrets/ssh_key", "-e", "ansible_ssh_private_key_file=" + d + "/secrets/ssh_key", "--become-password-file", d + "/secrets/become_pass",
 		"--vault-id", "default@" + d + "/secrets/vault/default", "--vault-id", "prod@" + d + "/secrets/vault/prod",
 		"--limit", "web:!db", "--tags", "a,b", "--skip-tags", "c", "--check", "--diff", "-vvv", "--", "site.yml",
 	}

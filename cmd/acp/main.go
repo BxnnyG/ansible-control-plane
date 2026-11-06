@@ -51,8 +51,8 @@ func run(args []string) error {
 		fmt.Printf("acp %s (%s)\n%s\n", version.Version, version.Commit, version.Attribution)
 		return nil
 	case "serve", "worker":
-	case "admin":
-	case "migrate", "db":
+	case "admin", "migrate":
+	case "db":
 		fmt.Println("not implemented")
 		return nil
 	default:
@@ -69,6 +69,9 @@ func run(args []string) error {
 
 	if args[0] == "admin" {
 		return runAdmin(ctx, args[1:], cfg, os.Stdin, os.Stdout, os.Stderr)
+	}
+	if args[0] == "migrate" {
+		return runMigrate(ctx, args[1:], cfg, os.Stdout, os.Stderr)
 	}
 	if args[0] == "worker" {
 		return worker.Run(ctx, cfg, log)

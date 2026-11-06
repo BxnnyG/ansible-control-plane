@@ -1,7 +1,11 @@
 # Handoff
 
 ## Goal
-- Next: M7 on `feat/m7-migration`, start with a fresh Semaphore backup (rule 2).
+- M7 on `feat/m7-migration` (ADR-0017). Plan: (1) ADR + backup script ✔, (2) MIG-9 worker key override + ssh secret type fix, (3) internal/migrate/semaphore reader + key decryption + mapping + dry-run report + migration 00013 `migration_mappings` + CLI `acp migrate semaphore`, (4) apply (incl. inventory-from-INI helper, schedules disabled), (5) compare + check-mode runs, (6) `scripts/migrate-semaphore.sh` (throwaway MySQL from backup), (7) docs/runbook `docs/migration-from-semaphore.md`, (8) live: dry run → apply → compare → cutover (stop/disable Semaphore only after explicit user OK).
+- Status 2026-11-06: steps (1)-(7) done; live: branch deployed (app+worker, DB at 00013), apply done (6 secrets, 2 archive inventories, 8 templates, 1 disabled schedule), rerun idempotent, compare counts match, 8 check runs on new worker: migrated key + become work; remaining failures are host/network/playbook issues (details docs/local/m7-migration.md). Cutover done 2026-11-06 with user OK: Semaphore stopped, restart policy no (was unless-stopped), ACP took over port 80 (ACP_HTTP_PORT=80, redirect to HTTPS). Next: M7 close (merge, tag m7, push), then M5 on feat/m5-connectors.
+- Semaphore backup for M7: /opt/backups/semaphore-2026-11-05-2227/ (`scripts/backup-semaphore.sh`, v2.17.33, includes semaphore-effective-config.json). Semaphore's real access key comes from env SEMAPHORE_ACCESS_KEY_ENCRYPTION (overrides config.json).
+- Lesson: deploy app+worker before queuing check runs (first batch ran on the old M4 worker).
+- Source facts: 1 project, 2 repos (local path ping.yml → unmappable; Git repo = existing ACP project), 2 static inventories (older copies of Git inventories infra/tetra), 7 keys (3 ssh, 3 login_password, 1 none), 1 empty environment, 8 templates (no args/surveys/vaults), 1 schedule (inactive, every minute, apt upgrade), 1 local admin user, 2844 tasks.
 - M3 (done, merged): Git projects (sync/scan/webhooks), inventories (DB + Git-synced, import, preview), vault (Go-native), surveys from argument_specs, inventory-backed ScopeResolver, secrets API.
 
 ## Done
@@ -49,6 +53,8 @@
 - TLS chain: server cert served without intermediate; need intermediate + root CA cert (public) from user to serve full chain / trust in worker.
 
 ## Decisions (with short rationale)
+- M7 (user, 2026-11-05): Semaphore task history is not imported (stays in backup); templates are re-pointed to the Git inventories, static Semaphore inventories are archived as DB inventories `semaphore-<name>`.
+- M7 (ADR-0017): tool reads a throwaway MySQL restored from the backup, never the live DB; template SSH secret is forced via `-e ansible_ssh_private_key_file`; Semaphore users only reported.
 - Roadmap order (user + Claude, 2026-11-05): M4 → M7 (migration) → M5 → M6 → M8; numbers unchanged. Reason: real runs need migrated SSH keys. M7 starts with a fresh Semaphore backup (hard rule 2).
 - M3 (user, 2026-11-04): ACP gets its own read-write deploy key for the Ansible repo (`secrets/acp_git_deploy_ed25519`, public key to be added on the Git server by the user); Git server is Gitea/Forgejo (webhook HMAC); write branch configurable per inventory, default `acp/<inventory-slug>`, never force-push.
 - M3: ADR-0013 (project cache clone + scan in Go, TOFU-with-confirmation known_hosts), ADR-0014 (single relational inventory model for both modes), ADR-0015 (vault format in Go). GIT-4 (requirements install) moves to M4 (needs ansible-galaxy in worker).
