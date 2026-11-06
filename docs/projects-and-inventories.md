@@ -138,7 +138,9 @@ masked as `<vault>`.
 
 A group rule puts matching fleet hosts (from the connectors, see ADR-0018) into
 one group of an inventory. Nothing happens automatically: you **preview** the
-diff and **apply** it explicitly (UI/REST, or `acp admin group-rule`).
+diff and **apply** it explicitly (UI/REST, or `acp admin group-rule`). The fleet
+and connectors behind the rules are described in
+[`connectors-and-fleet.md`](connectors-and-fleet.md).
 
 | Setting | Meaning |
 |---|---|
@@ -183,7 +185,8 @@ target inventory and act on the whole fleet, so memberships scoped to networks,
 groups or inventories cannot use them. Network-scoped members see the
 inventories that contain hosts of their networks, reduced to those hosts.
 
-CLI: `acp admin group-rule list|preview|apply --workspace SLUG [--rule NAME|ID]`.
+CLI: `acp admin group-rule list|preview|apply --workspace SLUG [--rule NAME|ID]`
+(see [`connectors-and-fleet.md`](connectors-and-fleet.md#group-rules)).
 
 ## Troubleshooting
 

@@ -2,7 +2,7 @@
 
 A self-hosted web platform to run, organize and monitor Ansible – Semaphore's simplicity, AWX's structure, a modern UI, plus a network-aware fleet view fed by connectors (OPNsense, Proxmox VE, NetBox, monitoring).
 
-> **Status:** early development – milestones M0–M4 and M7 done (auth, workspaces, secrets, Git projects, inventories, vault, templates and runs, Semaphore migration with dry run, apply, compare and cutover), see [`docs/migration-from-semaphore.md`](docs/migration-from-semaphore.md). See [`PLAN.md`](PLAN.md) for scope and roadmap.
+> **Status:** early development – milestones M0–M4 and M7 done (auth, workspaces, secrets, Git projects, inventories, vault, templates and runs, Semaphore migration with dry run, apply, compare and cutover), see [`docs/migration-from-semaphore.md`](docs/migration-from-semaphore.md). M5 (read-only OPNsense and Proxmox connectors, merged fleet view, conflicts, network scopes, group rules) is implemented and pending live verification, see [`docs/connectors-and-fleet.md`](docs/connectors-and-fleet.md). See [`PLAN.md`](PLAN.md) for scope and roadmap.
 
 ## Features
 
@@ -22,6 +22,7 @@ Planned for v1.0:
 - Network scopes for permissions (fed by connectors)
 - Fleet view per network: online, Ansible-reachable, last run, drift, open monitoring problems, unmanaged devices
 - One-click remediation runs mapped from monitoring alerts
+- Read-only connectors (OPNsense, Proxmox VE) feeding a merged fleet view with conflict hints and group rules (see [`docs/connectors-and-fleet.md`](docs/connectors-and-fleet.md))
 - Migration tool from Semaphore UI (see [`docs/migration-from-semaphore.md`](docs/migration-from-semaphore.md))
 
 ## Quickstart
@@ -63,6 +64,7 @@ group/host counts (never variable values). The project must be synced first.
 
 - [`PLAN.md`](PLAN.md) – project plan and requirements
 - [`docs/projects-and-inventories.md`](docs/projects-and-inventories.md) – operator guide: projects, inventories, vault
+- [`docs/connectors-and-fleet.md`](docs/connectors-and-fleet.md) – operator guide: connectors, fleet, conflicts, network scopes, group rules
 - [`docs/adr/`](docs/adr/) – architecture decision records
 
 ## License
