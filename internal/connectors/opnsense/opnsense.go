@@ -193,10 +193,16 @@ func (c *conn) detectBackend(ctx context.Context, res *connectors.Result) (strin
 	var st struct {
 		Status string `json:"status"`
 	}
-	if ok, err := c.optional(ctx, res, "dhcpv4/service/status", &st); err != nil {
-		return "", err
-	} else if ok && st.Status != "" && !strings.EqualFold(st.Status, "running") {
-		return BackendNone, nil
+	// No warning on 403/404: recent OPNsense releases offer no ACL for this
+	// endpoint, and the leases endpoint is the real signal.
+	err := c.get(ctx, "dhcpv4/service/status", &st)
+	switch code := statusCode(err); {
+	case err == nil:
+		if st.Status != "" && !strings.EqualFold(st.Status, "running") {
+			return BackendNone, nil
+		}
+	case code != 403 && code != 404:
+		return "", fmt.Errorf("dhcpv4/service/status: %w", err)
 	}
 	return BackendISC, nil
 }

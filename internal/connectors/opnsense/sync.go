@@ -106,12 +106,12 @@ func (c *conn) networks(ctx context.Context, res *connectors.Result) error {
 	var ifs struct {
 		Rows rows `json:"rows"`
 	}
-	okIf, err := c.optional(ctx, res, "interfaces/overview/interfacesInfo", &ifs)
+	okIf, err := c.optional(ctx, res, "interfaces/overview/interfaces_info", &ifs)
 	if err != nil {
 		return err
 	}
 	var vl rows
-	okVl, err := c.optional(ctx, res, "interfaces/vlan_settings/searchItem", &vl)
+	okVl, err := c.optional(ctx, res, "interfaces/vlan_settings/search_item", &vl)
 	if err != nil {
 		return err
 	}
@@ -177,7 +177,7 @@ func (c *conn) isc(ctx context.Context, res *connectors.Result, b *builder) erro
 	var r struct {
 		Rows rows `json:"rows"`
 	}
-	ok, err := c.optional(ctx, res, "dhcpv4/leases/searchLease", &r)
+	ok, err := c.optional(ctx, res, "dhcpv4/leases/search_lease", &r)
 	if err != nil || !ok {
 		return err
 	}
@@ -204,7 +204,7 @@ func (c *conn) dnsmasq(ctx context.Context, res *connectors.Result, b *builder) 
 		}
 	}
 	var h rows
-	if ok, err := c.optional(ctx, res, "dnsmasq/settings/searchHost", &h); err != nil {
+	if ok, err := c.optional(ctx, res, "dnsmasq/settings/search_host", &h); err != nil {
 		return err
 	} else if ok {
 		for _, row := range h {
@@ -269,7 +269,7 @@ func (c *conn) kea(ctx context.Context, res *connectors.Result, b *builder) erro
 // neighbours reads the ARP and NDP tables (both optional).
 func (c *conn) neighbours(ctx context.Context, res *connectors.Result, b *builder) error {
 	for _, e := range []struct{ endpoint, kind string }{
-		{"diagnostics/interface/getArp", connectors.KindARP}, {"diagnostics/interface/getNdp", connectors.KindNDP},
+		{"diagnostics/interface/get_arp", connectors.KindARP}, {"diagnostics/interface/get_ndp", connectors.KindNDP},
 	} {
 		var r rows
 		ok, err := c.optional(ctx, res, e.endpoint, &r)

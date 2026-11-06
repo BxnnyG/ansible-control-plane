@@ -24,16 +24,21 @@ Create an API key and secret for a dedicated user in OPNsense (System, Access,
 Users) and grant only the following pages (ACL entries) to that user or its
 group:
 
-| Data | Privilege page (GUI) |
+| Data | Privilege page (GUI, names as in OPNsense 26.7) |
 |---|---|
-| Firmware and system status | Status: System, plus System: Firmware |
-| DHCP leases (ISC) | Services: DHCP: Leases (also DHCPv4 service status) |
-| DHCP leases and reservations (dnsmasq) | Services: Dnsmasq DNS/DHCP, Status: Dnsmasq leases |
+| Firmware and system status | System: Status, System: Firmware |
+| DHCP leases (ISC legacy) | Services: ISC DHCPv4: Leases |
+| DHCP leases and reservations (dnsmasq) | Services: Dnsmasq DNS/DHCP: Settings |
 | DHCP leases and reservations (Kea) | Services: Kea DHCP, Status: Kea leases |
-| Interfaces overview | Interfaces: Overview |
+| Interfaces overview | Status: Interfaces (older releases: Interfaces: Overview) |
 | ARP and NDP tables | Diagnostics: ARP Table, Diagnostics: NDP Table |
 | VLANs | Interfaces: Other Types: VLAN |
-| DHCP service status | the status page of the respective DHCP service |
+
+The connector calls the snake_case API paths (for example
+`diagnostics/interface/get_arp`). Recent releases check ACLs only for those;
+the legacy camelCase aliases answer 403 even with the right privilege. The ISC
+DHCPv4 service status has no privilege page in recent releases; a 403 there is
+ignored silently because the leases endpoint decides whether ISC is in use.
 
 Page names differ slightly between OPNsense releases; if a page is missing the
 sync reports it as a warning (see below) and you add the privilege that matches.

@@ -24,15 +24,15 @@ func ok(f string) route { return route{file: f} }
 func code(c int) route  { return route{status: c} }
 func base() map[string]route {
 	return map[string]route{
-		"core/firmware/status":                ok("firmware_status.json"),
-		"core/system/status":                  ok("system_status.json"),
-		"interfaces/overview/interfacesInfo":  ok("interfaces_info.json"),
-		"interfaces/vlan_settings/searchItem": ok("vlan_search.json"),
-		"diagnostics/interface/getArp":        ok("arp.json"),
-		"diagnostics/interface/getNdp":        ok("ndp.json"),
-		"kea/service/status":                  ok("status_stopped.json"),
-		"dnsmasq/service/status":              ok("status_disabled.json"),
-		"dhcpv4/service/status":               ok("status_stopped.json"),
+		"core/firmware/status":                 ok("firmware_status.json"),
+		"core/system/status":                   ok("system_status.json"),
+		"interfaces/overview/interfaces_info":  ok("interfaces_info.json"),
+		"interfaces/vlan_settings/search_item": ok("vlan_search.json"),
+		"diagnostics/interface/get_arp":        ok("arp.json"),
+		"diagnostics/interface/get_ndp":        ok("ndp.json"),
+		"kea/service/status":                   ok("status_stopped.json"),
+		"dnsmasq/service/status":               ok("status_disabled.json"),
+		"dhcpv4/service/status":                ok("status_stopped.json"),
 	}
 }
 
@@ -109,7 +109,7 @@ func TestSyncBackends(t *testing.T) {
 		{
 			name: "isc",
 			routes: with(base(), "dhcpv4/service/status", ok("status_running.json"),
-				"dhcpv4/leases/searchLease", ok("isc_leases.json")),
+				"dhcpv4/leases/search_lease", ok("isc_leases.json")),
 			wantObs: []string{"arp:neigh:02:00:00:00:01:01/192.0.2.10", "arp:neigh:02:00:00:00:01:02/198.51.100.10",
 				"lease:isc:02:00:00:00:02:01/192.0.2.50", "ndp:neigh:02:00:00:00:01:01/2001:db8:0:1::10",
 				"static:isc:02:00:00:00:02:02/192.0.2.51"},
@@ -118,23 +118,23 @@ func TestSyncBackends(t *testing.T) {
 		},
 		{
 			name:   "isc without status privilege",
-			routes: with(base(), "dhcpv4/service/status", code(403), "dhcpv4/leases/searchLease", ok("isc_leases.json")),
+			routes: with(base(), "dhcpv4/service/status", code(403), "dhcpv4/leases/search_lease", ok("isc_leases.json")),
 			wantObs: []string{"arp:neigh:02:00:00:00:01:01/192.0.2.10", "arp:neigh:02:00:00:00:01:02/198.51.100.10",
 				"lease:isc:02:00:00:00:02:01/192.0.2.50", "ndp:neigh:02:00:00:00:01:01/2001:db8:0:1::10",
 				"static:isc:02:00:00:00:02:02/192.0.2.51"},
 			wantNets: []string{"if:lan:192.0.2.0/24", "if:lan:2001:db8:0:1::/64", "if:opt1:198.51.100.0/24"},
-			warnings: 1,
+			warnings: 0,
 		},
 		{
 			name: "dnsmasq",
 			routes: with(base(), "dnsmasq/service/status", ok("status_running.json"),
-				"dnsmasq/leases/search", ok("dnsmasq_leases.json"), "dnsmasq/settings/searchHost", ok("dnsmasq_hosts.json")),
+				"dnsmasq/leases/search", ok("dnsmasq_leases.json"), "dnsmasq/settings/search_host", ok("dnsmasq_hosts.json")),
 			wantObs: []string{"arp:neigh:02:00:00:00:01:01/192.0.2.10", "arp:neigh:02:00:00:00:01:02/198.51.100.10",
 				"lease:dnsmasq:02:00:00:00:03:01/192.0.2.60", "ndp:neigh:02:00:00:00:01:01/2001:db8:0:1::10",
 				"static:dnsmasq:00000000-0000-4000-8000-0000000000a1#0", "static:dnsmasq:00000000-0000-4000-8000-0000000000a1#1",
 				"static:dnsmasq:00000000-0000-4000-8000-0000000000a2"},
 			wantNets: []string{"if:lan:192.0.2.0/24", "if:lan:2001:db8:0:1::/64", "if:opt1:198.51.100.0/24"},
-			forbid:   "dhcpv4/leases/searchLease",
+			forbid:   "dhcpv4/leases/search_lease",
 		},
 		{
 			name: "kea wins over dnsmasq",
@@ -154,15 +154,15 @@ func TestSyncBackends(t *testing.T) {
 				"ndp:neigh:02:00:00:00:01:01/2001:db8:0:1::10"},
 			wantNets: []string{"if:lan:192.0.2.0/24", "if:lan:2001:db8:0:1::/64", "if:opt1:198.51.100.0/24"},
 			warnings: 1,
-			forbid:   "dhcpv4/leases/searchLease",
+			forbid:   "dhcpv4/leases/search_lease",
 		},
 		{
 			name: "partial sync on 403 and 404",
-			routes: with(base(), "interfaces/overview/interfacesInfo", code(403), "interfaces/vlan_settings/searchItem", code(403),
-				"diagnostics/interface/getArp", code(403), "diagnostics/interface/getNdp", code(404),
-				"dhcpv4/service/status", code(403), "dhcpv4/leases/searchLease", ok("isc_leases.json")),
+			routes: with(base(), "interfaces/overview/interfaces_info", code(403), "interfaces/vlan_settings/search_item", code(403),
+				"diagnostics/interface/get_arp", code(403), "diagnostics/interface/get_ndp", code(404),
+				"dhcpv4/service/status", code(403), "dhcpv4/leases/search_lease", ok("isc_leases.json")),
 			wantObs:  []string{"lease:isc:02:00:00:00:02:01/192.0.2.50", "static:isc:02:00:00:00:02:02/192.0.2.51"},
-			warnings: 5,
+			warnings: 4,
 		},
 	}
 	for _, tc := range cases {
@@ -221,7 +221,7 @@ type errString string
 func (e errString) Error() string { return string(e) }
 
 func TestNormalization(t *testing.T) {
-	srv := newServer(t, with(base(), "dhcpv4/service/status", ok("status_running.json"), "dhcpv4/leases/searchLease", ok("isc_leases.json")))
+	srv := newServer(t, with(base(), "dhcpv4/service/status", ok("status_running.json"), "dhcpv4/leases/search_lease", ok("isc_leases.json")))
 	res, err := build(t, srv.URL).Sync(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -261,8 +261,8 @@ func TestSyncFailures(t *testing.T) {
 	}{
 		{"auth failure on version", with(base(), "core/firmware/status", code(401))},
 		{"forbidden on version", with(base(), "core/firmware/status", code(403))},
-		{"auth failure on optional endpoint", with(base(), "diagnostics/interface/getArp", code(401))},
-		{"server error on optional endpoint", with(base(), "diagnostics/interface/getArp", code(500))},
+		{"auth failure on optional endpoint", with(base(), "diagnostics/interface/get_arp", code(401))},
+		{"server error on optional endpoint", with(base(), "diagnostics/interface/get_arp", code(500))},
 		{"no product version", with(base(), "core/firmware/status", ok("status_running.json"))},
 	}
 	for _, tc := range cases {
