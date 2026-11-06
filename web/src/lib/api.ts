@@ -56,13 +56,7 @@ export interface BreakGlassCredentials {
 }
 
 export type SecretType =
-  | 'ssh_key'
-  | 'password'
-  | 'token'
-  | 'vault_password'
-  | 'file'
-  | 'api_key_pair'
-  | 'api_token';
+  'ssh_key' | 'password' | 'token' | 'vault_password' | 'file' | 'api_key_pair' | 'api_token';
 
 /** Non-secret view of a stored secret; values are write-only and never returned. */
 export interface SecretMeta {
@@ -973,8 +967,7 @@ export const api = {
         version,
       ),
   },
-  connectorTypes: (ws: string) =>
-    request<ConnectorType[]>('GET', fleetPath(ws, 'connector-types')),
+  connectorTypes: (ws: string) => request<ConnectorType[]>('GET', fleetPath(ws, 'connector-types')),
   connectors: {
     list: (ws: string) => request<Connector[]>('GET', connectorsPath(ws)),
     get: (ws: string, id: string) =>
@@ -1012,7 +1005,10 @@ export const api = {
     host: (ws: string, id: string) =>
       request<FleetHostDetail>('GET', fleetPath(ws, `hosts/${encodeURIComponent(id)}`)),
     conflicts: (ws: string, state?: ConflictState) =>
-      request<FleetConflict[]>('GET', fleetPath(ws, 'conflicts') + (state ? `?state=${state}` : '')),
+      request<FleetConflict[]>(
+        'GET',
+        fleetPath(ws, 'conflicts') + (state ? `?state=${state}` : ''),
+      ),
     ackConflict: (ws: string, id: string) =>
       request<FleetConflict>('POST', fleetPath(ws, `conflicts/${encodeURIComponent(id)}/ack`)),
   },
