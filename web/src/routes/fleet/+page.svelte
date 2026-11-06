@@ -7,7 +7,6 @@
   import FormError from '$lib/components/FormError.svelte';
 
   let networks = $state<FleetNetwork[]>([]);
-  let counts = $state<Record<string, number>>({});
   let hosts = $state<FleetHost[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
@@ -21,13 +20,6 @@
   async function loadNetworks(ws: string) {
     try {
       networks = await api.fleet.networks(ws);
-      // The networks endpoint carries no host count yet: ask per network.
-      const entries = await Promise.all(
-        networks.map(
-          async (n) => [n.id, (await api.fleet.hosts(ws, { network: n.id })).length] as const,
-        ),
-      );
-      counts = Object.fromEntries(entries);
     } catch (e) {
       error = describeError(e);
     }
@@ -98,7 +90,7 @@
               {n.description || n.interface || '-'}{n.vlan ? ` - VLAN ${n.vlan}` : ''}
             </div>
             <div class="mt-2 text-sm">
-              {counts[n.id] ?? '...'} host{counts[n.id] === 1 ? '' : 's'}
+              {n.host_count} host{n.host_count === 1 ? '' : 's'}
               <span class="text-xs text-muted">via {n.connector}</span>
             </div>
           </button>

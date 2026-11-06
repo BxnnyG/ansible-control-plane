@@ -68,3 +68,11 @@ export function stateParam(f: ConflictFilter): 'open' | 'acknowledged' | 'resolv
 export function canAck(c: Pick<FleetConflict, 'state'>): boolean {
   return c.state === 'open';
 }
+
+/** Link labels for the hosts of a conflict; falls back to "host N" without a name. */
+export function conflictHosts(
+  c: Pick<FleetConflict, 'host_ids' | 'hosts'>,
+): { id: string; label: string }[] {
+  const names = new Map((c.hosts ?? []).map((h) => [h.id, h.name]));
+  return c.host_ids.map((id, i) => ({ id, label: names.get(id) || `host ${i + 1}` }));
+}

@@ -650,6 +650,7 @@ export interface FleetNetwork {
   source: string;
   first_seen: string;
   last_seen: string;
+  host_count: number;
 }
 
 export interface FleetHost {
@@ -717,6 +718,8 @@ export interface FleetConflict {
   state: ConflictState;
   fingerprint: string;
   host_ids: string[];
+  /** Display names of the hosts visible to the caller. */
+  hosts: { id: string; name: string }[];
   details: Record<string, unknown>;
   acknowledged_by: string | null;
   acknowledged_at: string | null;

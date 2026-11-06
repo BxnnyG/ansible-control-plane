@@ -4,6 +4,7 @@
   import {
     canAck,
     conflictDetails,
+    conflictHosts,
     conflictLabel,
     stateParam,
     type ConflictFilter,
@@ -97,8 +98,8 @@
                 {#each conflictDetails(c) as line (line)}<div>{line}</div>{/each}
               </td>
               <td class={td}>
-                {#each c.host_ids as id, i (id)}
-                  <a class="mr-2 text-accent underline" href="/fleet/hosts/{id}">host {i + 1}</a>
+                {#each conflictHosts(c) as h (h.id)}
+                  <a class="mr-2 text-accent underline" href="/fleet/hosts/{h.id}">{h.label}</a>
                 {/each}
               </td>
               <td class={td}>
