@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { NAV_ITEMS, filterNav } from '$lib/nav';
+  import { NAV_ITEMS, filterNav, visibleNav } from '$lib/nav';
+  import { session } from '$lib/session.svelte';
 
   let { open = $bindable(false) }: { open: boolean } = $props();
 
@@ -9,7 +10,12 @@
   let dialog: HTMLDialogElement | undefined = $state();
   let input: HTMLInputElement | undefined = $state();
 
-  const results = $derived(filterNav(NAV_ITEMS, query));
+  const results = $derived(
+    filterNav(
+      visibleNav(NAV_ITEMS, (p) => session.can(p)),
+      query,
+    ),
+  );
 
   $effect(() => {
     if (!dialog) return;
