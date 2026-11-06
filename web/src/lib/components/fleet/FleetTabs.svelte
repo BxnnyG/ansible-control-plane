@@ -3,8 +3,11 @@
 
   const TABS = [
     { href: '/fleet', label: 'Overview', exact: true },
+    { href: '/fleet/alerts', label: 'Alerts', exact: false },
+    { href: '/fleet/unmanaged', label: 'Unmanaged', exact: false },
     { href: '/fleet/conflicts', label: 'Conflicts', exact: false },
     { href: '/fleet/group-rules', label: 'Group rules', exact: false },
+    { href: '/fleet/remediation', label: 'Remediation', exact: false },
   ];
 </script>
 

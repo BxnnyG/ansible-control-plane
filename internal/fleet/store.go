@@ -115,6 +115,9 @@ func (s *Store) Merge(ctx context.Context, ws uuid.UUID) (Summary, error) {
 	if err != nil {
 		return Summary{}, err
 	}
+	if err := linkAlerts(ctx, q, ws); err != nil {
+		return Summary{}, err
+	}
 	return sum, tx.Commit(ctx)
 }
 

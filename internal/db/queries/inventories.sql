@@ -109,3 +109,10 @@ ON CONFLICT DO NOTHING;
 
 -- name: DeleteInventoryMembership :execrows
 DELETE FROM inventory_group_hosts WHERE group_id = $1 AND host_id = $2;
+
+-- name: ListWorkspaceInventoryHosts :many
+-- Every inventory host of the workspace with its ansible_host (fleet linking).
+SELECT h.id, h.inventory_id, h.name, COALESCE(h.vars->>'ansible_host', '')::text AS ansible_host
+FROM inventory_hosts h JOIN inventories i ON i.id = h.inventory_id
+WHERE i.workspace_id = $1
+ORDER BY h.inventory_id, h.name;

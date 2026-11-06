@@ -25,6 +25,7 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/inventory"
 	"github.com/BxnnyG/ansible-control-plane/internal/policy"
 	"github.com/BxnnyG/ansible-control-plane/internal/projects"
+	"github.com/BxnnyG/ansible-control-plane/internal/remediation"
 	"github.com/BxnnyG/ansible-control-plane/internal/runs"
 	"github.com/BxnnyG/ansible-control-plane/internal/runstream"
 	"github.com/BxnnyG/ansible-control-plane/internal/scan"
@@ -152,9 +153,10 @@ func run(args []string) error {
 		go schedSvc.Run(ctx, schedules.DefaultTick, log)
 		go prj.RunScheduler(ctx, projects.DefaultScheduleTick, projects.DefaultScheduleConcurrency, log)
 		fleetStore := fleet.NewStore(pool, nil)
-		conSvc := connectors.New(connectors.Options{DB: pool, Registry: newConnectorRegistry(), Secrets: sec, PostSync: fleetStore})
-		opts = append(opts, server.WithConnectors(conSvc), server.WithFleet(fleetStore),
-			server.WithGroupRules(grouprules.New(grouprules.Options{DB: pool, Fleet: fleetStore, Inventories: invSvc})))
+		conSvc := connectors.New(connectors.Options{DB: pool, Registry: newConnectorRegistry(), Secrets: sec, SecretWriter: sec, PostSync: fleetStore, Alerts: fleetStore})
+		opts = append(opts, server.WithConnectors(conSvc), server.WithFleet(fleetStore), server.WithFleetAdd(fleet.Adder{Fleet: fleetStore, Inventories: invSvc}),
+			server.WithGroupRules(grouprules.New(grouprules.Options{DB: pool, Fleet: fleetStore, Inventories: invSvc})),
+			server.WithRemediation(remediation.New(remediation.Options{DB: pool, Fleet: fleetStore, Runs: runSvc, Graphs: invSvc})))
 		go conSvc.RunScheduler(ctx, connectors.DefaultTick, connectors.DefaultConcurrency, log)
 		log.Info("login enabled", "oidc", cfg.OIDCEnabled(), "breakglass", cfg.BreakGlassEnabled)
 	case cfg.AuthEnabled():

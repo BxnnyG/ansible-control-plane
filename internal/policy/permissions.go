@@ -36,6 +36,7 @@ const (
 	ConnectorWrite  Permission = "connector.write"
 	FleetRead       Permission = "fleet.read"
 	FleetManage     Permission = "fleet.manage"
+	FleetRemediate  Permission = "fleet.remediate"
 	VaultRead       Permission = "vault.read"
 	VaultManage     Permission = "vault.manage"
 	VaultDecrypt    Permission = "vault.decrypt"
@@ -83,7 +84,7 @@ func buildMatrix() map[string]map[Permission]bool {
 		return m
 	}
 	viewer := grant(nil, viewerPerms...)
-	operator := grant(viewer, RunExecute, RunCancel, ProjectSync)
+	operator := grant(viewer, RunExecute, RunCancel, ProjectSync, FleetRemediate)
 	editor := grant(operator, SecretsMetaRead, ProjectWrite, InventoryWrite, TemplateWrite, ScheduleWrite, VaultRead, FleetManage)
 	admin := grant(editor, SecretsWrite, WorkspaceManage, MembersRead, MembersManage, AuditRead, ConnectorRead, ConnectorWrite, VaultManage, VaultDecrypt)
 	owner := grant(admin, WorkspaceDelete)

@@ -491,6 +491,46 @@ func (q *Queries) ListInventoryMemberships(ctx context.Context, inventoryID uuid
 	return items, nil
 }
 
+const listWorkspaceInventoryHosts = `-- name: ListWorkspaceInventoryHosts :many
+SELECT h.id, h.inventory_id, h.name, COALESCE(h.vars->>'ansible_host', '')::text AS ansible_host
+FROM inventory_hosts h JOIN inventories i ON i.id = h.inventory_id
+WHERE i.workspace_id = $1
+ORDER BY h.inventory_id, h.name
+`
+
+type ListWorkspaceInventoryHostsRow struct {
+	ID          uuid.UUID
+	InventoryID uuid.UUID
+	Name        string
+	AnsibleHost string
+}
+
+// Every inventory host of the workspace with its ansible_host (fleet linking).
+func (q *Queries) ListWorkspaceInventoryHosts(ctx context.Context, workspaceID uuid.UUID) ([]ListWorkspaceInventoryHostsRow, error) {
+	rows, err := q.db.Query(ctx, listWorkspaceInventoryHosts, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListWorkspaceInventoryHostsRow
+	for rows.Next() {
+		var i ListWorkspaceInventoryHostsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.InventoryID,
+			&i.Name,
+			&i.AnsibleHost,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockInventory = `-- name: LockInventory :one
 SELECT id, workspace_id, name, slug, mode, project_id, path, write_branch, source_format, base_sha, version, last_import_at, created_by, created_at, updated_at FROM inventories WHERE id = $1 AND workspace_id = $2 FOR UPDATE
 `

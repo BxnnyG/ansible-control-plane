@@ -1,0 +1,6 @@
+{"links": [], "domainType": "service", "id": "service", "value": [
+ {"domainType": "service", "id": "web1.example.test:Filesystem /", "title": "Filesystem /", "links": [], "members": {}, "extensions": {"host_name": "web1.example.test", "host_address": "192.0.2.10", "description": "Filesystem /", "state": 2, "plugin_output": "CRIT - 97.1% used", "last_state_change": 1767323000, "acknowledged": 0, "scheduled_downtime_depth": 0}},
+ {"domainType": "service", "id": "web1.example.test:CPU load", "title": "CPU load", "links": [], "members": {}, "extensions": {"host_name": "web1.example.test", "host_address": "192.0.2.10", "description": "CPU load", "state": 1, "plugin_output": "WARN - 15 min load 4.2", "last_state_change": 1767323010, "acknowledged": 1, "scheduled_downtime_depth": 0}},
+ {"domainType": "service", "id": "web2:Memory", "title": "Memory", "links": [], "members": {}, "extensions": {"host_name": "web2", "host_address": "192.0.2.11", "description": "Memory", "state": 3, "plugin_output": "UNKNOWN - no data", "last_state_change": 1767323020, "acknowledged": 0, "scheduled_downtime_depth": 2}},
+ {"domainType": "service", "id": "web2:Ok", "title": "Ok", "links": [], "members": {}, "extensions": {"host_name": "web2", "description": "Ok", "state": 0}}
+]}

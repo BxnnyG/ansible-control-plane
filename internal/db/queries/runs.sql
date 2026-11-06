@@ -1,7 +1,7 @@
 -- name: EnqueueRun :one
 INSERT INTO runs (workspace_id, template_id, template_name, project_id, project_revision, trigger,
-    triggered_by, schedule_id, overrides, params)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    triggered_by, schedule_id, overrides, params, remediation)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING *;
 
 -- name: GetRun :one
@@ -175,3 +175,28 @@ SELECT pg_notify(sqlc.arg(channel)::text, sqlc.arg(payload)::text);
 -- Display label of a user (display name, else email, else username).
 SELECT COALESCE(NULLIF(display_name, ''), NULLIF(email, ''), username, '')::text AS label
 FROM users WHERE id = $1;
+
+-- name: LatestHostRunResults :many
+-- Newest finished run per (inventory, host); the inventory comes from the
+-- run's template (runs of deleted templates carry no inventory).
+SELECT DISTINCT ON (t.inventory_id, rh.host)
+    t.inventory_id, rh.host, r.id AS run_id, r.template_name, r.finished_at,
+    COALESCE((r.params->>'check')::boolean, false)::boolean AS check_mode,
+    rh.ok, rh.changed, rh.failed, rh.unreachable
+FROM run_host_results rh
+JOIN runs r ON r.id = rh.run_id
+JOIN templates t ON t.id = r.template_id
+WHERE r.workspace_id = $1 AND r.finished_at IS NOT NULL AND r.status IN ('succeeded', 'failed')
+ORDER BY t.inventory_id, rh.host, r.finished_at DESC, r.id DESC;
+
+-- name: LatestHostCheckResults :many
+-- Newest finished check-mode run per (inventory, host).
+SELECT DISTINCT ON (t.inventory_id, rh.host)
+    t.inventory_id, rh.host, r.id AS run_id, r.template_name, r.finished_at,
+    rh.changed, rh.failed, rh.unreachable
+FROM run_host_results rh
+JOIN runs r ON r.id = rh.run_id
+JOIN templates t ON t.id = r.template_id
+WHERE r.workspace_id = $1 AND r.finished_at IS NOT NULL AND r.status IN ('succeeded', 'failed')
+  AND COALESCE((r.params->>'check')::boolean, false)
+ORDER BY t.inventory_id, rh.host, r.finished_at DESC, r.id DESC;

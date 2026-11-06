@@ -1,0 +1,2 @@
+{"count":1,"next":null,"previous":null,"results":[
+{"id":20,"name":"app-01","status":{"value":"active"},"site":null,"cluster":{"id":1,"slug":"pve-cluster"},"role":{"id":2,"slug":"web"},"primary_ip4":{"id":102,"address":"192.0.2.20/24"},"primary_ip6":{"id":103,"address":"2001:db8::20/64"},"tags":[{"slug":"Prod"},{"slug":"db"}]}]}

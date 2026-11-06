@@ -121,7 +121,7 @@ func ComputeAccess(scopes []Scope, inv uuid.UUID, g Graph) Access {
 func ComputeAccessWithNetworks(scopes []Scope, inv uuid.UUID, g Graph, networkHosts []FleetHost) Access {
 	a := computeGroupAccess(scopes, inv, g)
 	if !a.All {
-		a.addNetworkHosts(g, newFleetKeys(networkHosts))
+		a.addNetworkHosts(g, NewFleetIndex(networkHosts))
 	}
 	return a
 }

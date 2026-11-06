@@ -1,0 +1,4 @@
+{"count":3,"next":null,"previous":null,"results":[
+{"id":10,"name":"web-01.example.test","status":{"value":"active","label":"Active"},"site":{"id":1,"name":"Site A","slug":"site-a"},"role":{"id":2,"name":"Web","slug":"web"},"tenant":{"id":3,"slug":"acme"},"platform":{"id":4,"slug":"debian"},"primary_ip4":{"id":100,"address":"192.0.2.10/24"},"primary_ip6":null,"tags":[{"id":1,"name":"Prod","slug":"prod"}]},
+{"id":11,"name":"switch-01","status":{"value":"planned"},"site":{"id":1,"slug":"site-a"},"device_role":{"id":5,"slug":"switch"},"primary_ip4":null,"primary_ip6":null,"tags":[]},
+{"id":12,"name":"","status":{"value":"active"},"tags":[]}]}

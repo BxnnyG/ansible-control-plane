@@ -24,6 +24,8 @@ describe('params', () => {
   it('builds and reads kind specific params', () => {
     expect(buildParams('subnet', ' 10.0.0.0/24 ')).toEqual({ cidr: '10.0.0.0/24' });
     expect(buildParams('proxmox_tag', 'web')).toEqual({ tag: 'web' });
+    expect(buildParams('netbox_role', ' web ')).toEqual({ role: 'web' });
+    expect(buildParams('netbox_site', 'a')).toEqual({ site: 'a' });
     expect(buildParams('subnet', '')).toEqual({});
     expect(paramValue({ kind: 'proxmox_tag', params: { tag: 'web' } })).toBe('web');
     expect(describeMatch({ kind: 'subnet', params: { cidr: '10.0.0.0/24' } })).toBe(

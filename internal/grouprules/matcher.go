@@ -16,6 +16,9 @@ import (
 const (
 	KindSubnet     = "subnet"
 	KindProxmoxTag = "proxmox_tag"
+	KindNetboxRole = "netbox_role"
+	KindNetboxSite = "netbox_site"
+	KindNetboxTag  = "netbox_tag"
 )
 
 // ErrInvalid wraps validation errors of rules and their parameters.
@@ -33,6 +36,8 @@ type Host struct {
 	FQDN     string
 	IPs      []string
 	Tags     []string
+	// Attrs are classification attributes of the merged host (NetBox site, role, ...).
+	Attrs map[string]string
 }
 
 // Matcher decides whether a fleet host belongs to a rule.
@@ -47,6 +52,9 @@ type Factory func(params json.RawMessage) (Matcher, json.RawMessage, error)
 var factories = map[string]Factory{
 	KindSubnet:     newSubnet,
 	KindProxmoxTag: newProxmoxTag,
+	KindNetboxRole: newNetboxAttr("role", "role"),
+	KindNetboxSite: newNetboxAttr("site", "site"),
+	KindNetboxTag:  newNetboxTag,
 }
 
 // Kinds returns the registered rule kinds, sorted.
@@ -132,4 +140,55 @@ func (m tagMatcher) Match(h Host) bool {
 		}
 	}
 	return false
+}
+
+type attrMatcher struct{ key, val string }
+
+// newNetboxAttr builds the factory of a rule kind that matches one NetBox
+// attribute slug (param "<name>", e.g. {"role": "web-server"}).
+func newNetboxAttr(key, param string) Factory {
+	return func(params json.RawMessage) (Matcher, json.RawMessage, error) {
+		var p map[string]string
+		if err := strictDecode(params, &p); err != nil {
+			return nil, nil, err
+		}
+		for k := range p {
+			if k != param {
+				return nil, nil, invalid("unknown parameter %q (want %q)", k, param)
+			}
+		}
+		v, err := normSlug(p[param], "NetBox "+key)
+		if err != nil {
+			return nil, nil, err
+		}
+		norm, _ := json.Marshal(map[string]string{param: v})
+		return attrMatcher{key: key, val: v}, norm, nil
+	}
+}
+
+func (m attrMatcher) Match(h Host) bool {
+	return strings.ToLower(strings.TrimSpace(h.Attrs[m.key])) == m.val
+}
+
+func normSlug(raw, what string) (string, error) {
+	v := strings.ToLower(strings.TrimSpace(raw))
+	if v == "" || len(v) > 100 || strings.ContainsAny(v, " \t\r\n,;") {
+		return "", invalid("%s must be a single slug without whitespace", what)
+	}
+	return v, nil
+}
+
+func newNetboxTag(params json.RawMessage) (Matcher, json.RawMessage, error) {
+	var p struct {
+		Tag string `json:"tag"`
+	}
+	if err := strictDecode(params, &p); err != nil {
+		return nil, nil, err
+	}
+	tag, err := normSlug(strings.TrimPrefix(strings.TrimSpace(p.Tag), "netbox:"), "NetBox tag")
+	if err != nil {
+		return nil, nil, err
+	}
+	norm, _ := json.Marshal(map[string]string{"tag": tag})
+	return tagMatcher{tag: "netbox:" + tag}, norm, nil
 }

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api, type Connector, type ConnectorType } from '$lib/api';
+  import { api, type Connector, type ConnectorCreated, type ConnectorType } from '$lib/api';
   import { fmtDuration, statusClass, statusLabel } from '$lib/connectors';
   import { describeError } from '$lib/errors';
   import { session } from '$lib/session.svelte';
@@ -85,7 +85,11 @@
     }
   }
 
-  function done() {
+  // Shown once after creating a connector that generated a webhook secret.
+  let created = $state<ConnectorCreated | null>(null);
+
+  function done(saved: ConnectorCreated) {
+    created = saved.generated_secret ? saved : null;
     editing = null;
     if (session.slug) void load(session.slug);
   }
@@ -107,6 +111,21 @@
 
 <FormError id="connectors-error" message={error} />
 {#if notice}<p role="status" class="mb-3 text-sm">{notice}</p>{/if}
+{#if created}
+  <div role="status" class="{card} mb-6 max-w-2xl">
+    <p>
+      Connector <strong>{created.name}</strong> created. Copy the webhook secret now: it is shown only
+      once.
+    </p>
+    <dl class="mt-2 space-y-1 text-sm">
+      <dt class="text-muted">Endpoint (POST)</dt>
+      <dd class="font-mono break-all">{created.webhook_url || created.webhook_path}</dd>
+      <dt class="text-muted">Secret (Authorization: Bearer ...)</dt>
+      <dd class="font-mono break-all">{created.generated_secret}</dd>
+    </dl>
+    <button class="{btn} mt-3" onclick={() => (created = null)}>I have copied it</button>
+  </div>
+{/if}
 
 {#if !canRead}
   <p class="text-muted">You do not have permission to view connectors in this workspace.</p>
@@ -161,6 +180,9 @@
               <td class={td}>
                 {c.name}
                 {#if !c.enabled}<span class="text-xs text-muted">(disabled)</span>{/if}
+                {#if c.webhook_path}
+                  <div class="font-mono text-xs text-muted">POST {c.webhook_path}</div>
+                {/if}
                 {#each c.warnings ?? [] as w (w)}
                   <div class="text-xs text-amber-700 dark:text-amber-400">Warning: {w}</div>
                 {/each}

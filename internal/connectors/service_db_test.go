@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/BxnnyG/ansible-control-plane/internal/connectors"
+	"github.com/BxnnyG/ansible-control-plane/internal/connectors/alertwebhook"
 	"github.com/BxnnyG/ansible-control-plane/internal/connectors/fake"
 	"github.com/BxnnyG/ansible-control-plane/internal/db"
 	"github.com/BxnnyG/ansible-control-plane/internal/db/dbgen"
@@ -33,7 +34,13 @@ type env struct {
 	ws     uuid.UUID
 	secret uuid.UUID
 	synced atomic.Int32
+	linked atomic.Int32
+	sec    *secrets.Service
 }
+
+type linkFunc func(context.Context, uuid.UUID) error
+
+func (f linkFunc) LinkAlerts(ctx context.Context, ws uuid.UUID) error { return f(ctx, ws) }
 
 func setup(t *testing.T, timeout time.Duration) *env {
 	t.Helper()
@@ -72,7 +79,10 @@ func setup(t *testing.T, timeout time.Duration) *env {
 	e := &env{pool: pool, q: q, script: &fake.Script{}, ws: ws.ID, secret: meta.ID}
 	reg := connectors.NewRegistry()
 	fake.Register(reg, e.script)
-	e.svc = connectors.New(connectors.Options{DB: pool, Registry: reg, Secrets: sec, Timeout: timeout,
+	alertwebhook.Register(reg)
+	e.sec = sec
+	e.svc = connectors.New(connectors.Options{DB: pool, Registry: reg, Secrets: sec, SecretWriter: sec, Timeout: timeout,
+		Alerts:   linkFunc(func(context.Context, uuid.UUID) error { e.linked.Add(1); return nil }),
 		PostSync: connectors.PostSyncFunc(func(context.Context, uuid.UUID, uuid.UUID) error { e.synced.Add(1); return nil })})
 	return e
 }
@@ -121,7 +131,7 @@ func TestSyncStoresAndReplacesSet(t *testing.T) {
 			{ExternalKey: "m1", Kind: connectors.KindLease, Fields: connectors.Fields{MACs: []string{"02:00:00:00:00:01"}, IPs: []string{"192.0.2.10"}}},
 			{ExternalKey: "m2", Kind: connectors.KindVM, Fields: connectors.Fields{Hostname: "vm2"}},
 		},
-		Alerts: []connectors.Alert{{Host: "x", Message: "m"}},
+		Alerts: []connectors.Alert{{ExternalKey: "a1", Host: "x", Severity: connectors.SeverityWarning, Summary: "m"}},
 	})
 	counts, err := e.svc.Run(ctx, c, connectors.TriggerManual)
 	if err != nil || counts.Networks != 1 || counts.Observations != 2 || counts.Alerts != 1 {

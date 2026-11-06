@@ -94,10 +94,25 @@ func TestBuildUpdate(t *testing.T) {
 	for _, bad := range [][]string{
 		{"update", "--workspace", "w", "--connector", "c"},
 		{"update", "--workspace", "w", "--connector", "c", "--enable", "--disable"},
+		{"update", "--workspace", "w", "--connector", "c", "--secret", "s", "--secret-file", "-"},
+		{"update", "--workspace", "w", "--connector", "c", "--secret-type", "token"},
+		{"delete", "--workspace", "w"},
+		{"delete", "--workspace", "w", "--connector", "c", "extra"},
 		{"update", "--workspace", "w", "--connector", "c", "--interval", "1s"},
 	} {
 		if _, err := parseConnectorArgs(bad, io.Discard); err == nil {
 			t.Errorf("%v accepted", bad)
 		}
+	}
+}
+
+func TestParseUpdateSecretFileAndDelete(t *testing.T) {
+	a, err := parseConnectorArgs([]string{"update", "--workspace", "w", "--connector", "c", "--secret-file", "-", "--secret-type", "api_key_pair"}, io.Discard)
+	if err != nil || a.SecretFile != "-" || a.SecretType != "api_key_pair" {
+		t.Fatalf("update: %+v %v", a, err)
+	}
+	d, err := parseConnectorArgs([]string{"delete", "--workspace", "w", "--connector", "c", "--keep-secret"}, io.Discard)
+	if err != nil || !d.KeepSecret || d.Connector != "c" {
+		t.Fatalf("delete: %+v %v", d, err)
 	}
 }

@@ -1,5 +1,11 @@
 <script lang="ts">
-  import { api, type Connector, type ConnectorTestResult, type ConnectorType } from '$lib/api';
+  import {
+    api,
+    type Connector,
+    type ConnectorCreated,
+    type ConnectorTestResult,
+    type ConnectorType,
+  } from '$lib/api';
   import { buildConfig, initialValues, invalidFields, needsSecret } from '$lib/connectors';
   import { describeError } from '$lib/errors';
   import { session } from '$lib/session.svelte';
@@ -19,7 +25,7 @@
     types: ConnectorType[];
     /** Connector being edited; null creates a new one. */
     connector?: Connector | null;
-    ondone: (saved: Connector) => void;
+    ondone: (saved: ConnectorCreated) => void;
     oncancel: () => void;
     submitLabel?: string;
   } = $props();

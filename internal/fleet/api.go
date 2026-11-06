@@ -50,6 +50,8 @@ type NetworkView struct {
 	FirstSeen     time.Time `json:"first_seen"`
 	LastSeen      time.Time `json:"last_seen"`
 	HostCount     int       `json:"host_count"`
+	// Counts are the status counters of the visible hosts in the network.
+	Counts NetworkCounts `json:"counts"`
 }
 
 // Networks lists the workspace networks that allow accepts (nil allows all).
@@ -60,7 +62,7 @@ func (s *Store) Networks(ctx context.Context, ws uuid.UUID, allow func(id uuid.U
 	if err != nil {
 		return nil, fmt.Errorf("list networks: %w", err)
 	}
-	ips, err := s.hostIPs(ctx, ws)
+	entries, err := s.hostEntries(ctx, ws, true)
 	if err != nil {
 		return nil, err
 	}
@@ -84,9 +86,10 @@ func (s *Store) Networks(ctx context.Context, ws uuid.UUID, allow func(id uuid.U
 			vl := int(n.Vlan.Int32)
 			v.VLAN = &vl
 		}
-		for _, hostIPs := range ips {
-			if visible.ok(hostIPs) && hasIPIn(hostIPs, n.Cidr) {
+		for _, e := range entries {
+			if visible.ok(e.view.IPs) && hasIPIn(e.view.IPs, n.Cidr) {
 				v.HostCount++
+				v.Counts.count(e.view)
 			}
 		}
 		out = append(out, v)
@@ -96,19 +99,39 @@ func (s *Store) Networks(ctx context.Context, ws uuid.UUID, allow func(id uuid.U
 
 // HostView is the list representation of a merged host.
 type HostView struct {
-	ID            uuid.UUID `json:"id"`
-	Name          string    `json:"name"`
-	Kind          string    `json:"kind"`
-	Status        string    `json:"status"`
-	Hostname      string    `json:"hostname"`
-	FQDN          string    `json:"fqdn"`
-	IPs           []string  `json:"ips"`
-	MACs          []string  `json:"macs"`
-	Tags          []string  `json:"tags"`
-	Connectors    []string  `json:"connectors"`
-	OpenConflicts int       `json:"open_conflicts"`
+	ID            uuid.UUID         `json:"id"`
+	Name          string            `json:"name"`
+	Kind          string            `json:"kind"`
+	Status        string            `json:"status"`
+	Hostname      string            `json:"hostname"`
+	FQDN          string            `json:"fqdn"`
+	IPs           []string          `json:"ips"`
+	MACs          []string          `json:"macs"`
+	Tags          []string          `json:"tags"`
+	Attrs         map[string]string `json:"attrs,omitempty"`
+	Connectors    []string          `json:"connectors"`
+	OpenConflicts int               `json:"open_conflicts"`
+	// OpenAlerts counts open monitoring alerts linked to the host;
+	// WorstSeverity is the highest severity among them ("" without alerts).
+	OpenAlerts    int       `json:"open_alerts"`
+	WorstSeverity string    `json:"worst_severity"`
 	FirstSeen     time.Time `json:"first_seen"`
 	LastSeen      time.Time `json:"last_seen"`
+
+	// Host status (FLEET-4), derived on read. Online is online, offline or
+	// unknown (no live-state source). Ansible lists the linked inventory
+	// hosts; Managed is true when there is one. LastRun is the newest finished
+	// run on any linked host; Reachable is yes, no (that run hit the host as
+	// unreachable) or unknown (never run). Drift is set when the newest
+	// check-mode run reported changes.
+	Online    string        `json:"online"`
+	Managed   bool          `json:"managed"`
+	Ansible   []AnsibleLink `json:"ansible"`
+	LastRun   *RunRef       `json:"last_run"`
+	Reachable string        `json:"reachable"`
+	Drift     *Drift        `json:"drift"`
+
+	checkAt time.Time
 }
 
 // ObservationView is one connector observation behind a host.
@@ -138,6 +161,13 @@ type HostFilter struct {
 	NetworkID *uuid.UUID // hosts with an address in this network
 	Q         string     // case-insensitive substring of name, address, MAC or tag
 	Conflicts bool       // only hosts with an open conflict
+	Alerts    bool       // only hosts with an open alert
+	// Managed narrows to hosts linked (true) or not linked (false) to an
+	// inventory host of the workspace.
+	Managed *bool
+	// SkipStatus leaves the Ansible status fields empty (cheaper; for
+	// callers that only need identities).
+	SkipStatus bool
 }
 
 // ConflictView is a conflict hint. State is open, acknowledged or resolved.
@@ -207,6 +237,12 @@ func nonNil(s []string) []string {
 	return s
 }
 
+func (v *HostView) setAlerts(sums map[uuid.UUID]dbgen.ListOpenAlertSummariesRow) {
+	if r, ok := sums[v.ID]; ok {
+		v.OpenAlerts, v.WorstSeverity = int(r.OpenCount), rankSeverity(int(r.WorstRank))
+	}
+}
+
 func hostView(h dbgen.Host, open int) (HostView, Fields) {
 	var f Fields
 	_ = json.Unmarshal(h.Fields, &f)
@@ -222,7 +258,7 @@ func hostView(h dbgen.Host, open int) (HostView, Fields) {
 	}
 	slices.Sort(conns)
 	return HostView{ID: h.ID, Name: h.Name, Kind: f.Kind, Status: f.Status, Hostname: f.Hostname, FQDN: f.FQDN,
-		IPs: nonNil(f.IPs), MACs: nonNil(f.MACs), Tags: nonNil(f.Tags), Connectors: nonNil(conns), OpenConflicts: open,
+		IPs: nonNil(f.IPs), MACs: nonNil(f.MACs), Tags: nonNil(f.Tags), Attrs: f.Attrs, Connectors: nonNil(conns), OpenConflicts: open,
 		FirstSeen: h.FirstSeen.Time.UTC(), LastSeen: h.LastSeen.Time.UTC()}, f
 }
 
@@ -240,8 +276,15 @@ func openConflicts(list []dbgen.HostConflict) map[uuid.UUID]int {
 	return out
 }
 
-// Hosts lists merged hosts, filtered and limited to what visible allows.
-func (s *Store) Hosts(ctx context.Context, ws uuid.UUID, f HostFilter, visible Visible) ([]HostView, error) {
+// hostEntry is a host view together with its merged fields.
+type hostEntry struct {
+	view   HostView
+	fields Fields
+}
+
+// hostEntries loads every host of the workspace with conflict, alert and
+// (when withStatus) Ansible status, in a fixed number of queries.
+func (s *Store) hostEntries(ctx context.Context, ws uuid.UUID, withStatus bool) ([]hostEntry, error) {
 	rows, err := s.q.ListHosts(ctx, ws)
 	if err != nil {
 		return nil, fmt.Errorf("list hosts: %w", err)
@@ -250,6 +293,34 @@ func (s *Store) Hosts(ctx context.Context, ws uuid.UUID, f HostFilter, visible V
 	if err != nil {
 		return nil, fmt.Errorf("list conflicts: %w", err)
 	}
+	open := openConflicts(conflicts)
+	sums, err := alertSummaries(ctx, s.q, ws)
+	if err != nil {
+		return nil, err
+	}
+	var sd *statusData
+	if withStatus {
+		keys, err := s.q.ListHostKeys(ctx, ws)
+		if err != nil {
+			return nil, fmt.Errorf("list host keys: %w", err)
+		}
+		if sd, err = s.loadStatus(ctx, ws, rows, keys); err != nil {
+			return nil, err
+		}
+	}
+	now := s.now()
+	out := make([]hostEntry, 0, len(rows))
+	for _, h := range rows {
+		v, f := hostView(h, open[h.ID])
+		v.setAlerts(sums)
+		sd.apply(&v, f, now)
+		out = append(out, hostEntry{view: v, fields: f})
+	}
+	return out, nil
+}
+
+// Hosts lists merged hosts, filtered and limited to what visible allows.
+func (s *Store) Hosts(ctx context.Context, ws uuid.UUID, f HostFilter, visible Visible) ([]HostView, error) {
 	var prefix *netip.Prefix
 	if f.NetworkID != nil {
 		nets, err := s.q.ListNetworks(ctx, ws)
@@ -266,15 +337,24 @@ func (s *Store) Hosts(ctx context.Context, ws uuid.UUID, f HostFilter, visible V
 			return nil, ErrNotFound
 		}
 	}
-	open := openConflicts(conflicts)
+	entries, err := s.hostEntries(ctx, ws, !f.SkipStatus || f.Managed != nil)
+	if err != nil {
+		return nil, err
+	}
 	q := strings.ToLower(strings.TrimSpace(f.Q))
 	out := []HostView{}
-	for _, h := range rows {
-		v, _ := hostView(h, open[h.ID])
+	for _, e := range entries {
+		v := e.view
 		if !visible.ok(v.IPs) {
 			continue
 		}
+		if f.Alerts && v.OpenAlerts == 0 {
+			continue
+		}
 		if f.Conflicts && v.OpenConflicts == 0 {
+			continue
+		}
+		if f.Managed != nil && v.Managed != *f.Managed {
 			continue
 		}
 		if prefix != nil && !hasIPIn(v.IPs, *prefix) {
@@ -327,10 +407,20 @@ func (s *Store) Host(ctx context.Context, ws, id uuid.UUID, visible Visible) (Ho
 	if !visible.ok(view.IPs) {
 		return HostDetail{}, ErrNotFound
 	}
+	sums, err := alertSummaries(ctx, s.q, ws)
+	if err != nil {
+		return HostDetail{}, err
+	}
+	view.setAlerts(sums)
 	keyRows, err := s.q.ListHostKeys(ctx, ws)
 	if err != nil {
 		return HostDetail{}, fmt.Errorf("list host keys: %w", err)
 	}
+	sd, err := s.loadStatus(ctx, ws, rows, keyRows)
+	if err != nil {
+		return HostDetail{}, err
+	}
+	sd.apply(&view, fields, s.now())
 	d := HostDetail{HostView: view, Fields: fields, Keys: []Key{}, Observations: []ObservationView{}, Conflicts: []ConflictView{}}
 	for _, k := range keyRows {
 		if k.HostID == id {
@@ -411,18 +501,6 @@ func hostsVisible(ids []uuid.UUID, ips map[uuid.UUID][]string, visible Visible) 
 		}
 	}
 	return true
-}
-
-func (s *Store) hostIPs(ctx context.Context, ws uuid.UUID) (map[uuid.UUID][]string, error) {
-	info, err := s.hostInfos(ctx, ws)
-	if err != nil {
-		return nil, err
-	}
-	out := make(map[uuid.UUID][]string, len(info))
-	for id, h := range info {
-		out[id] = h.ips
-	}
-	return out, nil
 }
 
 func (s *Store) hostInfos(ctx context.Context, ws uuid.UUID) (map[uuid.UUID]hostInfo, error) {

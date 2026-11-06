@@ -146,6 +146,8 @@ and connectors behind the rules are described in
 |---|---|
 | Match `subnet` | `{"cidr": "192.0.2.0/24"}` (IPv4 or IPv6): the host has an address in the prefix |
 | Match `proxmox_tag` | `{"tag": "web"}`: the host carries the Proxmox tag (`proxmox:web` in the fleet) |
+| Match `netbox_role` / `netbox_site` | `{"role": "web"}` / `{"site": "site-a"}`: the NetBox role or site slug of the host |
+| Match `netbox_tag` | `{"tag": "prod"}`: the host carries the NetBox tag (`netbox:prod` in the fleet) |
 | Target | inventory plus group name; the group is created on apply if it is missing |
 | Mode `add-only` (default) | only adds memberships |
 | Mode `sync` | also removes the hosts the rule added earlier and that no longer match |

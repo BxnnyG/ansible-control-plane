@@ -275,13 +275,13 @@ func (s *Service) Delete(ctx context.Context, ws, id uuid.UUID) error {
 }
 
 func (s *Service) fleetHosts(ctx context.Context, ws uuid.UUID) ([]Host, error) {
-	list, err := s.fl.Hosts(ctx, ws, fleet.HostFilter{}, nil)
+	list, err := s.fl.Hosts(ctx, ws, fleet.HostFilter{SkipStatus: true}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("list fleet hosts: %w", err)
 	}
 	out := make([]Host, 0, len(list))
 	for _, h := range list {
-		out = append(out, Host{ID: h.ID, Name: h.Name, Hostname: h.Hostname, FQDN: h.FQDN, IPs: h.IPs, Tags: h.Tags})
+		out = append(out, Host{ID: h.ID, Name: h.Name, Hostname: h.Hostname, FQDN: h.FQDN, IPs: h.IPs, Tags: h.Tags, Attrs: h.Attrs})
 	}
 	return out, nil
 }

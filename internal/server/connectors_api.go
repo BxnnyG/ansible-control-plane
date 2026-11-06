@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -25,7 +27,8 @@ type ConnectorsAPI interface {
 	Specs() []connectors.Spec
 	List(ctx context.Context, ws uuid.UUID) ([]dbgen.Connector, error)
 	Get(ctx context.Context, ws, id uuid.UUID) (dbgen.Connector, error)
-	Create(ctx context.Context, ws uuid.UUID, in connectors.CreateInput) (dbgen.Connector, error)
+	CreateGenerating(ctx context.Context, ws uuid.UUID, in connectors.CreateInput) (dbgen.Connector, string, error)
+	HandleAlertWebhook(ctx context.Context, id uuid.UUID, authorization string, body []byte) (uuid.UUID, int, error)
 	Update(ctx context.Context, ws, id uuid.UUID, in connectors.UpdateInput) (dbgen.Connector, error)
 	Delete(ctx context.Context, ws, id uuid.UUID) error
 	Test(ctx context.Context, ws, id uuid.UUID) error
@@ -65,8 +68,10 @@ type connectorView struct {
 	BackoffCount    int                   `json:"backoff_count"`
 	Counts          connectors.Counts     `json:"counts"`
 	Warnings        []string              `json:"warnings"`
-	CreatedAt       time.Time             `json:"created_at"`
-	UpdatedAt       time.Time             `json:"updated_at"`
+	// WebhookPath is the receiver path of alert_webhook connectors.
+	WebhookPath string    `json:"webhook_path,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 func tsPtr(t pgtype.Timestamptz) *time.Time {
@@ -82,6 +87,9 @@ func newConnectorView(c dbgen.Connector, secrets map[uuid.UUID]connectors.Secret
 		IntervalSeconds: int(c.IntervalSeconds), Enabled: c.Enabled, LastSyncAt: tsPtr(c.LastSyncAt), LastSuccessAt: tsPtr(c.LastSuccessAt),
 		NextSyncAt: c.NextSyncAt.Time.UTC(), LastError: c.LastError, LastDurationMs: int(c.LastDurationMs), BackoffCount: int(c.BackoffCount),
 		Warnings: []string{}, CreatedAt: c.CreatedAt.Time.UTC(), UpdatedAt: c.UpdatedAt.Time.UTC()}
+	if c.Type == connectors.AlertWebhookType {
+		v.WebhookPath = connectors.AlertHookPath(c.ID)
+	}
 	_ = json.Unmarshal(c.Config, &v.Config)
 	_ = json.Unmarshal(c.LastCounts, &v.Counts)
 	if v.Counts.Warnings != nil {
@@ -118,7 +126,7 @@ type syncView struct {
 
 // connectorRoutes registers the connector endpoints under
 // /api/v1/workspaces/{workspace}. All of them are workspace-wide permissions.
-func connectorRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc ConnectorsAPI, log *slog.Logger) {
+func connectorRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc ConnectorsAPI, lim *hookLimiter, publicURL string, log *slog.Logger) {
 	const base = "/api/v1/workspaces/{workspace}/connectors"
 	const item = base + "/{id}"
 	fail := func(w http.ResponseWriter, what string, err error) {
@@ -187,6 +195,49 @@ func connectorRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc Co
 		return true
 	}
 
+	// Public endpoint: authenticated by the connector's bearer secret only, no
+	// session and no CSRF. Every rejection looks like an unknown path.
+	r.Post("/api/hooks/alerts/{id}", func(w http.ResponseWriter, req *http.Request) {
+		host, _, err := net.SplitHostPort(req.RemoteAddr)
+		if err != nil {
+			host = req.RemoteAddr
+		}
+		if !lim.allow(host, time.Now()) {
+			w.Header().Set("Retry-After", "60")
+			http.Error(w, "too many requests", http.StatusTooManyRequests)
+			return
+		}
+		body, err := io.ReadAll(http.MaxBytesReader(w, req.Body, connectors.MaxAlertWebhookBody))
+		if err != nil {
+			http.Error(w, "request too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+		id, err := uuid.Parse(chi.URLParam(req, "id"))
+		if err != nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		ws, n, err := svc.HandleAlertWebhook(req.Context(), id, req.Header.Get("Authorization"), body)
+		switch {
+		case err == nil:
+			b, _ := json.Marshal(map[string]any{"alerts": n})
+			actx, cancel := context.WithTimeout(context.WithoutCancel(req.Context()), 5*time.Second)
+			defer cancel()
+			if _, aerr := store.InsertAudit(actx, dbgen.InsertAuditParams{ActorLabel: "alert-webhook", Action: "connector.alert_webhook",
+				TargetType: "connector", TargetID: id.String(), WorkspaceID: pgtype.UUID{Bytes: ws, Valid: true}, Details: b}); aerr != nil {
+				log.Error("audit write failed", "action", "connector.alert_webhook", "error", aerr)
+			}
+			policy.WriteJSON(w, http.StatusAccepted, map[string]any{"status": "accepted", "alerts": n})
+		case errors.Is(err, connectors.ErrWebhookRejected):
+			http.Error(w, "not found", http.StatusNotFound)
+		case errors.Is(err, connectors.ErrWebhookPayload): // authenticated: say what is wrong
+			policy.WriteJSON(w, http.StatusBadRequest, apiError{Error: err.Error(), Code: "bad_request"})
+		default:
+			log.Error("alert webhook", "connector", id, "error", err)
+			policy.WriteJSON(w, http.StatusInternalServerError, apiError{Error: "internal error"})
+		}
+	})
+
 	az.Handle(r, http.MethodGet, "/api/v1/workspaces/{workspace}/connector-types", policy.ConnectorRead, func(w http.ResponseWriter, _ *http.Request) {
 		specs := svc.Specs()
 		for i := range specs { // JSON arrays, never null
@@ -240,7 +291,7 @@ func connectorRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc Co
 			return
 		}
 		uid := auth.FromContext(req.Context()).User.ID
-		c, err := svc.Create(req.Context(), d.Workspace.ID, connectors.CreateInput{Type: body.Type, Name: body.Name, BaseURL: body.BaseURL,
+		c, generated, err := svc.CreateGenerating(req.Context(), d.Workspace.ID, connectors.CreateInput{Type: body.Type, Name: body.Name, BaseURL: body.BaseURL,
 			Config: body.Config, SecretID: body.SecretID, IntervalSeconds: body.IntervalSeconds,
 			Enabled: body.Enabled == nil || *body.Enabled, CreatedBy: &uid})
 		if err != nil {
@@ -253,7 +304,21 @@ func connectorRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc Co
 			fail(w, "connector secret refs", err)
 			return
 		}
-		policy.WriteJSON(w, http.StatusCreated, v)
+		if generated == "" {
+			policy.WriteJSON(w, http.StatusCreated, v)
+			return
+		}
+		// A generated webhook secret is shown exactly once.
+		w.Header().Set("Cache-Control", "no-store")
+		out := struct {
+			connectorView
+			GeneratedSecret string `json:"generated_secret"`
+			WebhookURL      string `json:"webhook_url,omitempty"`
+		}{connectorView: v, GeneratedSecret: generated}
+		if publicURL != "" {
+			out.WebhookURL = publicURL + v.WebhookPath
+		}
+		policy.WriteJSON(w, http.StatusCreated, out)
 	})
 
 	az.Handle(r, http.MethodPost, base+"/test", policy.ConnectorWrite, func(w http.ResponseWriter, req *http.Request) {

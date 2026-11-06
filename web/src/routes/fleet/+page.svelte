@@ -1,8 +1,19 @@
 <script lang="ts">
-  import { api, type FleetHost, type FleetNetwork } from '$lib/api';
+  import { api, type FleetHost, type FleetNetwork, type Template } from '$lib/api';
   import { describeError } from '$lib/errors';
   import { session } from '$lib/session.svelte';
-  import { card, fmtDate, input, td, th } from '$lib/ui';
+  import {
+    alertBadge,
+    ansibleClass,
+    ansibleLabel,
+    driftLabel,
+    networkCountsLabel,
+    onlineClass,
+    onlineLabel,
+    severityClass,
+  } from '$lib/fleet';
+  import { btnPrimary, card, fmtDate, input, td, th } from '$lib/ui';
+  import BulkRunDialog from '$lib/components/fleet/BulkRunDialog.svelte';
   import FleetTabs from '$lib/components/fleet/FleetTabs.svelte';
   import FormError from '$lib/components/FormError.svelte';
 
@@ -14,8 +25,31 @@
   let network = $state('');
   let q = $state('');
   let conflictsOnly = $state(false);
+  let alertsOnly = $state(false);
 
   const canRead = $derived(session.can('fleet.read'));
+  const canBulk = $derived(session.can('run.execute'));
+
+  let selected = $state<Record<string, boolean>>({});
+  let templates = $state<Template[]>([]);
+  let bulkOpen = $state(false);
+  const chosen = $derived(hosts.filter((h) => selected[h.id]));
+  const allChosen = $derived(hosts.length > 0 && chosen.length === hosts.length);
+
+  function toggleAll(on: boolean) {
+    selected = on ? Object.fromEntries(hosts.map((h) => [h.id, true])) : {};
+  }
+
+  async function openBulk() {
+    if (!session.slug) return;
+    error = null;
+    try {
+      templates = await api.templates.list(session.slug);
+      bulkOpen = true;
+    } catch (e) {
+      error = describeError(e);
+    }
+  }
 
   async function loadNetworks(ws: string) {
     try {
@@ -25,7 +59,10 @@
     }
   }
 
-  async function loadHosts(ws: string, f: { network: string; q: string; conflicts: boolean }) {
+  async function loadHosts(
+    ws: string,
+    f: { network: string; q: string; conflicts: boolean; alerts: boolean },
+  ) {
     loading = true;
     error = null;
     try {
@@ -33,7 +70,10 @@
         network: f.network || undefined,
         q: f.q.trim() || undefined,
         conflicts: f.conflicts,
+        alerts: f.alerts,
       });
+      // Keep the selection to hosts still listed.
+      selected = Object.fromEntries(hosts.filter((h) => selected[h.id]).map((h) => [h.id, true]));
     } catch (e) {
       error = describeError(e);
     } finally {
@@ -47,7 +87,7 @@
 
   // Debounce the search so typing does not fire a request per key.
   $effect(() => {
-    const f = { network, q, conflicts: conflictsOnly };
+    const f = { network, q, conflicts: conflictsOnly, alerts: alertsOnly };
     const ws = session.slug;
     if (!ws || !canRead) {
       loading = false;
@@ -93,6 +133,11 @@
               {n.host_count} host{n.host_count === 1 ? '' : 's'}
               <span class="text-xs text-muted">via {n.connector}</span>
             </div>
+            <div class="text-xs text-muted">
+              {networkCountsLabel(n.counts)}{n.counts?.open_alerts
+                ? `, ${n.counts.open_alerts} alert${n.counts.open_alerts === 1 ? '' : 's'}`
+                : ''}
+            </div>
           </button>
         {/each}
       </div>
@@ -116,7 +161,23 @@
       <label class="flex items-center gap-2 text-sm">
         <input type="checkbox" bind:checked={conflictsOnly} /> Has conflicts
       </label>
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" bind:checked={alertsOnly} /> Has alerts
+      </label>
+      {#if canBulk && chosen.length > 0}
+        <button class={btnPrimary} onclick={openBulk}
+          >Run template on {chosen.length} host(s)</button
+        >
+      {/if}
     </div>
+    {#if bulkOpen && session.slug}
+      <BulkRunDialog
+        ws={session.slug}
+        hosts={chosen}
+        {templates}
+        onclose={() => (bulkOpen = false)}
+      />
+    {/if}
     {#if loading}
       <p class="text-muted">Loading...</p>
     {:else if hosts.length === 0}
@@ -128,21 +189,71 @@
         <table class="w-full">
           <thead class="bg-surface-2">
             <tr>
-              <th class={th}>Name</th><th class={th}>Kind</th><th class={th}>Status</th>
-              <th class={th}>IPs</th><th class={th}>Sources</th><th class={th}>Conflicts</th>
+              {#if canBulk}
+                <th class={th}>
+                  <input
+                    type="checkbox"
+                    aria-label="Select all hosts"
+                    checked={allChosen}
+                    onchange={(e) => toggleAll(e.currentTarget.checked)}
+                  />
+                </th>
+              {/if}
+              <th class={th}>Name</th><th class={th}>Kind</th><th class={th}>Online</th>
+              <th class={th}>Ansible</th><th class={th}>Drift</th>
+              <th class={th}>IPs</th><th class={th}>Sources</th><th class={th}>Alerts</th>
+              <th class={th}>Conflicts</th>
               <th class={th}>Last seen</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-border">
             {#each hosts as h (h.id)}
               <tr>
+                {#if canBulk}
+                  <td class={td}>
+                    <input
+                      type="checkbox"
+                      aria-label="Select {h.name}"
+                      bind:checked={selected[h.id]}
+                    />
+                  </td>
+                {/if}
                 <td class={td}
                   ><a class="text-accent underline" href="/fleet/hosts/{h.id}">{h.name}</a></td
                 >
                 <td class={td}>{h.kind || '-'}</td>
-                <td class={td}>{h.status || '-'}</td>
+                <td class={td}>
+                  <span class="rounded px-2 py-0.5 text-xs {onlineClass(h.online)}"
+                    >{onlineLabel(h.online)}</span
+                  >
+                </td>
+                <td class={td}>
+                  <span class="rounded px-2 py-0.5 text-xs {ansibleClass(h)}"
+                    >{ansibleLabel(h)}</span
+                  >
+                  {#if h.reachable === 'no'}<span
+                      class="ml-1 text-xs text-red-600 dark:text-red-400">unreachable</span
+                    >{/if}
+                </td>
+                <td class={td}>
+                  {#if h.drift}
+                    <a
+                      class="rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                      href="/runs/{h.drift.run_id}">{driftLabel(h)}</a
+                    >
+                  {:else}-{/if}
+                </td>
                 <td class="{td} font-mono text-xs">{h.ips?.join(', ') || '-'}</td>
                 <td class={td}>{h.connectors?.join(', ') || '-'}</td>
+                <td class={td}>
+                  {#if h.open_alerts > 0}
+                    <a
+                      href="/fleet/alerts?host_id={h.id}"
+                      class="rounded px-2 py-0.5 text-xs {severityClass(h.worst_severity)}"
+                      >{alertBadge(h)}</a
+                    >
+                  {:else}-{/if}
+                </td>
                 <td class={td}>
                   {#if h.open_conflicts > 0}
                     <span class="text-red-600 dark:text-red-400">{h.open_conflicts}</span>

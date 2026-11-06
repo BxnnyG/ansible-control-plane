@@ -19,7 +19,7 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/secrets"
 )
 
-const adminUsage = "usage: acp admin <create-breakglass --username NAME [--generate] | set-breakglass-password --username NAME [--generate] | reset-breakglass-totp --username NAME | rotate-master-key --new-key-file PATH | inventory import|list ... | project list|sync ... | template list|create ... | run start|show|list ... | connector list|types|create|test|sync ... | fleet merge|hosts|conflicts ... | group-rule list|preview|apply ...>"
+const adminUsage = "usage: acp admin <create-breakglass --username NAME [--generate] | set-breakglass-password --username NAME [--generate] | reset-breakglass-totp --username NAME | rotate-master-key --new-key-file PATH | inventory import|list ... | project list|sync ... | template list|create ... | run start|show|list ... | connector list|types|create|test|sync ... | fleet merge|hosts|conflicts ... | group-rule list|preview|apply ... | remediation list|create ... | alert remediate ...>"
 
 // runAdmin executes operator tasks. Secrets (generated password, TOTP secret)
 // go to stdout only; prompts and hints go to stderr.
@@ -38,6 +38,9 @@ func runAdmin(ctx context.Context, args []string, cfg config.Config, in *os.File
 	}
 	if args[0] == "group-rule" {
 		return runAdminGroupRule(ctx, args[1:], cfg, stdout, stderr)
+	}
+	if args[0] == "remediation" || args[0] == "alert" {
+		return runAdminRemediation(ctx, args[0], args[1:], cfg, stdout, stderr)
 	}
 	if args[0] == "template" || args[0] == "run" {
 		return runAdminRuns(ctx, args[0], args[1:], cfg, stdout, stderr)

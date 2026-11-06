@@ -49,7 +49,9 @@ type routerOpts struct {
 	schedules   SchedulesAPI
 	connectors  ConnectorsAPI
 	fleet       FleetAPI
+	fleetAdd    FleetAdder
 	groupRules  GroupRulesAPI
+	remediation RemediationAPI
 	stream      *runStream
 	publicURL   string
 }
@@ -108,13 +110,16 @@ func Router(log *slog.Logger, db Pinger, static fs.FS, opts ...Option) http.Hand
 			inventoryRoutes(r, ro.az, ro.store, ro.inventories, log)
 		}
 		if ro.connectors != nil {
-			connectorRoutes(r, ro.az, ro.store, ro.connectors, log)
+			connectorRoutes(r, ro.az, ro.store, ro.connectors, hookLim, ro.publicURL, log)
 		}
 		if ro.fleet != nil {
-			fleetRoutes(r, ro.az, ro.store, ro.fleet, log)
+			fleetRoutes(r, ro.az, ro.store, ro.fleet, ro.fleetAdd, log)
 		}
 		if ro.groupRules != nil {
 			groupRuleRoutes(r, ro.az, ro.store, ro.groupRules, log)
+		}
+		if ro.remediation != nil && ro.fleet != nil {
+			remediationRoutes(r, ro.az, ro.store, ro.remediation, ro.fleet, log)
 		}
 		if ro.vaultIDs != nil && ro.vaultOps != nil {
 			vaultRoutes(r, ro.az, ro.store, ro.vaultIDs, ro.vaultOps, log)

@@ -11,6 +11,23 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Alert struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	ConnectorID uuid.UUID
+	ExternalKey string
+	HostName    string
+	HostIp      string
+	HostID      pgtype.UUID
+	Service     string
+	Severity    string
+	Summary     string
+	Labels      []byte
+	StartedAt   pgtype.Timestamptz
+	LastSeenAt  pgtype.Timestamptz
+	ResolvedAt  pgtype.Timestamptz
+}
+
 type AuditLog struct {
 	ID          int64
 	Ts          pgtype.Timestamptz
@@ -242,6 +259,25 @@ type ProjectRevision struct {
 	Warnings  []byte
 }
 
+type RemediationRule struct {
+	ID            uuid.UUID
+	WorkspaceID   uuid.UUID
+	Name          string
+	Enabled       bool
+	ConnectorType pgtype.Text
+	ServiceRegex  string
+	SummaryRegex  string
+	MinSeverity   string
+	TemplateID    uuid.UUID
+	Target        string
+	GroupName     string
+	CheckFirst    bool
+	CreatedBy     pgtype.UUID
+	UpdatedBy     pgtype.UUID
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+}
+
 type Run struct {
 	ID                uuid.UUID
 	WorkspaceID       uuid.UUID
@@ -269,6 +305,7 @@ type Run struct {
 	HostsUnreachable  int32
 	CreatedAt         pgtype.Timestamptz
 	BundleServedAt    pgtype.Timestamptz
+	Remediation       []byte
 }
 
 type RunHostResult struct {

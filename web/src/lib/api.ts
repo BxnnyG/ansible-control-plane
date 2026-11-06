@@ -448,6 +448,8 @@ export interface Run {
   /** Display name (or email) of the user; null for schedule/webhook runs without a user. */
   triggered_by_name: string | null;
   schedule_id: string | null;
+  /** Set when the run was started by a remediation rule or a fleet bulk action. */
+  remediation?: Record<string, unknown> | null;
   params: RunParams;
   created_at: string;
   started_at: string | null;
@@ -561,6 +563,8 @@ export interface ConnectorType {
   base_url: boolean;
   fields: ConnectorField[];
   help?: string;
+  /** A secret is generated on create (and shown once) when none is selected. */
+  generates_secret?: boolean;
 }
 
 export interface ConnectorSecretRef {
@@ -597,8 +601,16 @@ export interface Connector {
   backoff_count: number;
   counts: ConnectorCounts;
   warnings: string[];
+  /** Receiver path of alert_webhook connectors. */
+  webhook_path?: string;
   created_at: string;
   updated_at: string;
+}
+
+/** Response of a create that generated a webhook secret; the secret is shown once. */
+export interface ConnectorCreated extends Connector {
+  generated_secret?: string;
+  webhook_url?: string;
 }
 
 export interface ConnectorInput {
@@ -651,6 +663,43 @@ export interface FleetNetwork {
   first_seen: string;
   last_seen: string;
   host_count: number;
+  /** Status counters of the visible hosts in the network. */
+  counts: FleetNetworkCounts;
+}
+
+export interface FleetNetworkCounts {
+  online: number;
+  ansible_ok: number;
+  failed: number;
+  never_managed: number;
+  open_alerts: number;
+}
+
+export type FleetOnline = 'online' | 'offline' | 'unknown';
+export type FleetRunResult = 'ok' | 'changed' | 'failed' | 'unreachable';
+
+/** An inventory host linked to a fleet host. */
+export interface FleetAnsibleLink {
+  inventory_id: string;
+  inventory: string;
+  host_id: string;
+  host: string;
+}
+
+export interface FleetRunRef {
+  run_id: string;
+  template: string;
+  finished_at: string;
+  result: FleetRunResult;
+  check: boolean;
+}
+
+/** The newest check-mode run reported changes for the host. */
+export interface FleetDrift {
+  run_id: string;
+  template: string;
+  finished_at: string;
+  changed: number;
 }
 
 export interface FleetHost {
@@ -666,8 +715,67 @@ export interface FleetHost {
   /** Names of the connectors that contributed. */
   connectors: string[];
   open_conflicts: number;
+  /** Open monitoring alerts linked to the host and the worst severity among them. */
+  open_alerts: number;
+  worst_severity: AlertSeverity | '';
   first_seen: string;
   last_seen: string;
+  /** Host status, derived on read. */
+  online: FleetOnline;
+  /** True when an inventory host of the workspace is linked. */
+  managed: boolean;
+  ansible: FleetAnsibleLink[];
+  last_run: FleetRunRef | null;
+  reachable: 'yes' | 'no' | 'unknown';
+  drift: FleetDrift | null;
+}
+
+export interface FleetAddInput {
+  inventory_id: string;
+  group: string;
+  /** Inventory host name; defaults to the fleet host name. */
+  name?: string;
+}
+
+export interface FleetAddResult {
+  host: string;
+  ansible_host: string;
+  result: {
+    group_created: boolean;
+    hosts_created: string[];
+    added: string[];
+    version: number;
+    commit: { sha: string; branch: string; no_op?: boolean } | null;
+  };
+}
+
+export type AlertSeverity = 'critical' | 'warning' | 'unknown' | 'info';
+
+export interface FleetAlert {
+  id: string;
+  connector_id: string;
+  connector: string;
+  connector_type: string;
+  external_key: string;
+  host_id: string | null;
+  /** Merged host name when linked. */
+  host: string;
+  /** Host name and address as reported by the monitoring system. */
+  host_name: string;
+  host_ip: string;
+  service: string;
+  severity: AlertSeverity;
+  summary: string;
+  labels: Record<string, string>;
+  started_at: string;
+  last_seen_at: string;
+  resolved_at: string | null;
+}
+
+export interface FleetAlertFilter {
+  state?: 'open' | 'resolved';
+  host_id?: string;
+  connector?: string;
 }
 
 export interface FleetSource {
@@ -739,10 +847,14 @@ export interface FleetHostFilter {
   network?: string;
   q?: string;
   conflicts?: boolean;
+  alerts?: boolean;
+  /** false lists the unmanaged hosts (not linked to any inventory host). */
+  managed?: boolean;
 }
 
 /** Match kind of a group rule; the set is open (NetBox kinds follow in M6). */
-export type GroupRuleKind = 'subnet' | 'proxmox_tag' | (string & {});
+export type GroupRuleKind =
+  'subnet' | 'proxmox_tag' | 'netbox_role' | 'netbox_site' | 'netbox_tag' | (string & {});
 export type GroupRuleMode = 'add-only' | 'sync';
 
 export interface GroupRule {
@@ -816,6 +928,69 @@ export interface GroupRuleApplied {
     /** Set for git inventories when a commit was written. */
     commit: InventoryCommitResult | null;
   };
+}
+
+export type RemediationTarget = 'host' | 'group' | 'network';
+
+export interface RemediationRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  /** Null matches alerts of every connector type. */
+  connector_type: string | null;
+  service_regex: string;
+  summary_regex: string;
+  min_severity: AlertSeverity;
+  template_id: string;
+  template: string;
+  target: RemediationTarget;
+  group: string;
+  check_first: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RemediationRuleInput {
+  name: string;
+  enabled?: boolean;
+  connector_type: string | null;
+  service_regex: string;
+  summary_regex: string;
+  min_severity: AlertSeverity;
+  template_id: string;
+  target: RemediationTarget;
+  group: string;
+  check_first: boolean;
+}
+
+/** A rule that can fix a given alert. */
+export interface RemediationRef {
+  rule_id: string;
+  name: string;
+  template: string;
+  target: RemediationTarget;
+  group: string;
+  check_first: boolean;
+}
+
+export interface RemediationResult {
+  run: Run;
+  phase: 'check' | 'apply';
+  limit: string;
+  hosts: string[];
+}
+
+export interface BulkRunSkipped {
+  host_id: string;
+  name: string;
+  reason: string;
+}
+
+export interface BulkRunResult {
+  run: Run;
+  limit: string;
+  hosts: string[];
+  skipped?: BulkRunSkipped[];
 }
 
 export class ApiError extends Error {
@@ -1052,7 +1227,8 @@ export const api = {
     list: (ws: string) => request<Connector[]>('GET', connectorsPath(ws)),
     get: (ws: string, id: string) =>
       request<Connector>('GET', connectorsPath(ws, encodeURIComponent(id))),
-    create: (ws: string, c: ConnectorInput) => request<Connector>('POST', connectorsPath(ws), c),
+    create: (ws: string, c: ConnectorInput) =>
+      request<ConnectorCreated>('POST', connectorsPath(ws), c),
     update: (ws: string, id: string, c: ConnectorUpdate) =>
       request<Connector>('PATCH', connectorsPath(ws, encodeURIComponent(id)), c),
     remove: (ws: string, id: string) =>
@@ -1097,18 +1273,76 @@ export const api = {
         inventoryVersion,
       ),
   },
+  remediation: {
+    list: (ws: string) => request<RemediationRule[]>('GET', fleetPath(ws, 'remediation-rules')),
+    create: (ws: string, r: RemediationRuleInput) =>
+      request<RemediationRule>('POST', fleetPath(ws, 'remediation-rules'), r),
+    update: (ws: string, id: string, r: RemediationRuleInput) =>
+      request<RemediationRule>(
+        'PUT',
+        fleetPath(ws, `remediation-rules/${encodeURIComponent(id)}`),
+        r,
+      ),
+    remove: (ws: string, id: string) =>
+      request<void>('DELETE', fleetPath(ws, `remediation-rules/${encodeURIComponent(id)}`)),
+    /** Open alerts an (unsaved) rule would match: the regex test of the editor. */
+    preview: (
+      ws: string,
+      c: Pick<
+        RemediationRuleInput,
+        'connector_type' | 'service_regex' | 'summary_regex' | 'min_severity'
+      >,
+    ) => request<FleetAlert[]>('POST', fleetPath(ws, 'remediation-rules/preview'), c),
+    /** Applicable rules of every open alert the caller sees, keyed by alert id. */
+    applicable: (ws: string) =>
+      request<Record<string, RemediationRef[]>>(
+        'GET',
+        fleetPath(ws, 'remediation-rules/applicable'),
+      ),
+    /** Starts the fix of an alert (a check run first when the rule asks for it and skipCheck is false). */
+    remediate: (ws: string, alertId: string, ruleId: string, skipCheck = false) =>
+      request<RemediationResult>(
+        'POST',
+        fleetPath(ws, `alerts/${encodeURIComponent(alertId)}/remediate`),
+        { rule_id: ruleId, skip_check: skipCheck },
+      ),
+  },
   fleet: {
+    bulkRun: (ws: string, hostIds: string[], templateId: string, checkMode: boolean) =>
+      request<BulkRunResult>('POST', fleetPath(ws, 'fleet/bulk-run'), {
+        host_ids: hostIds,
+        template_id: templateId,
+        check_mode: checkMode,
+      }),
     networks: (ws: string) => request<FleetNetwork[]>('GET', fleetPath(ws, 'networks')),
     hosts: (ws: string, f: FleetHostFilter = {}) => {
       const q = new URLSearchParams();
       if (f.network) q.set('network', f.network);
       if (f.q) q.set('q', f.q);
       if (f.conflicts) q.set('conflicts', 'true');
+      if (f.alerts) q.set('alerts', 'true');
+      if (f.managed !== undefined) q.set('managed', String(f.managed));
       const qs = q.toString();
       return request<FleetHost[]>('GET', fleetPath(ws, 'hosts') + (qs ? `?${qs}` : ''));
     },
     host: (ws: string, id: string) =>
       request<FleetHostDetail>('GET', fleetPath(ws, `hosts/${encodeURIComponent(id)}`)),
+    /** Puts an unmanaged host into an inventory group (git inventories get a commit). */
+    addToInventory: (ws: string, id: string, i: FleetAddInput, inventoryVersion?: number) =>
+      request<FleetAddResult>(
+        'POST',
+        fleetPath(ws, `hosts/${encodeURIComponent(id)}/add-to-inventory`),
+        i,
+        inventoryVersion,
+      ),
+    alerts: (ws: string, f: FleetAlertFilter = {}) => {
+      const q = new URLSearchParams();
+      if (f.state) q.set('state', f.state);
+      if (f.host_id) q.set('host_id', f.host_id);
+      if (f.connector) q.set('connector', f.connector);
+      const qs = q.toString();
+      return request<FleetAlert[]>('GET', fleetPath(ws, 'alerts') + (qs ? `?${qs}` : ''));
+    },
     conflicts: (ws: string, state?: ConflictState) =>
       request<FleetConflict[]>(
         'GET',

@@ -24,6 +24,27 @@ export const RULE_KINDS: readonly KindDef[] = [
     paramLabel: 'Tag',
     placeholder: 'webserver',
   },
+  {
+    kind: 'netbox_role',
+    label: 'NetBox role',
+    param: 'role',
+    paramLabel: 'Role slug',
+    placeholder: 'web-server',
+  },
+  {
+    kind: 'netbox_site',
+    label: 'NetBox site',
+    param: 'site',
+    paramLabel: 'Site slug',
+    placeholder: 'site-a',
+  },
+  {
+    kind: 'netbox_tag',
+    label: 'NetBox tag',
+    param: 'tag',
+    paramLabel: 'Tag',
+    placeholder: 'prod',
+  },
 ];
 
 export function kindDef(kind: GroupRuleKind): KindDef | undefined {

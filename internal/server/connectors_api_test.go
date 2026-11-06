@@ -34,6 +34,12 @@ type fakeConnectors struct {
 	tested   []connectors.TestInput
 	syncs    int
 	deleted  int
+
+	generated string
+	hookID    uuid.UUID
+	hookErr   error
+	hookAuth  string
+	hookBody  []byte
 }
 
 func (f *fakeConnectors) Specs() []connectors.Spec {
@@ -57,9 +63,16 @@ func (f *fakeConnectors) List(context.Context, uuid.UUID) ([]dbgen.Connector, er
 func (f *fakeConnectors) Get(context.Context, uuid.UUID, uuid.UUID) (dbgen.Connector, error) {
 	return f.row(), f.err
 }
-func (f *fakeConnectors) Create(_ context.Context, _ uuid.UUID, in connectors.CreateInput) (dbgen.Connector, error) {
+func (f *fakeConnectors) CreateGenerating(_ context.Context, _ uuid.UUID, in connectors.CreateInput) (dbgen.Connector, string, error) {
 	f.created = append(f.created, in)
-	return f.row(), f.err
+	return f.row(), f.generated, f.err
+}
+func (f *fakeConnectors) HandleAlertWebhook(_ context.Context, id uuid.UUID, authz string, body []byte) (uuid.UUID, int, error) {
+	f.hookAuth, f.hookBody = authz, body
+	if id != f.hookID {
+		return uuid.Nil, 0, connectors.ErrWebhookRejected
+	}
+	return uuid.New(), 2, f.hookErr
 }
 func (f *fakeConnectors) Update(_ context.Context, _, _ uuid.UUID, in connectors.UpdateInput) (dbgen.Connector, error) {
 	f.updated = append(f.updated, in)
@@ -93,6 +106,28 @@ type fakeFleet struct {
 	conflicts []fleet.ConflictView
 	netPrefix map[uuid.UUID]netip.Prefix
 	acked     []uuid.UUID
+	alerts    []fleet.AlertView
+	lastAlert fleet.AlertFilter
+}
+
+func (f *fakeFleet) Alerts(_ context.Context, _ uuid.UUID, fl fleet.AlertFilter, v fleet.Visible) ([]fleet.AlertView, error) {
+	f.lastAlert = fl
+	out := []fleet.AlertView{}
+	for _, a := range f.alerts {
+		if v != nil {
+			ok := false
+			for _, h := range f.hosts {
+				if a.HostID != nil && h.ID == *a.HostID && v(h.IPs) {
+					ok = true
+				}
+			}
+			if !ok {
+				continue
+			}
+		}
+		out = append(out, a)
+	}
+	return out, nil
 }
 
 func (f *fakeFleet) Networks(_ context.Context, _ uuid.UUID, allow func(uuid.UUID, netip.Prefix) bool, v fleet.Visible) ([]fleet.NetworkView, error) {
@@ -197,6 +232,7 @@ type connEnv struct {
 	h      http.Handler
 	conns  *fakeConnectors
 	fleet  *fakeFleet
+	adder  *fakeAdder
 	audits *[]string
 }
 
@@ -212,7 +248,7 @@ func newConnEnv(t *testing.T, role string, scopes ...dbgen.MembershipScope) *con
 	}
 	netA, netB := uuid.MustParse("00000000-0000-0000-0000-00000000000a"), uuid.MustParse("00000000-0000-0000-0000-00000000000b")
 	prefixes := map[uuid.UUID]netip.Prefix{netA: netip.MustParsePrefix("192.0.2.0/24"), netB: netip.MustParsePrefix("198.51.100.0/24")}
-	fc := &fakeConnectors{secretID: uuid.New()}
+	fc := &fakeConnectors{secretID: uuid.New(), hookID: uuid.New()}
 	hA := fleet.HostView{ID: uuid.New(), Name: "host-a", IPs: []string{"192.0.2.10"}, OpenConflicts: 1}
 	hB := fleet.HostView{ID: uuid.New(), Name: "host-b", IPs: []string{"198.51.100.10"}}
 	hA2 := fleet.HostView{ID: uuid.New(), Name: "host-a2", IPs: []string{"192.0.2.11"}}
@@ -221,9 +257,10 @@ func newConnEnv(t *testing.T, role string, scopes ...dbgen.MembershipScope) *con
 		{ID: uuid.MustParse("00000000-0000-0000-0000-0000000000c2"), Type: "ip_conflict", State: "open", HostIDs: []uuid.UUID{hA.ID, hB.ID}},
 		{ID: uuid.MustParse("00000000-0000-0000-0000-0000000000c3"), Type: "host_disappeared", State: "resolved", HostIDs: []uuid.UUID{hB.ID}},
 	}}
+	fa := &fakeAdder{}
 	az := policy.New(st, policy.InventoryResolver{Networks: policy.NetworkSource(fakeNetSource{prefixes})}, authn, quiet)
-	h := Router(quiet, fakePing{}, DefaultStatic(), WithPolicy(az, st), WithConnectors(fc), WithFleet(ff))
-	return &connEnv{h: h, conns: fc, fleet: ff, audits: &audits}
+	h := Router(quiet, fakePing{}, DefaultStatic(), WithPolicy(az, st), WithConnectors(fc), WithFleet(ff), WithFleetAdd(fa))
+	return &connEnv{h: h, conns: fc, fleet: ff, adder: fa, audits: &audits}
 }
 
 func (e *connEnv) do(method, path, body string) *httptest.ResponseRecorder {

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/BxnnyG/ansible-control-plane/internal/admin"
 	"github.com/BxnnyG/ansible-control-plane/internal/config"
@@ -23,7 +24,7 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/secrets"
 )
 
-const connectorUsage = "usage: acp admin connector <list --workspace SLUG | types | create --workspace SLUG --type T --name N [--url URL] [--secret NAME|ID | --secret-file PATH|- --secret-type TYPE] [--interval 5m] [--ca-file PATH] [--insecure-skip-verify] [--timeout SECONDS] [--set key=value ...] [--disabled] | update --workspace SLUG --connector NAME|ID [--url URL] [--secret NAME|ID] [--interval 5m] [--ca-file PATH] [--insecure-skip-verify=BOOL] [--timeout SECONDS] [--set key=value ...] [--unset key ...] [--enable | --disable] | test|sync --workspace SLUG --connector NAME|ID>"
+const connectorUsage = "usage: acp admin connector <list --workspace SLUG | types | create --workspace SLUG --type T --name N [--url URL] [--secret NAME|ID | --secret-file PATH|- --secret-type TYPE] [--interval 5m] [--ca-file PATH] [--insecure-skip-verify] [--timeout SECONDS] [--set key=value ...] [--disabled] | update --workspace SLUG --connector NAME|ID [--url URL] [--secret NAME|ID | --secret-file PATH|- [--secret-type TYPE]] [--interval 5m] [--ca-file PATH] [--insecure-skip-verify=BOOL] [--timeout SECONDS] [--set key=value ...] [--unset key ...] [--enable | --disable] | delete --workspace SLUG --connector NAME|ID [--keep-secret] | test|sync --workspace SLUG --connector NAME|ID>"
 
 type setFlags []string
 
@@ -44,6 +45,7 @@ type connectorArgs struct {
 	Unset                     []string
 	Disabled                  bool
 	Enable                    bool
+	KeepSecret                bool
 	// Given records which flags were set explicitly (used by update).
 	Given map[string]bool
 }
@@ -62,9 +64,12 @@ func parseConnectorArgs(args []string, stderr io.Writer) (connectorArgs, error) 
 	case "types":
 	case "list":
 		fs.StringVar(&a.Workspace, "workspace", "", "workspace slug")
-	case "test", "sync":
+	case "test", "sync", "delete":
 		fs.StringVar(&a.Workspace, "workspace", "", "workspace slug")
 		fs.StringVar(&a.Connector, "connector", "", "connector name or id")
+		if a.Sub == "delete" {
+			fs.BoolVar(&a.KeepSecret, "keep-secret", false, "do not delete the connector's secret")
+		}
 	case "create":
 		fs.StringVar(&a.Workspace, "workspace", "", "workspace slug")
 		fs.StringVar(&a.Type, "type", "", "connector type")
@@ -84,6 +89,8 @@ func parseConnectorArgs(args []string, stderr io.Writer) (connectorArgs, error) 
 		fs.StringVar(&a.Connector, "connector", "", "connector name or id")
 		fs.StringVar(&a.URL, "url", "", "base URL")
 		fs.StringVar(&a.Secret, "secret", "", "existing secret (name or id)")
+		fs.StringVar(&a.SecretFile, "secret-file", "", "file with the new secret value, or - for stdin")
+		fs.StringVar(&a.SecretType, "secret-type", "", "type of a secret created by --secret-file (default: api_token)")
 		fs.DurationVar(&a.Interval, "interval", 0, "sync interval")
 		fs.StringVar(&a.CAFile, "ca-file", "", "PEM file with additional CA certificates")
 		fs.BoolVar(&a.InsecureSkipVerify, "insecure-skip-verify", false, "skip TLS verification (insecure)")
@@ -111,13 +118,19 @@ func parseConnectorArgs(args []string, stderr io.Writer) (connectorArgs, error) 
 		return connectorArgs{}, errors.New("--workspace is required")
 	}
 	switch a.Sub {
-	case "test", "sync":
+	case "test", "sync", "delete":
 		if a.Connector == "" {
 			return connectorArgs{}, errors.New("--connector is required")
 		}
 	case "update":
 		if a.Connector == "" {
 			return connectorArgs{}, errors.New("--connector is required")
+		}
+		if a.Secret != "" && a.SecretFile != "" {
+			return connectorArgs{}, errors.New("use either --secret or --secret-file")
+		}
+		if a.Given["secret-type"] && a.SecretFile == "" {
+			return connectorArgs{}, errors.New("--secret-type needs --secret-file")
 		}
 		if a.Enable && a.Disabled {
 			return connectorArgs{}, errors.New("use either --enable or --disable")
@@ -254,7 +267,8 @@ func runAdminConnector(ctx context.Context, args []string, cfg config.Config, in
 	}
 	q := dbgen.New(pool)
 	sec := secrets.NewService(q, sp)
-	svc := connectors.New(connectors.Options{DB: pool, Registry: reg, Secrets: sec, PostSync: fleet.NewStore(pool, nil)})
+	fleetSt := fleet.NewStore(pool, nil)
+	svc := connectors.New(connectors.Options{DB: pool, Registry: reg, Secrets: sec, SecretWriter: sec, PostSync: fleetSt, Alerts: fleetSt})
 	ws, err := (&admin.InventoryOps{Q: q}).Workspace(ctx, a.Workspace)
 	if err != nil {
 		return err
@@ -304,11 +318,14 @@ func runAdminConnector(ctx context.Context, args []string, cfg config.Config, in
 			}
 			in2.SecretID = &m.ID
 		}
-		c, err := svc.Create(ctx, ws, in2)
+		c, generated, err := svc.CreateGenerating(ctx, ws, in2)
 		if err != nil {
 			return err
 		}
 		_, _ = fmt.Fprintf(stdout, "connector: %s\nid: %s\ntype: %s\n", c.Name, c.ID, c.Type)
+		if generated != "" { // shown once, never stored in plaintext
+			_, _ = fmt.Fprintf(stdout, "webhook path: /api/hooks/alerts/%s\nsecret (shown once): %s\n", c.ID, generated)
+		}
 		return nil
 	}
 	c, err := findConnector(ctx, svc, ws, a.Connector)
@@ -331,11 +348,46 @@ func runAdminConnector(ctx context.Context, args []string, cfg config.Config, in
 			}
 			up.SecretID = &id
 		}
+		secretNote := ""
+		if a.SecretFile != "" {
+			val, err := readSecretValue(a.SecretFile, in)
+			if err != nil {
+				return err
+			}
+			if secretNote, err = applySecretFile(ctx, sec, ws, c, a.SecretType, val, &up); err != nil {
+				return err
+			}
+		}
 		u, err := svc.Update(ctx, ws, c.ID, up)
 		if err != nil {
 			return err
 		}
+		if secretNote != "" {
+			if c.SecretID.Valid && u.Enabled { // in-place replace: sync with the new credential
+				if err := svc.RequestSync(ctx, ws, c.ID); err != nil {
+					return err
+				}
+			}
+			cliAudit(ctx, q, ws, "connector.secret_replace", c.ID.String(), map[string]any{"name": c.Name, "mode": secretNote})
+			_, _ = fmt.Fprintf(stdout, "secret: %s\n", secretNote)
+		}
+		if len(a.Given) > 2+btoi(a.Given["secret-file"])+btoi(a.Given["secret-type"]) {
+			cliAudit(ctx, q, ws, "connector.update", c.ID.String(), map[string]any{"name": c.Name, "type": c.Type})
+		}
 		_, _ = fmt.Fprintf(stdout, "connector: %s\nid: %s\nenabled: %v\n", u.Name, u.ID, u.Enabled)
+		return nil
+	}
+	if a.Sub == "delete" {
+		pol := connectors.DeleteSecretUnused
+		if a.KeepSecret {
+			pol = connectors.KeepSecret
+		}
+		gone, err := svc.DeleteConnector(ctx, ws, c.ID, pol)
+		if err != nil {
+			return err
+		}
+		cliAudit(ctx, q, ws, "connector.delete", c.ID.String(), map[string]any{"name": c.Name, "type": c.Type, "secret_deleted": gone})
+		_, _ = fmt.Fprintf(stdout, "deleted: %s\nsecret deleted: %v\n", c.Name, gone)
 		return nil
 	}
 	if a.Sub == "test" {
@@ -397,4 +449,53 @@ func buildUpdate(a connectorArgs, spec connectors.Spec, stored []byte, readFile 
 	}
 	up.Config = cfg
 	return up, nil
+}
+
+func btoi(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// cliAudit records a CLI action; failures are reported on stderr only.
+func cliAudit(ctx context.Context, q *dbgen.Queries, ws uuid.UUID, action, id string, details map[string]any) {
+	b, _ := json.Marshal(details)
+	if _, err := q.InsertAudit(ctx, dbgen.InsertAuditParams{
+		ActorLabel: "cli", Action: action, TargetType: "connector", TargetID: id,
+		WorkspaceID: pgtype.UUID{Bytes: ws, Valid: true}, Details: b,
+	}); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "warning: audit write failed: %v\n", err)
+	}
+}
+
+// applySecretFile replaces the value of the connector's current secret in
+// place, or creates "connector-<name>" and links it through up when the
+// connector has none. It returns a short description of what happened.
+func applySecretFile(ctx context.Context, sec *secrets.Service, ws uuid.UUID, c dbgen.Connector, typ string, val []byte, up *connectors.UpdateInput) (string, error) {
+	if up.SecretID != nil {
+		return "", errors.New("use either --secret or --secret-file")
+	}
+	if c.SecretID.Valid {
+		cur, err := sec.Get(ctx, ws, c.SecretID.Bytes)
+		if err != nil {
+			return "", fmt.Errorf("get current secret: %w", err)
+		}
+		if typ != "" && typ != cur.Type {
+			return "", fmt.Errorf("current secret has type %s; the type cannot be changed (create a new secret and use --secret)", cur.Type)
+		}
+		if _, err := sec.Update(ctx, ws, cur.ID, secrets.UpdateInput{Value: val}); err != nil {
+			return "", fmt.Errorf("replace secret: %w", err)
+		}
+		return "replaced value of " + cur.Name, nil
+	}
+	if typ == "" {
+		typ = secrets.TypeAPIToken
+	}
+	m, err := sec.Create(ctx, ws, secrets.CreateInput{Name: "connector-" + c.Name, Type: typ, Value: val})
+	if err != nil {
+		return "", fmt.Errorf("store secret: %w", err)
+	}
+	up.SecretID = &m.ID
+	return "created and linked " + m.Name, nil
 }

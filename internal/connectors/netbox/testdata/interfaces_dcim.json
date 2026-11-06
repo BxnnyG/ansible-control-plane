@@ -1,0 +1,4 @@
+{"count":3,"next":null,"previous":null,"results":[
+{"id":1,"name":"eth0","device":{"id":10,"name":"web-01.example.test"},"mac_address":"02:00:00:00:00:10"},
+{"id":2,"name":"eth1","device":{"id":10,"name":"web-01.example.test"},"mac_address":null,"primary_mac_address":{"id":7,"mac_address":"02:00:00:00:00:11"},"mac_addresses":[{"id":7,"mac_address":"02:00:00:00:00:11"},{"id":8,"mac_address":"02-00-00-00-00-12"}]},
+{"id":3,"name":"ge-0/0/1","device":{"id":11,"name":"switch-01"},"mac_address":null}]}

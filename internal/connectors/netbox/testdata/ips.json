@@ -1,0 +1,5 @@
+{"count":4,"next":null,"previous":null,"results":[
+{"id":100,"address":"192.0.2.10/24","assigned_object_type":"dcim.interface","assigned_object_id":1},
+{"id":101,"address":"198.51.100.10/25","assigned_object_type":"dcim.interface","assigned_object_id":2},
+{"id":102,"address":"192.0.2.20/24","assigned_object_type":"virtualization.vminterface","assigned_object_id":1},
+{"id":104,"address":"192.0.2.99/24","assigned_object_type":null,"assigned_object_id":null}]}

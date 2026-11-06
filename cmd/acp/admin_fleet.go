@@ -19,10 +19,12 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/fleet"
 )
 
-const fleetUsage = "usage: acp admin fleet <merge | hosts | conflicts [--state open|resolved|all]> --workspace SLUG"
+const fleetUsage = "usage: acp admin fleet <merge | hosts | unmanaged | conflicts [--state open|resolved|all] | add --host NAME|ID --inventory SLUG --group GROUP [--name NAME --author-name NAME --author-email EMAIL]> --workspace SLUG"
 
 type fleetArgs struct {
-	Sub, Workspace, State string
+	Sub, Workspace, State        string
+	Host, Inventory, Group, Name string
+	AuthorName, AuthorEmail      string
 }
 
 func parseFleetArgs(args []string, stderr io.Writer) (fleetArgs, error) {
@@ -33,7 +35,14 @@ func parseFleetArgs(args []string, stderr io.Writer) (fleetArgs, error) {
 	fs := flag.NewFlagSet("fleet "+a.Sub, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	switch a.Sub {
-	case "merge", "hosts":
+	case "merge", "hosts", "unmanaged":
+	case "add":
+		fs.StringVar(&a.Host, "host", "", "fleet host name or id")
+		fs.StringVar(&a.Inventory, "inventory", "", "target inventory slug")
+		fs.StringVar(&a.Group, "group", "", "target group")
+		fs.StringVar(&a.Name, "name", "", "inventory host name (default: fleet host name)")
+		fs.StringVar(&a.AuthorName, "author-name", "ACP admin", "Git author name (git inventories)")
+		fs.StringVar(&a.AuthorEmail, "author-email", "acp-admin@localhost", "Git author email (git inventories)")
 	case "conflicts":
 		fs.StringVar(&a.State, "state", "open", "open, resolved or all")
 	default:
@@ -48,6 +57,9 @@ func parseFleetArgs(args []string, stderr io.Writer) (fleetArgs, error) {
 	}
 	if a.Workspace == "" {
 		return fleetArgs{}, errors.New("--workspace is required")
+	}
+	if a.Sub == "add" && (a.Host == "" || a.Inventory == "" || a.Group == "") {
+		return fleetArgs{}, errors.New("--host, --inventory and --group are required")
 	}
 	if a.Sub == "conflicts" && a.State != "open" && a.State != "resolved" && a.State != "all" {
 		return fleetArgs{}, errors.New("--state must be open, resolved or all")
@@ -87,6 +99,11 @@ func formatHost(h dbgen.Host, keys []dbgen.HostKey) string {
 		dash(strings.Join(f.IPs, ",")), dash(f.Kind), h.LastSeen.Time.UTC().Format("2006-01-02T15:04:05Z"), dash(strings.Join(src, ",")))
 }
 
+// formatUnmanaged renders one unmanaged host line.
+func formatUnmanaged(h fleet.HostView) string {
+	return fmt.Sprintf("%s\t%s\t%s\t%s\tonline=%s\talerts=%d", h.ID, dash(h.Name), dash(strings.Join(h.IPs, ",")), dash(h.Kind), h.Online, h.OpenAlerts)
+}
+
 func formatConflict(c dbgen.HostConflict) string {
 	ack := "-"
 	if c.AcknowledgedAt.Valid {
@@ -120,6 +137,17 @@ func runAdminFleet(ctx context.Context, args []string, cfg config.Config, stdout
 		return err
 	}
 	switch a.Sub {
+	case "unmanaged":
+		no := false
+		list, err := fleet.NewStore(pool, nil).Hosts(ctx, ws, fleet.HostFilter{Managed: &no}, nil)
+		if err != nil {
+			return err
+		}
+		for _, h := range list {
+			_, _ = fmt.Fprintln(stdout, formatUnmanaged(h))
+		}
+	case "add":
+		return runAdminFleetAdd(ctx, a, ws, pool, cfg, stdout)
 	case "merge":
 		s, err := fleet.NewStore(pool, nil).Merge(ctx, ws)
 		if err != nil {

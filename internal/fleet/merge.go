@@ -93,16 +93,24 @@ type Source struct {
 // connectors that contributed: the winning connector for scalar fields, all
 // contributors (highest priority first) for list fields.
 type Fields struct {
-	Kind      string              `json:"kind,omitempty"`
-	Hostname  string              `json:"hostname,omitempty"`
-	FQDN      string              `json:"fqdn,omitempty"`
-	MACs      []string            `json:"macs,omitempty"`
-	IPs       []string            `json:"ips,omitempty"`
-	Tags      []string            `json:"tags,omitempty"`
-	Notes     string              `json:"notes,omitempty"`
-	Status    string              `json:"status,omitempty"`
-	Interface string              `json:"interface,omitempty"`
-	Sources   map[string][]Source `json:"sources,omitempty"`
+	Kind      string   `json:"kind,omitempty"`
+	Hostname  string   `json:"hostname,omitempty"`
+	FQDN      string   `json:"fqdn,omitempty"`
+	MACs      []string `json:"macs,omitempty"`
+	IPs       []string `json:"ips,omitempty"`
+	Tags      []string `json:"tags,omitempty"`
+	Notes     string   `json:"notes,omitempty"`
+	Status    string   `json:"status,omitempty"`
+	Interface string   `json:"interface,omitempty"`
+	// Attrs are the classification attributes of the contributing
+	// observations; the highest-priority source wins per key.
+	Attrs   map[string]string   `json:"attrs,omitempty"`
+	Sources map[string][]Source `json:"sources,omitempty"`
+	// NetSeen is the newest last_seen of the lease, ARP and NDP observations;
+	// Power is the status reported by the highest-priority VM, LXC or device
+	// observation. Both feed the online status (see OnlineOf).
+	NetSeen *time.Time `json:"net_seen,omitempty"`
+	Power   string     `json:"power,omitempty"`
 }
 
 // MemberRef identifies one observation (connector and external key).
@@ -441,9 +449,31 @@ func buildHost(all []obs, idx []int) Host {
 		scalar("notes", &f.Notes, o.Fields.Notes, o)
 		scalar("status", &f.Status, o.Fields.Status, o)
 		scalar("interface", &f.Interface, o.Fields.Interface, o)
+		switch o.Kind {
+		case connectors.KindLease, connectors.KindARP, connectors.KindNDP:
+			if f.NetSeen == nil || o.LastSeen.After(*f.NetSeen) {
+				t := o.LastSeen.UTC()
+				f.NetSeen = &t
+			}
+		case connectors.KindVM, connectors.KindLXC, connectors.KindDevice:
+			if f.Power == "" {
+				f.Power = strings.ToLower(strings.TrimSpace(o.Fields.Status))
+			}
+		}
 		list("macs", &f.MACs, o.macs, o)
 		list("ips", &f.IPs, o.ips, o)
 		list("tags", &f.Tags, o.Fields.Tags, o)
+		for k, v := range o.Fields.Attrs {
+			if v == "" {
+				continue
+			}
+			if f.Attrs == nil {
+				f.Attrs = map[string]string{}
+			}
+			if _, ok := f.Attrs[k]; !ok {
+				f.Attrs[k] = v
+			}
+		}
 		list("", &names, o.names, o)
 		if n == 0 || o.FirstSeen.Before(h.FirstSeen) {
 			h.FirstSeen = o.FirstSeen

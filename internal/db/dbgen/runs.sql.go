@@ -35,7 +35,7 @@ const cancelQueuedRun = `-- name: CancelQueuedRun :one
 UPDATE runs SET status = 'cancelled', cancel_requested_at = now(), finished_at = now(),
     params = params - 'secret_vars_enc'
 WHERE id = $1 AND workspace_id = $2 AND status = 'queued'
-RETURNING id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at
+RETURNING id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at, remediation
 `
 
 type CancelQueuedRunParams struct {
@@ -73,6 +73,7 @@ func (q *Queries) CancelQueuedRun(ctx context.Context, arg CancelQueuedRunParams
 		&i.HostsUnreachable,
 		&i.CreatedAt,
 		&i.BundleServedAt,
+		&i.Remediation,
 	)
 	return i, err
 }
@@ -124,7 +125,7 @@ WHERE runs.id = (
     LIMIT 1
     FOR UPDATE OF r SKIP LOCKED
 )
-RETURNING id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at
+RETURNING id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at, remediation
 `
 
 func (q *Queries) ClaimRun(ctx context.Context, workerID string) (Run, error) {
@@ -157,6 +158,7 @@ func (q *Queries) ClaimRun(ctx context.Context, workerID string) (Run, error) {
 		&i.HostsUnreachable,
 		&i.CreatedAt,
 		&i.BundleServedAt,
+		&i.Remediation,
 	)
 	return i, err
 }
@@ -188,9 +190,9 @@ func (q *Queries) DeleteOldRunLogChunks(ctx context.Context, createdAt pgtype.Ti
 
 const enqueueRun = `-- name: EnqueueRun :one
 INSERT INTO runs (workspace_id, template_id, template_name, project_id, project_revision, trigger,
-    triggered_by, schedule_id, overrides, params)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at
+    triggered_by, schedule_id, overrides, params, remediation)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at, remediation
 `
 
 type EnqueueRunParams struct {
@@ -204,6 +206,7 @@ type EnqueueRunParams struct {
 	ScheduleID      pgtype.UUID
 	Overrides       []byte
 	Params          []byte
+	Remediation     []byte
 }
 
 func (q *Queries) EnqueueRun(ctx context.Context, arg EnqueueRunParams) (Run, error) {
@@ -218,6 +221,7 @@ func (q *Queries) EnqueueRun(ctx context.Context, arg EnqueueRunParams) (Run, er
 		arg.ScheduleID,
 		arg.Overrides,
 		arg.Params,
+		arg.Remediation,
 	)
 	var i Run
 	err := row.Scan(
@@ -247,6 +251,7 @@ func (q *Queries) EnqueueRun(ctx context.Context, arg EnqueueRunParams) (Run, er
 		&i.HostsUnreachable,
 		&i.CreatedAt,
 		&i.BundleServedAt,
+		&i.Remediation,
 	)
 	return i, err
 }
@@ -263,7 +268,7 @@ FROM (
     FROM run_host_results WHERE run_id = $1
 ) s
 WHERE r.id = $1 AND r.lease_id = $2 AND r.status = 'running'
-RETURNING r.id, r.workspace_id, r.template_id, r.template_name, r.project_id, r.project_revision, r.status, r.trigger, r.triggered_by, r.schedule_id, r.overrides, r.params, r.worker_id, r.lease_id, r.claimed_at, r.started_at, r.finished_at, r.last_heartbeat_at, r.cancel_requested_at, r.exit_code, r.hosts_ok, r.hosts_changed, r.hosts_failed, r.hosts_unreachable, r.created_at, r.bundle_served_at
+RETURNING r.id, r.workspace_id, r.template_id, r.template_name, r.project_id, r.project_revision, r.status, r.trigger, r.triggered_by, r.schedule_id, r.overrides, r.params, r.worker_id, r.lease_id, r.claimed_at, r.started_at, r.finished_at, r.last_heartbeat_at, r.cancel_requested_at, r.exit_code, r.hosts_ok, r.hosts_changed, r.hosts_failed, r.hosts_unreachable, r.created_at, r.bundle_served_at, r.remediation
 `
 
 type FinishRunParams struct {
@@ -309,12 +314,13 @@ func (q *Queries) FinishRun(ctx context.Context, arg FinishRunParams) (Run, erro
 		&i.HostsUnreachable,
 		&i.CreatedAt,
 		&i.BundleServedAt,
+		&i.Remediation,
 	)
 	return i, err
 }
 
 const getRun = `-- name: GetRun :one
-SELECT id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at FROM runs WHERE id = $1 AND workspace_id = $2
+SELECT id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at, remediation FROM runs WHERE id = $1 AND workspace_id = $2
 `
 
 type GetRunParams struct {
@@ -352,12 +358,13 @@ func (q *Queries) GetRun(ctx context.Context, arg GetRunParams) (Run, error) {
 		&i.HostsUnreachable,
 		&i.CreatedAt,
 		&i.BundleServedAt,
+		&i.Remediation,
 	)
 	return i, err
 }
 
 const getRunByID = `-- name: GetRunByID :one
-SELECT id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at FROM runs WHERE id = $1
+SELECT id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at, remediation FROM runs WHERE id = $1
 `
 
 func (q *Queries) GetRunByID(ctx context.Context, id uuid.UUID) (Run, error) {
@@ -390,12 +397,13 @@ func (q *Queries) GetRunByID(ctx context.Context, id uuid.UUID) (Run, error) {
 		&i.HostsUnreachable,
 		&i.CreatedAt,
 		&i.BundleServedAt,
+		&i.Remediation,
 	)
 	return i, err
 }
 
 const getRunForLease = `-- name: GetRunForLease :one
-SELECT id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at FROM runs WHERE id = $1 AND lease_id = $2 AND status = 'running'
+SELECT id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at, remediation FROM runs WHERE id = $1 AND lease_id = $2 AND status = 'running'
 `
 
 type GetRunForLeaseParams struct {
@@ -433,6 +441,7 @@ func (q *Queries) GetRunForLease(ctx context.Context, arg GetRunForLeaseParams) 
 		&i.HostsUnreachable,
 		&i.CreatedAt,
 		&i.BundleServedAt,
+		&i.Remediation,
 	)
 	return i, err
 }
@@ -477,6 +486,117 @@ func (q *Queries) LastRunLogSeq(ctx context.Context, runID uuid.UUID) (int64, er
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const latestHostCheckResults = `-- name: LatestHostCheckResults :many
+SELECT DISTINCT ON (t.inventory_id, rh.host)
+    t.inventory_id, rh.host, r.id AS run_id, r.template_name, r.finished_at,
+    rh.changed, rh.failed, rh.unreachable
+FROM run_host_results rh
+JOIN runs r ON r.id = rh.run_id
+JOIN templates t ON t.id = r.template_id
+WHERE r.workspace_id = $1 AND r.finished_at IS NOT NULL AND r.status IN ('succeeded', 'failed')
+  AND COALESCE((r.params->>'check')::boolean, false)
+ORDER BY t.inventory_id, rh.host, r.finished_at DESC, r.id DESC
+`
+
+type LatestHostCheckResultsRow struct {
+	InventoryID  uuid.UUID
+	Host         string
+	RunID        uuid.UUID
+	TemplateName string
+	FinishedAt   pgtype.Timestamptz
+	Changed      int32
+	Failed       int32
+	Unreachable  int32
+}
+
+// Newest finished check-mode run per (inventory, host).
+func (q *Queries) LatestHostCheckResults(ctx context.Context, workspaceID uuid.UUID) ([]LatestHostCheckResultsRow, error) {
+	rows, err := q.db.Query(ctx, latestHostCheckResults, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []LatestHostCheckResultsRow
+	for rows.Next() {
+		var i LatestHostCheckResultsRow
+		if err := rows.Scan(
+			&i.InventoryID,
+			&i.Host,
+			&i.RunID,
+			&i.TemplateName,
+			&i.FinishedAt,
+			&i.Changed,
+			&i.Failed,
+			&i.Unreachable,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const latestHostRunResults = `-- name: LatestHostRunResults :many
+SELECT DISTINCT ON (t.inventory_id, rh.host)
+    t.inventory_id, rh.host, r.id AS run_id, r.template_name, r.finished_at,
+    COALESCE((r.params->>'check')::boolean, false)::boolean AS check_mode,
+    rh.ok, rh.changed, rh.failed, rh.unreachable
+FROM run_host_results rh
+JOIN runs r ON r.id = rh.run_id
+JOIN templates t ON t.id = r.template_id
+WHERE r.workspace_id = $1 AND r.finished_at IS NOT NULL AND r.status IN ('succeeded', 'failed')
+ORDER BY t.inventory_id, rh.host, r.finished_at DESC, r.id DESC
+`
+
+type LatestHostRunResultsRow struct {
+	InventoryID  uuid.UUID
+	Host         string
+	RunID        uuid.UUID
+	TemplateName string
+	FinishedAt   pgtype.Timestamptz
+	CheckMode    bool
+	Ok           int32
+	Changed      int32
+	Failed       int32
+	Unreachable  int32
+}
+
+// Newest finished run per (inventory, host); the inventory comes from the
+// run's template (runs of deleted templates carry no inventory).
+func (q *Queries) LatestHostRunResults(ctx context.Context, workspaceID uuid.UUID) ([]LatestHostRunResultsRow, error) {
+	rows, err := q.db.Query(ctx, latestHostRunResults, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []LatestHostRunResultsRow
+	for rows.Next() {
+		var i LatestHostRunResultsRow
+		if err := rows.Scan(
+			&i.InventoryID,
+			&i.Host,
+			&i.RunID,
+			&i.TemplateName,
+			&i.FinishedAt,
+			&i.CheckMode,
+			&i.Ok,
+			&i.Changed,
+			&i.Failed,
+			&i.Unreachable,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listRunHostResults = `-- name: ListRunHostResults :many
@@ -550,7 +670,7 @@ func (q *Queries) ListRunLogChunks(ctx context.Context, arg ListRunLogChunksPara
 }
 
 const listRuns = `-- name: ListRuns :many
-SELECT r.id, r.workspace_id, r.template_id, r.template_name, r.project_id, r.project_revision, r.status, r.trigger, r.triggered_by, r.schedule_id, r.overrides, r.params, r.worker_id, r.lease_id, r.claimed_at, r.started_at, r.finished_at, r.last_heartbeat_at, r.cancel_requested_at, r.exit_code, r.hosts_ok, r.hosts_changed, r.hosts_failed, r.hosts_unreachable, r.created_at, r.bundle_served_at,
+SELECT r.id, r.workspace_id, r.template_id, r.template_name, r.project_id, r.project_revision, r.status, r.trigger, r.triggered_by, r.schedule_id, r.overrides, r.params, r.worker_id, r.lease_id, r.claimed_at, r.started_at, r.finished_at, r.last_heartbeat_at, r.cancel_requested_at, r.exit_code, r.hosts_ok, r.hosts_changed, r.hosts_failed, r.hosts_unreachable, r.created_at, r.bundle_served_at, r.remediation,
        COALESCE(NULLIF(u.display_name, ''), NULLIF(u.email, ''), u.username, '')::text AS triggered_by_name
 FROM runs r
 LEFT JOIN users u ON u.id = r.triggered_by
@@ -631,6 +751,7 @@ func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]ListRunsR
 			&i.Run.HostsUnreachable,
 			&i.Run.CreatedAt,
 			&i.Run.BundleServedAt,
+			&i.Run.Remediation,
 			&i.TriggeredByName,
 		); err != nil {
 			return nil, err
@@ -657,7 +778,7 @@ func (q *Queries) LockRunClaim(ctx context.Context) error {
 const markLostRuns = `-- name: MarkLostRuns :many
 UPDATE runs SET status = 'lost', finished_at = now(), params = params - 'secret_vars_enc'
 WHERE status = 'running' AND last_heartbeat_at < now() - make_interval(secs => $1::float8)
-RETURNING id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at
+RETURNING id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at, remediation
 `
 
 func (q *Queries) MarkLostRuns(ctx context.Context, staleSeconds float64) ([]Run, error) {
@@ -696,6 +817,7 @@ func (q *Queries) MarkLostRuns(ctx context.Context, staleSeconds float64) ([]Run
 			&i.HostsUnreachable,
 			&i.CreatedAt,
 			&i.BundleServedAt,
+			&i.Remediation,
 		); err != nil {
 			return nil, err
 		}
@@ -710,7 +832,7 @@ func (q *Queries) MarkLostRuns(ctx context.Context, staleSeconds float64) ([]Run
 const markRunBundleServed = `-- name: MarkRunBundleServed :one
 UPDATE runs SET bundle_served_at = now()
 WHERE id = $1 AND lease_id = $2 AND status = 'running' AND bundle_served_at IS NULL
-RETURNING id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at
+RETURNING id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at, remediation
 `
 
 type MarkRunBundleServedParams struct {
@@ -749,6 +871,7 @@ func (q *Queries) MarkRunBundleServed(ctx context.Context, arg MarkRunBundleServ
 		&i.HostsUnreachable,
 		&i.CreatedAt,
 		&i.BundleServedAt,
+		&i.Remediation,
 	)
 	return i, err
 }
@@ -838,7 +961,7 @@ func (q *Queries) RequestCancelOrphanRuns(ctx context.Context) ([]uuid.UUID, err
 const requestRunCancel = `-- name: RequestRunCancel :one
 UPDATE runs SET cancel_requested_at = COALESCE(cancel_requested_at, now())
 WHERE id = $1 AND workspace_id = $2 AND status = 'running'
-RETURNING id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at
+RETURNING id, workspace_id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, schedule_id, overrides, params, worker_id, lease_id, claimed_at, started_at, finished_at, last_heartbeat_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, created_at, bundle_served_at, remediation
 `
 
 type RequestRunCancelParams struct {
@@ -876,6 +999,7 @@ func (q *Queries) RequestRunCancel(ctx context.Context, arg RequestRunCancelPara
 		&i.HostsUnreachable,
 		&i.CreatedAt,
 		&i.BundleServedAt,
+		&i.Remediation,
 	)
 	return i, err
 }

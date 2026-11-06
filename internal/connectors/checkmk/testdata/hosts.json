@@ -1,0 +1,7 @@
+{"links": [], "domainType": "host", "id": "host", "value": [
+ {"domainType": "host", "id": "web1.example.test", "title": "web1.example.test", "links": [], "members": {}, "extensions": {"name": "web1.example.test", "address": "192.0.2.10", "state": 1, "plugin_output": "CRIT - 192.0.2.10: rta nan, lost 100%", "last_state_change": 1767323045, "acknowledged": 0, "scheduled_downtime_depth": 0}},
+ {"domainType": "host", "id": "web2", "title": "web2", "links": [], "members": {}, "extensions": {"name": "web2", "address": "192.0.2.11", "state": 2, "plugin_output": "UNREACH", "last_state_change": 1767323100, "acknowledged": 1, "scheduled_downtime_depth": 1}},
+ {"domainType": "host", "id": "odd", "title": "odd", "links": [], "members": {}, "extensions": {"name": "odd", "address": "192.0.2.12", "state": 7, "plugin_output": "", "last_state_change": 0}},
+ {"domainType": "host", "id": "up", "title": "up", "links": [], "members": {}, "extensions": {"name": "up", "address": "192.0.2.13", "state": 0}},
+ {"domainType": "host", "id": "broken", "title": "broken", "links": [], "members": {}, "extensions": {"address": "192.0.2.14", "state": 1}}
+]}

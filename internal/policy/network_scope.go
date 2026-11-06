@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/netip"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
@@ -125,29 +126,37 @@ func (r InventoryResolver) scopedNetworks(ctx context.Context, workspaceID strin
 	return pfx, in, nil
 }
 
-// fleetKeys are the lower-case names and addresses of fleet hosts that lie in
-// a scoped network. An inventory host is linked to them when its name or its
-// ansible_host equals one of the keys.
-type fleetKeys map[string]bool
+// FleetIndex maps the lower-case names and canonical addresses of fleet hosts
+// to the ids of the hosts carrying them. An inventory host is linked to a fleet
+// host when its name or its ansible_host equals one of the keys.
+type FleetIndex map[string][]uuid.UUID
 
-func newFleetKeys(hosts []FleetHost) fleetKeys {
-	k := fleetKeys{}
+// NewFleetIndex indexes the names and addresses of the given fleet hosts.
+func NewFleetIndex(hosts []FleetHost) FleetIndex {
+	k := FleetIndex{}
+	add := func(key string, id uuid.UUID) {
+		if !slices.Contains(k[key], id) {
+			k[key] = append(k[key], id)
+		}
+	}
 	for _, h := range hosts {
 		for _, n := range h.Names {
 			if n = strings.ToLower(strings.TrimSpace(n)); n != "" {
-				k[n] = true
+				add(n, h.ID)
 			}
 		}
 		for _, ip := range h.IPs {
 			if a, err := netip.ParseAddr(strings.TrimSpace(ip)); err == nil {
-				k[a.Unmap().String()] = true
+				add(a.Unmap().String(), h.ID)
 			}
 		}
 	}
 	return k
 }
 
-func (k fleetKeys) matches(name, addr string) bool {
+// Match returns the ids of the fleet hosts an inventory host (name and
+// ansible_host, either may be empty) is linked to.
+func (k FleetIndex) Match(name, addr string) []uuid.UUID {
 	norm := func(s string) string {
 		s = strings.ToLower(strings.TrimSpace(s))
 		if a, err := netip.ParseAddr(s); err == nil {
@@ -155,15 +164,25 @@ func (k fleetKeys) matches(name, addr string) bool {
 		}
 		return s
 	}
-	if name != "" && k[norm(name)] {
-		return true
+	var out []uuid.UUID
+	for _, v := range []string{name, addr} {
+		if v == "" {
+			continue
+		}
+		for _, id := range k[norm(v)] {
+			if !slices.Contains(out, id) {
+				out = append(out, id)
+			}
+		}
 	}
-	return addr != "" && k[norm(addr)]
+	return out
 }
+
+func (k FleetIndex) matches(name, addr string) bool { return len(k.Match(name, addr)) > 0 }
 
 // addNetworkHosts grants the inventory hosts linked to fleet hosts of the
 // scoped networks.
-func (a *Access) addNetworkHosts(g Graph, keys fleetKeys) {
+func (a *Access) addNetworkHosts(g Graph, keys FleetIndex) {
 	if len(keys) == 0 {
 		return
 	}
@@ -221,6 +240,11 @@ func (s DBNetworkSource) FleetHosts(ctx context.Context, ws uuid.UUID) ([]FleetH
 	if err != nil {
 		return nil, err
 	}
+	return FleetHostsOf(hosts, keys)
+}
+
+// FleetHostsOf converts stored merged hosts and their keys into FleetHosts.
+func FleetHostsOf(hosts []dbgen.Host, keys []dbgen.HostKey) ([]FleetHost, error) {
 	names := map[uuid.UUID][]string{}
 	for _, k := range keys {
 		if k.Kind == "name" {

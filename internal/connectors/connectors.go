@@ -29,9 +29,10 @@ const (
 	KindVM     = "vm"
 	KindLXC    = "lxc"
 	KindNode   = "node"
+	KindDevice = "device"
 )
 
-var validKinds = map[string]bool{KindLease: true, KindARP: true, KindNDP: true, KindStatic: true, KindVM: true, KindLXC: true, KindNode: true}
+var validKinds = map[string]bool{KindLease: true, KindARP: true, KindNDP: true, KindStatic: true, KindVM: true, KindLXC: true, KindNode: true, KindDevice: true}
 
 // Connector is one configured instance of an integration. Implementations
 // must only read from the remote system (use httpx for HTTP).
@@ -66,6 +67,9 @@ type Fields struct {
 	Status   string   `json:"status,omitempty"`
 	// Interface is the network interface the entity was seen on (if known).
 	Interface string `json:"interface,omitempty"`
+	// Attrs are optional classification attributes (NetBox: site, role,
+	// tenant, platform, cluster as slugs) that group rules can match on.
+	Attrs map[string]string `json:"attrs,omitempty"`
 }
 
 // UnmarshalJSON reads the current format and observations stored before the
@@ -106,14 +110,34 @@ type HostObservation struct {
 	Fields      Fields
 }
 
-// Alert is a monitoring alert reported by a connector. Alerts are counted but
-// not yet stored (M6).
+// Alert severities (alerts.severity).
+const (
+	SeverityCritical = "critical"
+	SeverityWarning  = "warning"
+	SeverityUnknown  = "unknown"
+	SeverityInfo     = "info"
+)
+
+// ValidSeverity reports whether s is a stored alert severity.
+func ValidSeverity(s string) bool {
+	switch s {
+	case SeverityCritical, SeverityWarning, SeverityUnknown, SeverityInfo:
+		return true
+	}
+	return false
+}
+
+// Alert is a monitoring alert reported by a connector (ADR-0019). Host and IP
+// are the keys used to link the alert to a merged host.
 type Alert struct {
-	ExternalKey string
+	ExternalKey string // stable per connector
 	Host        string
+	IP          string
+	Service     string
 	Severity    string
-	Message     string
-	At          time.Time
+	Summary     string
+	Labels      map[string]string
+	StartedAt   time.Time // zero: first seen now
 }
 
 // Result is the normalized outcome of a sync.
@@ -121,6 +145,10 @@ type Result struct {
 	Networks     []Network
 	Observations []HostObservation
 	Alerts       []Alert
+	// ReplaceAlerts makes Alerts the complete open set of the connector:
+	// open alerts that are not listed get resolved. Pull adapters set it
+	// (also for an empty list); without it alerts are only upserted.
+	ReplaceAlerts bool
 	// Warnings lists optional data that could not be fetched (partial sync).
 	Warnings []string
 }
@@ -191,6 +219,9 @@ type Spec struct {
 	Fields         []Field  `json:"fields"`
 	// Help explains type-specific setup (credential format, privileges).
 	Help string `json:"help,omitempty"`
+	// GeneratesSecret makes Create generate a token secret when none is
+	// given and return it once (alert webhook receivers).
+	GeneratesSecret bool `json:"generates_secret,omitempty"`
 }
 
 // HTTPOptions derives httpx options from the instance (base URL and shared

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/netip"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -17,6 +18,7 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/db/dbgen"
 	"github.com/BxnnyG/ansible-control-plane/internal/fleet"
 	"github.com/BxnnyG/ansible-control-plane/internal/policy"
+	"github.com/BxnnyG/ansible-control-plane/internal/projects"
 )
 
 // FleetAPI is the fleet read model used by the HTTP layer; *fleet.Store
@@ -26,15 +28,27 @@ type FleetAPI interface {
 	Hosts(ctx context.Context, ws uuid.UUID, f fleet.HostFilter, visible fleet.Visible) ([]fleet.HostView, error)
 	Host(ctx context.Context, ws, id uuid.UUID, visible fleet.Visible) (fleet.HostDetail, error)
 	Conflicts(ctx context.Context, ws uuid.UUID, state string, visible fleet.Visible) ([]fleet.ConflictView, error)
+	Alerts(ctx context.Context, ws uuid.UUID, f fleet.AlertFilter, visible fleet.Visible) ([]fleet.AlertView, error)
 	Acknowledge(ctx context.Context, ws, id, user uuid.UUID, visible fleet.Visible) (fleet.ConflictView, error)
 }
+
+// FleetAdder adds unmanaged fleet hosts to inventories; fleet.Adder implements
+// it.
+type FleetAdder interface {
+	AddToInventory(ctx context.Context, ws, hostID uuid.UUID, in fleet.AddInput, visible fleet.Visible) (fleet.AddResult, error)
+}
+
+// WithFleetAdd enables the "add to inventory" action of the fleet API.
+func WithFleetAdd(a FleetAdder) Option { return func(o *routerOpts) { o.fleetAdd = a } }
+
+const maxFleetAddBody = 4 << 10
 
 // WithFleet mounts the fleet API. It requires WithPolicy.
 func WithFleet(f FleetAPI) Option { return func(o *routerOpts) { o.fleet = f } }
 
 // fleetRoutes registers networks, hosts and conflicts. Scoped memberships see
 // the hosts whose addresses lie in their network scopes (ADR-0018).
-func fleetRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc FleetAPI, log *slog.Logger) {
+func fleetRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc FleetAPI, adder FleetAdder, log *slog.Logger) {
 	const base = "/api/v1/workspaces/{workspace}"
 	notFound := func(w http.ResponseWriter, what string) {
 		policy.WriteJSON(w, http.StatusNotFound, apiError{Error: what + " not found", Code: "not_found"})
@@ -66,14 +80,14 @@ func fleetRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc FleetA
 		}
 		return d, fa.Host, true
 	}
-	audit := func(req *http.Request, d policy.Decision, action, id string, details map[string]any) {
+	audit := func(req *http.Request, d policy.Decision, action, targetType, id string, details map[string]any) {
 		b, _ := json.Marshal(details)
 		p := auth.FromContext(req.Context())
 		actx, cancel := context.WithTimeout(context.WithoutCancel(req.Context()), 5*time.Second)
 		defer cancel()
 		_, err := store.InsertAudit(actx, dbgen.InsertAuditParams{
 			ActorID: pgtype.UUID{Bytes: p.User.ID, Valid: true}, ActorLabel: p.User.DisplayName,
-			Action: action, TargetType: "host_conflict", TargetID: id,
+			Action: action, TargetType: targetType, TargetID: id,
 			WorkspaceID: pgtype.UUID{Bytes: d.Workspace.ID, Valid: true}, Details: b,
 		})
 		if err != nil {
@@ -125,6 +139,23 @@ func fleetRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc FleetA
 			f.Conflicts = true
 		default:
 			policy.WriteJSON(w, http.StatusBadRequest, apiError{Error: "conflicts must be true or false", Code: "bad_request"})
+			return
+		}
+		switch q.Get("managed") {
+		case "":
+		case "true", "1", "false", "0":
+			m := q.Get("managed") == "true" || q.Get("managed") == "1"
+			f.Managed = &m
+		default:
+			policy.WriteJSON(w, http.StatusBadRequest, apiError{Error: "managed must be true or false", Code: "bad_request"})
+			return
+		}
+		switch q.Get("alerts") {
+		case "", "false", "0":
+		case "true", "1":
+			f.Alerts = true
+		default:
+			policy.WriteJSON(w, http.StatusBadRequest, apiError{Error: "alerts must be true or false", Code: "bad_request"})
 			return
 		}
 		list, err := svc.Hosts(req.Context(), d.Workspace.ID, f, vis)
@@ -179,6 +210,40 @@ func fleetRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc FleetA
 		policy.WriteJSON(w, http.StatusOK, h)
 	})
 
+	az.Handle(r, http.MethodGet, base+"/alerts", policy.FleetRead, func(w http.ResponseWriter, req *http.Request) {
+		d, vis, ok := access(w, req)
+		if !ok {
+			return
+		}
+		q := req.URL.Query()
+		f := fleet.AlertFilter{State: q.Get("state")}
+		switch f.State {
+		case "", fleet.AlertOpen, fleet.AlertResolved:
+		default:
+			policy.WriteJSON(w, http.StatusBadRequest, apiError{Error: "state must be open or resolved", Code: "bad_request"})
+			return
+		}
+		for _, p := range []struct {
+			name string
+			dst  **uuid.UUID
+		}{{"host_id", &f.HostID}, {"connector", &f.ConnectorID}} {
+			if s := q.Get(p.name); s != "" {
+				id, err := uuid.Parse(s)
+				if err != nil {
+					policy.WriteJSON(w, http.StatusBadRequest, apiError{Error: p.name + " must be a UUID", Code: "bad_request"})
+					return
+				}
+				*p.dst = &id
+			}
+		}
+		list, err := svc.Alerts(req.Context(), d.Workspace.ID, f, vis)
+		if err != nil {
+			fail(w, "list alerts", err)
+			return
+		}
+		policy.WriteJSON(w, http.StatusOK, list)
+	})
+
 	az.Handle(r, http.MethodGet, base+"/conflicts", policy.FleetRead, func(w http.ResponseWriter, req *http.Request) {
 		d, vis, ok := access(w, req)
 		if !ok {
@@ -218,7 +283,76 @@ func fleetRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc FleetA
 			fail(w, "acknowledge conflict", err)
 			return
 		}
-		audit(req, d, "fleet.conflict.ack", id.String(), map[string]any{"type": c.Type, "fingerprint": c.Fingerprint})
+		audit(req, d, "fleet.conflict.ack", "host_conflict", id.String(), map[string]any{"type": c.Type, "fingerprint": c.Fingerprint})
 		policy.WriteJSON(w, http.StatusOK, c)
+	})
+
+	if adder == nil {
+		return
+	}
+	// Adding a host to an inventory needs fleet.read (the route) plus
+	// inventory.write on the target inventory, checked with scope narrowing.
+	az.Handle(r, http.MethodPost, base+"/hosts/{id}/add-to-inventory", policy.FleetRead, func(w http.ResponseWriter, req *http.Request) {
+		d, vis, ok := access(w, req)
+		if !ok {
+			return
+		}
+		id, err := uuid.Parse(chi.URLParam(req, "id"))
+		if err != nil {
+			notFound(w, "host")
+			return
+		}
+		var body struct {
+			InventoryID uuid.UUID `json:"inventory_id"`
+			Group       string    `json:"group"`
+			Name        string    `json:"name"`
+		}
+		dec := json.NewDecoder(http.MaxBytesReader(w, req.Body, maxFleetAddBody))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&body); err != nil || body.InventoryID == uuid.Nil {
+			policy.WriteJSON(w, http.StatusBadRequest, apiError{Error: "malformed request", Code: "bad_request"})
+			return
+		}
+		p := auth.FromContext(req.Context())
+		err = az.Authorize(req.Context(), p, d.Workspace.ID, policy.InventoryWrite,
+			policy.Target{Refs: []policy.Ref{{Kind: policy.KindInventory, ID: body.InventoryID.String()}}})
+		if errors.Is(err, policy.ErrForbidden) {
+			policy.WriteJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
+			return
+		}
+		if err != nil {
+			fail(w, "check inventory write", err)
+			return
+		}
+		match, ok := parseIfMatch(w, req)
+		if !ok {
+			return
+		}
+		res, err := adder.AddToInventory(req.Context(), d.Workspace.ID, id, fleet.AddInput{
+			InventoryID: body.InventoryID, Group: body.Group, Name: body.Name, IfMatch: match,
+			Author: projects.Author{Name: p.User.DisplayName, Email: p.User.Email},
+		}, vis)
+		switch {
+		case errors.Is(err, fleet.ErrNotFound):
+			notFound(w, "host")
+			return
+		case errors.Is(err, fleet.ErrManaged), errors.Is(err, fleet.ErrNameTaken):
+			policy.WriteJSON(w, http.StatusConflict, apiError{Error: err.Error(), Code: "conflict"})
+			return
+		case errors.Is(err, fleet.ErrInvalid):
+			policy.WriteJSON(w, http.StatusUnprocessableEntity, apiError{Error: err.Error(), Code: "invalid"})
+			return
+		case err != nil:
+			inventoryFail(log, w, "add host to inventory", err)
+			return
+		}
+		details := map[string]any{"inventory_id": body.InventoryID, "group": body.Group, "host": res.Host, "ansible_host": res.AnsibleHost,
+			"group_created": res.Result.GroupCreated, "host_created": len(res.Result.HostsCreated) > 0}
+		if c := res.Result.Commit; c != nil && !c.NoOp {
+			details["commit"] = map[string]any{"branch": c.Branch, "sha": c.SHA, "paths": c.Paths}
+		}
+		audit(req, d, "fleet.host.add_to_inventory", "host", id.String(), details)
+		w.Header().Set("ETag", `"`+strconv.Itoa(res.Result.Version)+`"`)
+		policy.WriteJSON(w, http.StatusOK, res)
 	})
 }

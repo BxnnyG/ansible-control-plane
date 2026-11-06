@@ -22,10 +22,25 @@ func TestParseFleetArgs(t *testing.T) {
 	if a, err := parseFleetArgs([]string{"hosts", "--workspace", "w"}, io.Discard); err != nil || a.Sub != "hosts" {
 		t.Errorf("hosts %+v %v", a, err)
 	}
-	for _, bad := range [][]string{{}, {"nope"}, {"merge"}, {"conflicts", "--workspace", "w", "--state", "x"}, {"hosts", "--workspace", "w", "extra"}} {
+	if a, err := parseFleetArgs([]string{"add", "--workspace", "w", "--host", "h", "--inventory", "main", "--group", "web"}, io.Discard); err != nil || a.Host != "h" || a.Group != "web" || a.AuthorName == "" {
+		t.Errorf("add %+v %v", a, err)
+	}
+	if a, err := parseFleetArgs([]string{"unmanaged", "--workspace", "w"}, io.Discard); err != nil || a.Sub != "unmanaged" {
+		t.Errorf("unmanaged %+v %v", a, err)
+	}
+	for _, bad := range [][]string{{"add", "--workspace", "w", "--host", "h"}, {}, {"nope"}, {"merge"}, {"conflicts", "--workspace", "w", "--state", "x"}, {"hosts", "--workspace", "w", "extra"}} {
 		if _, err := parseFleetArgs(bad, io.Discard); err == nil {
 			t.Errorf("args %v accepted", bad)
 		}
+	}
+}
+
+func TestFormatUnmanaged(t *testing.T) {
+	id := uuid.MustParse("00000000-0000-0000-0000-000000000002")
+	got := formatUnmanaged(fleet.HostView{ID: id, Name: "printer", IPs: []string{"192.0.2.40"}, Online: "unknown"})
+	want := id.String() + "\tprinter\t192.0.2.40\t-\tonline=unknown\talerts=0"
+	if got != want {
+		t.Errorf("unmanaged = %q", got)
 	}
 }
 

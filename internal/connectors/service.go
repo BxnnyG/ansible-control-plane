@@ -2,6 +2,8 @@ package connectors
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -49,6 +51,11 @@ type SecretResolver interface {
 	Resolve(ctx context.Context, ws, id uuid.UUID) (secrets.Resolved, error)
 }
 
+// SecretWriter creates workspace secrets; *secrets.Service implements it.
+type SecretWriter interface {
+	Create(ctx context.Context, ws uuid.UUID, in secrets.CreateInput) (secrets.Meta, error)
+}
+
 // PostSync runs after a successful sync was committed, outside the sync
 // transaction. M5 plugs the host merge in here; errors are logged only.
 type PostSync interface {
@@ -66,9 +73,14 @@ type Options struct {
 	DB       *pgxpool.Pool
 	Registry *Registry
 	Secrets  SecretResolver
-	PostSync PostSync      // optional
-	Timeout  time.Duration // per sync; default DefaultSyncTimeout
-	Now      func() time.Time
+	PostSync PostSync // optional
+	// Alerts links stored alerts to hosts after webhook deliveries; optional.
+	Alerts AlertLinker
+	// SecretWriter stores generated secrets (types with Spec.GeneratesSecret);
+	// optional.
+	SecretWriter SecretWriter
+	Timeout      time.Duration // per sync; default DefaultSyncTimeout
+	Now          func() time.Time
 }
 
 // Service manages connectors and runs their syncs.
@@ -106,16 +118,32 @@ func invalid(format string, a ...any) error {
 
 // Create validates and stores a connector. It becomes due immediately.
 func (s *Service) Create(ctx context.Context, ws uuid.UUID, in CreateInput) (dbgen.Connector, error) {
+	c, _, err := s.CreateGenerating(ctx, ws, in)
+	return c, err
+}
+
+// CreateGenerating is Create that also returns the plaintext of a secret
+// generated for types with Spec.GeneratesSecret ("" otherwise). The caller
+// must show it once and never store or log it.
+func (s *Service) CreateGenerating(ctx context.Context, ws uuid.UUID, in CreateInput) (dbgen.Connector, string, error) {
+	c, plain, err := s.create(ctx, ws, in)
+	if err != nil {
+		return dbgen.Connector{}, "", err
+	}
+	return c, plain, nil
+}
+
+func (s *Service) create(ctx context.Context, ws uuid.UUID, in CreateInput) (dbgen.Connector, string, error) {
 	name := strings.TrimSpace(in.Name)
 	if name == "" || len(name) > 100 {
-		return dbgen.Connector{}, invalid("name must be 1-100 characters")
+		return dbgen.Connector{}, "", invalid("name must be 1-100 characters")
 	}
 	interval := in.IntervalSeconds
 	if interval == 0 {
 		interval = int(DefaultInterval / time.Second)
 	}
 	if time.Duration(interval)*time.Second < MinInterval {
-		return dbgen.Connector{}, invalid("interval must be at least %ds", int(MinInterval/time.Second))
+		return dbgen.Connector{}, "", invalid("interval must be at least %ds", int(MinInterval/time.Second))
 	}
 	cfg := in.Config
 	if cfg == nil {
@@ -125,12 +153,12 @@ func (s *Service) Create(ctx context.Context, ws uuid.UUID, in CreateInput) (dbg
 	if in.SecretID != nil {
 		sec, err := s.q.GetSecret(ctx, dbgen.GetSecretParams{ID: *in.SecretID, WorkspaceID: ws})
 		if err != nil {
-			return dbgen.Connector{}, invalid("secret not found in workspace")
+			return dbgen.Connector{}, "", invalid("secret not found in workspace")
 		}
 		secretType = sec.Type
 	}
 	if err := s.o.Registry.Validate(in.Type, in.BaseURL, cfg, secretType, in.SecretID != nil); err != nil {
-		return dbgen.Connector{}, err
+		return dbgen.Connector{}, "", err
 	}
 	cb, _ := json.Marshal(cfg)
 	p := dbgen.CreateConnectorParams{
@@ -143,14 +171,48 @@ func (s *Service) Create(ctx context.Context, ws uuid.UUID, in CreateInput) (dbg
 	if in.CreatedBy != nil {
 		p.CreatedBy = pgtype.UUID{Bytes: *in.CreatedBy, Valid: true}
 	}
+	spec, _ := s.o.Registry.Spec(in.Type)
+	generate := spec.GeneratesSecret && in.SecretID == nil
+	if generate && s.o.SecretWriter == nil {
+		return dbgen.Connector{}, "", errors.New("secret generation is not available")
+	}
 	c, err := s.q.CreateConnector(ctx, p)
 	if err != nil {
 		if strings.Contains(err.Error(), "connectors_workspace_id_name_key") {
-			return dbgen.Connector{}, ErrConflict
+			return dbgen.Connector{}, "", ErrConflict
 		}
-		return dbgen.Connector{}, fmt.Errorf("create connector: %w", err)
+		return dbgen.Connector{}, "", fmt.Errorf("create connector: %w", err)
 	}
-	return c, nil
+	if !generate {
+		return c, "", nil
+	}
+	c, plain, err := s.attachGeneratedSecret(ctx, ws, c)
+	if err != nil {
+		_, _ = s.q.DeleteConnector(ctx, dbgen.DeleteConnectorParams{ID: c.ID, WorkspaceID: ws})
+		return dbgen.Connector{}, "", err
+	}
+	return c, plain, nil
+}
+
+const generatedSecretDescription = "Generated secret of connector "
+
+// attachGeneratedSecret stores a fresh random token secret and links it to c.
+func (s *Service) attachGeneratedSecret(ctx context.Context, ws uuid.UUID, c dbgen.Connector) (dbgen.Connector, string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return c, "", fmt.Errorf("generate secret: %w", err)
+	}
+	plain := hex.EncodeToString(b)
+	m, err := s.o.SecretWriter.Create(ctx, ws, secrets.CreateInput{Name: "connector-" + c.Name + "-" + hex.EncodeToString(c.ID[:4]),
+		Type: secrets.TypeToken, Description: generatedSecretDescription + c.Name, Value: []byte(plain)})
+	if err != nil {
+		return c, "", fmt.Errorf("store generated secret: %w", err)
+	}
+	c, err = s.q.SetConnectorSecret(ctx, dbgen.SetConnectorSecretParams{ID: c.ID, WorkspaceID: ws, SecretID: pgtype.UUID{Bytes: m.ID, Valid: true}})
+	if err != nil {
+		return c, "", fmt.Errorf("link generated secret: %w", err)
+	}
+	return c, plain, nil
 }
 
 // List returns the connectors of a workspace.
@@ -289,6 +351,20 @@ func validate(r Result) (Result, error) {
 		}
 		nets[n.ExternalKey] = true
 	}
+	alerts := make([]Alert, 0, len(r.Alerts))
+	seenAlerts := map[string]bool{}
+	for _, a := range r.Alerts {
+		na, err := normalizeAlert(a)
+		if err != nil {
+			return r, fmt.Errorf("connector returned an invalid alert: %w", err)
+		}
+		if seenAlerts[na.ExternalKey] {
+			return r, fmt.Errorf("connector returned duplicate alert key %q", na.ExternalKey)
+		}
+		seenAlerts[na.ExternalKey] = true
+		alerts = append(alerts, na)
+	}
+	r.Alerts = alerts
 	obs := map[string]bool{}
 	for _, o := range r.Observations {
 		if o.ExternalKey == "" || !validKinds[o.Kind] {
@@ -379,7 +455,13 @@ func (s *Service) persistOK(ctx context.Context, c dbgen.Connector, trigger stri
 			return fmt.Errorf("upsert observation: %w", err)
 		}
 	}
+	if err := persistAlerts(ctx, q, c, res, started); err != nil {
+		return err
+	}
 	cutoff := ts(started.Add(-ObservationMaxAge))
+	if _, err := q.PruneAlerts(ctx, dbgen.PruneAlertsParams{ConnectorID: c.ID, ResolvedAt: cutoff}); err != nil {
+		return err
+	}
 	if _, err := q.PruneNetworks(ctx, dbgen.PruneNetworksParams{ConnectorID: c.ID, LastSeen: cutoff}); err != nil {
 		return err
 	}
@@ -565,21 +647,71 @@ func (s *Service) Update(ctx context.Context, ws, id uuid.UUID, in UpdateInput) 
 }
 
 // Delete removes a connector together with its networks and observations and
-// re-merges the fleet.
+// re-merges the fleet. A secret generated for the connector (types with
+// Spec.GeneratesSecret) is removed with it.
 func (s *Service) Delete(ctx context.Context, ws, id uuid.UUID) error {
+	_, err := s.DeleteConnector(ctx, ws, id, DeleteSecretGenerated)
+	return err
+}
+
+// SecretPolicy selects what happens to the credential of a deleted connector.
+type SecretPolicy int
+
+const (
+	// DeleteSecretGenerated removes only secrets generated for the connector.
+	DeleteSecretGenerated SecretPolicy = iota
+	// DeleteSecretUnused removes the secret unless another connector references it.
+	DeleteSecretUnused
+	// KeepSecret never removes the secret.
+	KeepSecret
+)
+
+// DeleteConnector deletes a connector and handles its secret according to
+// policy. It reports whether the secret was deleted; a secret still in use
+// elsewhere is kept without error.
+func (s *Service) DeleteConnector(ctx context.Context, ws, id uuid.UUID, policy SecretPolicy) (bool, error) {
+	c, err := s.Get(ctx, ws, id)
+	if err != nil {
+		return false, err
+	}
 	n, err := s.q.DeleteConnector(ctx, dbgen.DeleteConnectorParams{ID: id, WorkspaceID: ws})
 	if err != nil {
-		return fmt.Errorf("delete connector: %w", err)
+		return false, fmt.Errorf("delete connector: %w", err)
 	}
 	if n == 0 {
-		return ErrNotFound
+		return false, ErrNotFound
+	}
+	deleted := false
+	if c.SecretID.Valid && policy != KeepSecret {
+		deleted = s.deleteSecretIfUnused(ctx, ws, c, policy)
 	}
 	if s.o.PostSync != nil {
 		if err := s.o.PostSync.AfterSync(ctx, ws, id); err != nil {
 			slog.Error("post-delete hook failed", "connector", id, "error", err)
 		}
 	}
-	return nil
+	return deleted, nil
+}
+
+func (s *Service) deleteSecretIfUnused(ctx context.Context, ws uuid.UUID, c dbgen.Connector, policy SecretPolicy) bool {
+	sid := c.SecretID.Bytes
+	sec, err := s.q.GetSecret(ctx, dbgen.GetSecretParams{ID: sid, WorkspaceID: ws})
+	if err != nil {
+		return false
+	}
+	if policy == DeleteSecretGenerated && !strings.HasPrefix(sec.Description, generatedSecretDescription) {
+		return false
+	}
+	var refs int
+	if err := s.o.DB.QueryRow(ctx, `SELECT count(*) FROM connectors WHERE secret_id = $1`, sid).Scan(&refs); err != nil || refs > 0 {
+		return false
+	}
+	// Deleting fails (and the secret stays) while other objects still reference it.
+	if err := s.q.DeleteSecret(ctx, dbgen.DeleteSecretParams{ID: sid, WorkspaceID: ws}); err != nil {
+		slog.Warn("secret of deleted connector kept", "connector", c.ID, "error", err)
+		return false
+	}
+	return true
 }
 
 // TestInput describes an unsaved connector configuration to probe.

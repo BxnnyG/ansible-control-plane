@@ -26,7 +26,14 @@ func TestParseMatcherValidation(t *testing.T) {
 		{"tag with prefix", KindProxmoxTag, `{"tag":"proxmox:db"}`, false, `{"tag":"db"}`},
 		{"tag empty", KindProxmoxTag, `{"tag":""}`, true, ""},
 		{"tag whitespace", KindProxmoxTag, `{"tag":"a b"}`, true, ""},
-		{"unknown kind", "netbox_role", `{}`, true, ""},
+		{"role", KindNetboxRole, `{"role":" Web-Server "}`, false, `{"role":"web-server"}`},
+		{"role empty", KindNetboxRole, `{}`, true, ""},
+		{"role wrong param", KindNetboxRole, `{"site":"a"}`, true, ""},
+		{"site", KindNetboxSite, `{"site":"Site-A"}`, false, `{"site":"site-a"}`},
+		{"site whitespace", KindNetboxSite, `{"site":"a b"}`, true, ""},
+		{"netbox tag", KindNetboxTag, `{"tag":"netbox:Prod"}`, false, `{"tag":"prod"}`},
+		{"netbox tag empty", KindNetboxTag, `{"tag":" "}`, true, ""},
+		{"unknown kind", "bogus_kind", `{}`, true, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -62,6 +69,13 @@ func TestMatchers(t *testing.T) {
 		{"tag case-insensitive", KindProxmoxTag, `{"tag":"web"}`, h(nil, "Proxmox:WEB"), true},
 		{"tag other namespace", KindProxmoxTag, `{"tag":"web"}`, h(nil, "node:web"), false},
 		{"tag absent", KindProxmoxTag, `{"tag":"web"}`, h(nil), false},
+		{"netbox role match", KindNetboxRole, `{"role":"web"}`, Host{Attrs: map[string]string{"role": "Web", "site": "a"}}, true},
+		{"netbox role other attr", KindNetboxRole, `{"role":"a"}`, Host{Attrs: map[string]string{"site": "a"}}, false},
+		{"netbox role no attrs", KindNetboxRole, `{"role":"web"}`, h(nil), false},
+		{"netbox site match", KindNetboxSite, `{"site":"a"}`, Host{Attrs: map[string]string{"site": "a"}}, true},
+		{"netbox site other", KindNetboxSite, `{"site":"a"}`, Host{Attrs: map[string]string{"site": "b"}}, false},
+		{"netbox tag match", KindNetboxTag, `{"tag":"prod"}`, h(nil, "proxmox:prod", "netbox:prod"), true},
+		{"netbox tag not proxmox", KindNetboxTag, `{"tag":"prod"}`, h(nil, "proxmox:prod"), false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

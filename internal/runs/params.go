@@ -123,6 +123,9 @@ type Overrides struct {
 type Actor struct {
 	UserID    uuid.UUID
 	Principal *auth.Principal
+	// Remediation is optional provenance stored on the run (remediation rule
+	// and alert, or a fleet bulk action). It must be a JSON object.
+	Remediation json.RawMessage
 }
 
 // secretVarsAAD binds the sealed survey secrets to the workspace.

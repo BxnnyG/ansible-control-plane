@@ -83,6 +83,9 @@
   <p class="text-xs text-muted">
     Accepted: {ctype.secret_types.map((t) => SECRET_TYPE_LABEL[t] ?? t).join(', ')}. The value is
     never shown again.
+    {#if ctype.generates_secret}
+      Leave on None to generate a secret; it is shown once after creating the connector.
+    {/if}
   </p>
   {#if canCreate && !creating}
     <button type="button" class={btn} onclick={() => (creating = true)}>New secret</button>

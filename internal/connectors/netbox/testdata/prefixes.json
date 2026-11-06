@@ -1,0 +1,3 @@
+{"count":2,"next":null,"previous":null,"results":[
+{"id":1,"prefix":"192.0.2.0/24","status":{"value":"active"},"vlan":{"id":5,"vid":20,"name":"servers"},"description":"Server network"},
+{"id":2,"prefix":"198.51.100.0/25","status":{"value":"active"},"vlan":null,"description":""}]}

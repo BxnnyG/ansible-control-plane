@@ -274,7 +274,7 @@ func (s *Service) Enqueue(ctx context.Context, ws, templateID uuid.UUID, ov Over
 	row, err := s.q.EnqueueRun(ctx, dbgen.EnqueueRunParams{
 		WorkspaceID: ws, TemplateID: toPg(&t.ID), TemplateName: t.Name, ProjectID: toPg(&t.ProjectID),
 		ProjectRevision: sha, Trigger: trigger, TriggeredBy: toPg(by), ScheduleID: toPg(scheduleID),
-		Overrides: ovJSON, Params: pJSON,
+		Overrides: ovJSON, Params: pJSON, Remediation: []byte(actor.Remediation),
 	})
 	if err != nil {
 		return Run{}, fmt.Errorf("enqueue run: %w", mapErr(err))
@@ -456,6 +456,7 @@ type Run struct {
 	TriggeredByName   *string         `json:"triggered_by_name"`
 	ScheduleID        *uuid.UUID      `json:"schedule_id"`
 	Overrides         json.RawMessage `json:"overrides"`
+	Remediation       json.RawMessage `json:"remediation"`
 	Params            Params          `json:"params"`
 	WorkerID          string          `json:"worker_id"`
 	CreatedAt         time.Time       `json:"created_at"`
@@ -506,6 +507,9 @@ func toRun(r dbgen.Run) (Run, error) {
 		CancelRequestedAt: tsPtr(r.CancelRequestedAt),
 		HostsOK:           int(r.HostsOk), HostsChanged: int(r.HostsChanged), HostsFailed: int(r.HostsFailed),
 		HostsUnreachable: int(r.HostsUnreachable),
+	}
+	if len(r.Remediation) > 0 {
+		out.Remediation = json.RawMessage(r.Remediation)
 	}
 	if len(out.Overrides) == 0 {
 		out.Overrides = json.RawMessage("{}")
