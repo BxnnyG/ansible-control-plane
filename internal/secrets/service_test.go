@@ -178,3 +178,23 @@ func TestSSHKeyFingerprint(t *testing.T) {
 		t.Errorf("invalid replacement: %v", err)
 	}
 }
+
+func TestConnectorSecretTypes(t *testing.T) {
+	for _, tc := range []struct {
+		typ, val string
+		ok       bool
+	}{
+		{TypeAPIToken, "tok", true},
+		{TypeAPIKeyPair, `{"key":"k","secret":"s"}`, true},
+		{TypeAPIKeyPair, `{"key":"k"}`, false},
+		{TypeAPIKeyPair, `not json`, false},
+	} {
+		if !ValidType(tc.typ) {
+			t.Fatalf("%s must be a valid type", tc.typ)
+		}
+		_, _, err := prepareValue(tc.typ, []byte(tc.val))
+		if (err == nil) != tc.ok {
+			t.Errorf("%s %q: err=%v, want ok=%v", tc.typ, tc.val, err, tc.ok)
+		}
+	}
+}
