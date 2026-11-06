@@ -28,7 +28,7 @@ const (
 	TypeVaultPassword = "vault_password"
 	TypeFile          = "file"
 	// TypeAPIKeyPair holds a JSON object {"key": "...", "secret": "..."} (connectors).
-	TypeAPIKeyPair = "api_key_pair"
+	TypeAPIKeyPair = "api_key_pair" //nolint:gosec // type name, not a credential
 	// TypeAPIToken holds a single API token (connectors).
 	TypeAPIToken = "api_token"
 )

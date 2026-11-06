@@ -21,8 +21,12 @@ func TestReadOnlyTransportRefusesWrites(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, m := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, "PROPFIND", http.MethodOptions} {
-		req, _ := http.NewRequest(m, srv.URL+"/x", nil)
-		if _, err := c.hc.Do(req); !errors.Is(err, ErrMethodNotAllowed) {
+		req, _ := http.NewRequestWithContext(context.Background(), m, srv.URL+"/x", nil)
+		resp, err := c.hc.Do(req)
+		if resp != nil {
+			_ = resp.Body.Close()
+		}
+		if !errors.Is(err, ErrMethodNotAllowed) {
 			t.Errorf("%s: err=%v, want ErrMethodNotAllowed", m, err)
 		}
 	}
