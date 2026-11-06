@@ -101,7 +101,7 @@ Scopes: a membership grants a role either workspace-wide or restricted to a set 
 - **AUTH-9** Audit log of all security-relevant actions (login, permission change, secret access, run start, cutover).
 
 ### Workspaces & organization (ORG)
-- **ORG-1** Multiple workspaces from day one; all objects belong to exactly one workspace (except global connector data).
+- **ORG-1** Multiple workspaces from day one; all objects belong to exactly one workspace, including connectors and fleet data (ADR-0018).
 - **ORG-2** Folders, tags and owners for hosts, playbooks, templates, inventories.
 - **ORG-3** Command palette (Ctrl+K) searching all objects the user may see; dark/light mode.
 
