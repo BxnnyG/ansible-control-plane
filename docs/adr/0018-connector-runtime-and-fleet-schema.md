@@ -28,3 +28,9 @@ M5 implements CON-1..5, CON-8/9, FLEET-2/3 and INV-5 on top of ADR-0009 (connect
 ## Alternatives
 - Global connectors with an instance-level admin role: closer to the original plan, but needs a second authorization layer and cross-workspace filtering for every fleet query.
 - One row per observed field (EAV): exact ADR-0010 wording, but many more rows and writes with no extra information over JSONB fields plus the source connector.
+
+## Implementation notes (group rules)
+- Migration 00015 opens `group_rules.kind` (name pattern instead of a fixed list), adds `mode` (`add-only` | `sync`) and `last_applied_at/by`, and the table `group_rule_members` (rule id, inventory host name) that records the memberships a rule added. Matching is a registry of factories (`internal/grouprules`): kind plus JSON params, normalized on save; NetBox kinds register later without a migration.
+- Diff is a pure function (`grouprules.Diff`); apply runs `inventory.ApplyGroupChange`, which locks the inventory, recomputes the plan from fresh state, writes group/hosts/memberships, records the tracking rows via a hook in the same transaction and, for Git inventories, writes back through the existing write-back path (`writeBack`, shared with `Commit`) before committing the transaction. A Git conflict therefore rolls everything back.
+- Sync removes only recorded memberships, so manual memberships survive; the inventory host is never deleted. Applying is never triggered by syncs in M5.
+- Rule write actions require the whole fleet (unscoped membership) plus `inventory.write` on the target; previews require the whole fleet. Rule lists are filtered by inventory access, which for network-scoped members now covers inventories containing their hosts (the resolver already grants those hosts; reads were covered by tests).

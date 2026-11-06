@@ -134,6 +134,57 @@ masked as `<vault>`.
      keep comments but may normalize indentation; multi-document YAML files
      are refused.
 
+## 5. Group rules
+
+A group rule puts matching fleet hosts (from the connectors, see ADR-0018) into
+one group of an inventory. Nothing happens automatically: you **preview** the
+diff and **apply** it explicitly (UI/REST, or `acp admin group-rule`).
+
+| Setting | Meaning |
+|---|---|
+| Match `subnet` | `{"cidr": "192.0.2.0/24"}` (IPv4 or IPv6): the host has an address in the prefix |
+| Match `proxmox_tag` | `{"tag": "web"}`: the host carries the Proxmox tag (`proxmox:web` in the fleet) |
+| Target | inventory plus group name; the group is created on apply if it is missing |
+| Mode `add-only` (default) | only adds memberships |
+| Mode `sync` | also removes the hosts the rule added earlier and that no longer match |
+| Enabled | disabled rules can be previewed but not applied |
+
+More match kinds (NetBox role, site, tag in M6) need no schema change: a kind is
+a name plus JSON parameters.
+
+**Host naming.** The inventory host is named by the FQDN if the fleet host has
+one (a name with a dot; assumed resolvable, so no `ansible_host` is set).
+Otherwise by the short hostname, with `ansible_host` set to the primary IP
+(first IPv4, else first address), because a short name may not resolve. A host
+with neither is named by its primary IP. Inventory hosts that already represent
+the fleet host (same name, FQDN or hostname case-insensitively, or `ansible_host`
+equal to one of its addresses) are reused and never modified; only new hosts get
+`ansible_host`. Matching hosts without any name or address are listed as skipped.
+
+**Sync mode and manual memberships.** Every membership a rule adds is recorded.
+`sync` removes only recorded memberships (the host itself stays in the
+inventory). Hosts that were already members, or were added by hand, are never
+removed. Recorded entries whose membership disappeared (removed by hand) are
+dropped. Changing a rule's inventory or group forgets the records.
+
+**Apply.** The diff is recomputed under the inventory lock, so the result can
+differ from a preview that is a few seconds old. For DB inventories the change
+is one transaction. For Git inventories the same transaction also commits the
+change to the inventory's write branch (acting user as author, sign-off, no
+force push); if the branch moved, the apply fails with `git_conflict` (409) and
+nothing is changed in the database or the repository. The optional `If-Match`
+header carries the inventory version. There is no automatic apply after
+connector syncs in M5; running rules after a sync is a possible later option.
+
+**Permissions.** Reading rules needs `fleet.read` and read access to the rule's
+inventory; previews additionally need access to the whole fleet. Creating,
+changing, deleting and applying need `fleet.manage` and `inventory.write` on the
+target inventory and act on the whole fleet, so memberships scoped to networks,
+groups or inventories cannot use them. Network-scoped members see the
+inventories that contain hosts of their networks, reduced to those hosts.
+
+CLI: `acp admin group-rule list|preview|apply --workspace SLUG [--rule NAME|ID]`.
+
 ## Troubleshooting
 
 | Error code | Meaning |
@@ -144,4 +195,5 @@ masked as `<vault>`.
 | `git_conflict` (409) | Target files changed on the write branch – merge/re-sync, then retry |
 | `version_conflict` (412) | Inventory changed since it was loaded – reload |
 | `vault_requires_yaml` (422) | INI inventory with vault values – convert to YAML |
+| `rule_disabled` / `rule_changed` (409) | Group rule is disabled / was edited while applying |
 | `provider_not_supported_in_app` (422) | Script vault identities only work in runs |
