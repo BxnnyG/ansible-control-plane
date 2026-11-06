@@ -84,6 +84,8 @@ type Result struct {
 	Networks     []Network
 	Observations []HostObservation
 	Alerts       []Alert
+	// Warnings lists optional data that could not be fetched (partial sync).
+	Warnings []string
 }
 
 // Instance is the stored configuration of one connector.

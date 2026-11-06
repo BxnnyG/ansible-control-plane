@@ -272,6 +272,8 @@ type Counts struct {
 	Networks     int `json:"networks"`
 	Observations int `json:"observations"`
 	Alerts       int `json:"alerts"`
+	// Warnings records a partial sync (optional endpoints that failed).
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 func ts(t time.Time) pgtype.Timestamptz { return pgtype.Timestamptz{Time: t, Valid: true} }
@@ -327,7 +329,7 @@ func (s *Service) Run(ctx context.Context, c dbgen.Connector, trigger string) (C
 			serr = fmt.Errorf("sync timed out after %s", s.o.Timeout)
 		}
 	}()
-	counts := Counts{Networks: len(res.Networks), Observations: len(res.Observations), Alerts: len(res.Alerts)}
+	counts := Counts{Networks: len(res.Networks), Observations: len(res.Observations), Alerts: len(res.Alerts), Warnings: res.Warnings}
 	// Persist even when the caller was cancelled, so the status is not lost.
 	pctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 	defer cancel()
