@@ -108,12 +108,12 @@ DELETE FROM group_rule_members WHERE rule_id = $1 AND host_name = ANY($2::text[]
 `
 
 type DeleteGroupRuleMembersParams struct {
-	RuleID  uuid.UUID
-	Column2 []string
+	RuleID    uuid.UUID
+	HostNames []string
 }
 
 func (q *Queries) DeleteGroupRuleMembers(ctx context.Context, arg DeleteGroupRuleMembersParams) error {
-	_, err := q.db.Exec(ctx, deleteGroupRuleMembers, arg.RuleID, arg.Column2)
+	_, err := q.db.Exec(ctx, deleteGroupRuleMembers, arg.RuleID, arg.HostNames)
 	return err
 }
 

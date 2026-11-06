@@ -32,7 +32,7 @@ INSERT INTO group_rule_members (rule_id, host_name) VALUES ($1, $2)
 ON CONFLICT DO NOTHING;
 
 -- name: DeleteGroupRuleMembers :exec
-DELETE FROM group_rule_members WHERE rule_id = $1 AND host_name = ANY($2::text[]);
+DELETE FROM group_rule_members WHERE rule_id = $1 AND host_name = ANY(sqlc.arg(host_names)::text[]);
 
 -- name: ClearGroupRuleMembers :exec
 DELETE FROM group_rule_members WHERE rule_id = $1;
