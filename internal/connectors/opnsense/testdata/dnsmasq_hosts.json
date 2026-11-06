@@ -1,0 +1,4 @@
+{"total":2,"rowCount":2,"current":1,"rows":[
+{"uuid":"00000000-0000-4000-8000-0000000000a1","host":"dm-static","domain":"example.test","ip":"192.0.2.61","hwaddr":"02:00:00:00:03:02,02:00:00:00:03:03","descr":"Two NICs"},
+{"uuid":"00000000-0000-4000-8000-0000000000a2","host":"dm-nomac","domain":"","ip":"192.0.2.62, 2001:db8:0:1::62","hwaddr":"","descr":""}
+]}

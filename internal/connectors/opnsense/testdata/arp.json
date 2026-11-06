@@ -1,0 +1,2 @@
+[{"mac":"02:00:00:00:01:01","ip":"192.0.2.10","intf":"igc1","intf_description":"lan","manufacturer":"","hostname":"arp-host.example.test","expired":false,"permanent":false},
+{"mac":"02:00:00:00:01:02","ip":"198.51.100.10","intf":"igc1.20","intf_description":"opt1","manufacturer":"","hostname":"","expired":false,"permanent":false}]
