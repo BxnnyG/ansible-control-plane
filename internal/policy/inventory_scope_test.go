@@ -115,7 +115,7 @@ func TestComputeAccess(t *testing.T) {
 		{"no scopes grants nothing", nil, false, nil, nil},
 		{"inventory scope is everything", []string{"inv"}, true, nil, nil},
 		{"inventory plus group is still everything", []string{"inv", "leaf"}, true, nil, nil},
-		{"network scope matches no inventory hosts", []string{"net"}, false, nil, nil},
+		{"network scope without a network source matches nothing", []string{"net"}, false, nil, nil},
 		{"leaf group", []string{"leaf"}, false, []string{"leaf"}, []string{"h-both", "h-leaf"}},
 		{"nested: mid includes leaf", []string{"mid"}, false, []string{"leaf", "mid"}, []string{"h-both", "h-leaf", "h-mid"}},
 		{"root includes all descendants", []string{"root"}, false, []string{"leaf", "mid", "other", "root"},
@@ -303,7 +303,7 @@ func TestAuthorizerHostsAndAccess(t *testing.T) {
 		{"group scope, one host outside", "mid-op", RunExecute, []string{"h-mid", "h-root"}, ErrForbidden},
 		{"group scope, empty limit", "mid-op", RunExecute, nil, ErrForbidden},
 		{"inventory scope, any host", "inv-op", RunExecute, []string{"h-root", "h-none"}, nil},
-		{"network scope matches no inventory hosts", "net-op", RunExecute, []string{"h-mid"}, ErrForbidden},
+		{"network scope without a network source matches nothing", "net-op", RunExecute, []string{"h-mid"}, ErrForbidden},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

@@ -17,10 +17,13 @@ var ErrNoInventory = errors.New("policy: inventory not found")
 // groups and hosts (id to name), the group parent/child links and the
 // direct host memberships.
 type Graph struct {
-	Groups  map[uuid.UUID]string
-	Hosts   map[uuid.UUID]string
-	Links   []GraphLink
-	Members []GraphMember
+	Groups map[uuid.UUID]string
+	Hosts  map[uuid.UUID]string
+	// HostAddrs holds the ansible_host variable of hosts that set one; it
+	// links inventory hosts to fleet hosts for network scopes.
+	HostAddrs map[uuid.UUID]string
+	Links     []GraphLink
+	Members   []GraphMember
 }
 
 // GraphLink is a parent to child edge between two groups. A group may have
@@ -104,10 +107,26 @@ func hasInventoryScope(scopes []Scope, inv uuid.UUID) bool {
 
 // ComputeAccess derives the Access of the scopes within one inventory. Group
 // scopes include every descendant group (links form a multi-parent graph and
-// may contain cycles) and their hosts. Network scopes never match inventory
-// content: they are resolved by the connectors in M5. Scopes naming groups
-// of other inventories are ignored.
+// may contain cycles) and their hosts. Network scopes are not resolved here
+// (see ComputeAccessWithNetworks). Scopes naming groups of other inventories
+// are ignored.
 func ComputeAccess(scopes []Scope, inv uuid.UUID, g Graph) Access {
+	return ComputeAccessWithNetworks(scopes, inv, g, nil)
+}
+
+// ComputeAccessWithNetworks is ComputeAccess plus the inventory hosts linked
+// to the fleet hosts of the scoped networks (ADR-0018): hosts whose name or
+// ansible_host equals a name or address of such a fleet host. They are
+// granted as single hosts, without any group.
+func ComputeAccessWithNetworks(scopes []Scope, inv uuid.UUID, g Graph, networkHosts []FleetHost) Access {
+	a := computeGroupAccess(scopes, inv, g)
+	if !a.All {
+		a.addNetworkHosts(g, newFleetKeys(networkHosts))
+	}
+	return a
+}
+
+func computeGroupAccess(scopes []Scope, inv uuid.UUID, g Graph) Access {
 	if hasInventoryScope(scopes, inv) {
 		return Access{All: true}
 	}
@@ -154,7 +173,12 @@ func ComputeAccess(scopes []Scope, inv uuid.UUID, g Graph) Access {
 // that name groups or hosts must carry Target.InventoryID (or exactly one
 // inventory ref): group ids and host names are only meaningful inside one
 // inventory.
-type InventoryResolver struct{ Source GraphSource }
+//
+// Networks is optional; without it network scopes grant nothing.
+type InventoryResolver struct {
+	Source   GraphSource
+	Networks NetworkSource
+}
 
 // AccessResolver is implemented by resolvers that can expand scopes into the
 // accessible part of an inventory.
@@ -162,13 +186,17 @@ type AccessResolver interface {
 	Access(ctx context.Context, workspaceID string, scopes []Scope, inv uuid.UUID) (Access, error)
 }
 
-// Access implements AccessResolver. The graph is only loaded when group
-// scopes exist and no inventory scope already grants everything.
+// Access implements AccessResolver. The graph is only loaded when group or
+// network scopes exist and no inventory scope already grants everything.
 func (r InventoryResolver) Access(ctx context.Context, workspaceID string, scopes []Scope, inv uuid.UUID) (Access, error) {
 	if hasInventoryScope(scopes, inv) {
 		return Access{All: true}, nil
 	}
-	if !hasGroupScopes(scopes) {
+	_, netHosts, err := r.scopedNetworks(ctx, workspaceID, scopes)
+	if err != nil {
+		return Access{}, err
+	}
+	if !hasGroupScopes(scopes) && len(netHosts) == 0 {
 		return Access{}, nil
 	}
 	ws, err := uuid.Parse(workspaceID)
@@ -182,7 +210,7 @@ func (r InventoryResolver) Access(ctx context.Context, workspaceID string, scope
 	if err != nil {
 		return Access{}, fmt.Errorf("load inventory graph: %w", err)
 	}
-	return ComputeAccess(scopes, inv, g), nil
+	return ComputeAccessWithNetworks(scopes, inv, g, netHosts), nil
 }
 
 // InScope implements ScopeResolver: the whole target must be accessible.

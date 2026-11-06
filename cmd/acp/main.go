@@ -113,7 +113,7 @@ func run(args []string) error {
 		invSvc := inventory.New(inventory.Options{DB: pool, Checkouts: prj, Writer: prj})
 		vids := vaultids.New(q, sec)
 		vops := vaultops.New(prj, vids)
-		az := policy.New(q, policy.InventoryResolver{Source: invSvc}, svc.Require, log)
+		az := policy.New(q, policy.InventoryResolver{Source: invSvc, Networks: policy.DBNetworkSource{Q: q}}, svc.Require, log)
 		runSvc := runs.New(runs.Options{DB: pool, Graphs: invSvc, Authz: az, Sealer: sp})
 		schedSvc := schedules.New(schedules.Options{DB: pool, Runs: runSvc, Secret: sec})
 		if cfg.WorkerTokenFile != "" {
