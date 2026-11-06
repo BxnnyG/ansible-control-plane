@@ -18,7 +18,6 @@ import (
 const (
 	tagPrefix  = "proxmox:"
 	nodePrefix = "node:"
-	macPrefix  = "mac:"
 )
 
 type node struct {
@@ -248,13 +247,7 @@ func (c *conn) guest(ctx context.Context, res *connectors.Result, g resource) er
 		}
 	}
 	f.Tags = append(tags, nodePrefix+g.Node)
-	for i, m := range macs {
-		if i == 0 {
-			f.MAC = m
-		} else {
-			f.Tags = append(f.Tags, macPrefix+m)
-		}
-	}
+	f.MACs = macs
 	res.Observations = append(res.Observations, connectors.HostObservation{
 		ExternalKey: kind + ":" + Type + ":" + strconv.Itoa(g.VMID), Kind: kind, Fields: f,
 	})

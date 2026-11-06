@@ -246,7 +246,7 @@ func TestNormalization(t *testing.T) {
 			continue
 		}
 		f := o.Fields
-		if o.Kind != connectors.KindStatic || f.Hostname != "isc-static" || f.Notes != "Printer" || len(f.Tags) != 1 || f.Tags[0] != "interface:lan" {
+		if o.Kind != connectors.KindStatic || f.Hostname != "isc-static" || f.Notes != "Printer" || f.Interface != "lan" || len(f.Tags) != 0 {
 			t.Errorf("static = %+v", o)
 		}
 		return

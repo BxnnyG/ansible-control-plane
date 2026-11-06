@@ -142,7 +142,7 @@ func TestSyncFull(t *testing.T) {
 	}
 	cases := []struct {
 		key     string
-		mac     string
+		macs    string
 		host    string
 		ips     string
 		tags    string
@@ -151,8 +151,8 @@ func TestSyncFull(t *testing.T) {
 		noAgent string // endpoint that must not be requested
 	}{
 		{"node:proxmox:pve1", "", "pve1", "192.0.2.2 2001:db8:0:1::2 198.51.100.2", "", "online", "", ""},
-		{"vm:proxmox:100", "02:00:00:00:10:01", "vm-agent", "192.0.2.20 2001:db8:0:1::20 198.51.100.20",
-			"proxmox:web proxmox:prod node:pve1 mac:02:00:00:00:10:02", "running", "Web frontend\nowner: team-a", ""},
+		{"vm:proxmox:100", "02:00:00:00:10:01 02:00:00:00:10:02", "vm-agent", "192.0.2.20 2001:db8:0:1::20 198.51.100.20",
+			"proxmox:web proxmox:prod node:pve1", "running", "Web frontend\nowner: team-a", ""},
 		{"vm:proxmox:101", "02:00:00:00:10:03", "vm-noagent", "", "node:pve1", "running", "", ""},
 		{"vm:proxmox:102", "02:00:00:00:10:04", "vm-stopped", "", "proxmox:lab proxmox:test node:pve1", "stopped", "powered off", "nodes/pve1/qemu/102/agent/network-get-interfaces"},
 		{"vm:proxmox:900", "02:00:00:00:10:09", "tmpl", "", "node:pve1", "template", "", "nodes/pve1/qemu/900/agent/network-get-interfaces"},
@@ -162,7 +162,7 @@ func TestSyncFull(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.key, func(t *testing.T) {
 			o, f := obs[tc.key], obs[tc.key].Fields
-			if f.MAC != tc.mac || f.Hostname != tc.host || strings.Join(f.IPs, " ") != tc.ips ||
+			if strings.Join(f.MACs, " ") != tc.macs || f.Hostname != tc.host || strings.Join(f.IPs, " ") != tc.ips ||
 				strings.Join(f.Tags, " ") != tc.tags ||
 				f.Status != tc.status || f.Notes != tc.notes {
 				t.Errorf("%s = %+v", o.ExternalKey, f)

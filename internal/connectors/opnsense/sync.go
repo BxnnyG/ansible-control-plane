@@ -48,6 +48,14 @@ func str(m map[string]any, keys ...string) string {
 	return ""
 }
 
+// macs returns the normalized MAC as a one-element list, or nil.
+func macs(s string) []string {
+	if m := normMAC(s); m != "" {
+		return []string{m}
+	}
+	return nil
+}
+
 func normMAC(s string) string {
 	s = strings.ToLower(strings.TrimSpace(s))
 	if len(s) != 17 || strings.Count(s, ":") != 5 {
@@ -76,11 +84,11 @@ type builder struct {
 func newBuilder(res *connectors.Result) *builder { return &builder{res: res, seen: map[string]bool{}} }
 
 func (b *builder) add(kind, source, uniq string, f connectors.Fields, iface string) {
-	if f.MAC == "" && len(f.IPs) == 0 && f.Hostname == "" {
+	if len(f.MACs) == 0 && len(f.IPs) == 0 && f.Hostname == "" {
 		return
 	}
 	if uniq == "" {
-		uniq = f.MAC + "/" + strings.Join(f.IPs, ",")
+		uniq = strings.Join(f.MACs, ",") + "/" + strings.Join(f.IPs, ",")
 	}
 	key := kind + ":" + source + ":" + uniq
 	if b.seen[key] {
@@ -88,7 +96,7 @@ func (b *builder) add(kind, source, uniq string, f connectors.Fields, iface stri
 	}
 	b.seen[key] = true
 	if iface != "" {
-		f.Tags = append(f.Tags, "interface:"+iface)
+		f.Interface = iface
 	}
 	b.res.Observations = append(b.res.Observations, connectors.HostObservation{ExternalKey: key, Kind: kind, Fields: f})
 }
@@ -178,7 +186,7 @@ func (c *conn) isc(ctx context.Context, res *connectors.Result, b *builder) erro
 		if strings.EqualFold(str(row, "type"), "static") {
 			kind = connectors.KindStatic
 		}
-		f := connectors.Fields{MAC: normMAC(str(row, "mac")), Hostname: str(row, "hostname"), IPs: ips(str(row, "address")),
+		f := connectors.Fields{MACs: macs(str(row, "mac")), Hostname: str(row, "hostname"), IPs: ips(str(row, "address")),
 			Notes: str(row, "descr"), Status: str(row, "status")}
 		b.add(kind, BackendISC, "", f, str(row, "if", "if_descr"))
 	}
@@ -191,7 +199,7 @@ func (c *conn) dnsmasq(ctx context.Context, res *connectors.Result, b *builder) 
 		return err
 	} else if ok {
 		for _, row := range l {
-			f := connectors.Fields{MAC: normMAC(str(row, "hwaddr", "mac")), Hostname: str(row, "hostname"), IPs: ips(str(row, "address"))}
+			f := connectors.Fields{MACs: macs(str(row, "hwaddr", "mac")), Hostname: str(row, "hostname"), IPs: ips(str(row, "address"))}
 			b.add(connectors.KindLease, BackendDnsmasq, "", f, str(row, "if_name", "if"))
 		}
 	}
@@ -205,13 +213,13 @@ func (c *conn) dnsmasq(ctx context.Context, res *connectors.Result, b *builder) 
 			if d := str(row, "domain"); d != "" && name != "" {
 				f.FQDN = name + "." + d
 			}
-			macs := strings.FieldsFunc(str(row, "hwaddr"), func(r rune) bool { return r == ',' || r == ' ' })
-			if len(macs) == 0 {
+			hw := strings.FieldsFunc(str(row, "hwaddr"), func(r rune) bool { return r == ',' || r == ' ' })
+			if len(hw) == 0 {
 				b.add(connectors.KindStatic, BackendDnsmasq, str(row, "uuid"), f, "")
 				continue
 			}
-			for i, m := range macs {
-				f.MAC = normMAC(m)
+			for i, m := range hw {
+				f.MACs = macs(m)
 				b.add(connectors.KindStatic, BackendDnsmasq, fmt.Sprintf("%s#%d", str(row, "uuid"), i), f, "")
 			}
 		}
@@ -225,7 +233,7 @@ func (c *conn) kea(ctx context.Context, res *connectors.Result, b *builder) erro
 		return err
 	} else if ok {
 		for _, row := range l {
-			f := connectors.Fields{MAC: normMAC(str(row, "hwaddr", "hw_address")), Hostname: str(row, "hostname"), IPs: ips(str(row, "address")), Status: str(row, "state")}
+			f := connectors.Fields{MACs: macs(str(row, "hwaddr", "hw_address")), Hostname: str(row, "hostname"), IPs: ips(str(row, "address")), Status: str(row, "state")}
 			b.add(connectors.KindLease, BackendKea, "", f, str(row, "if_name", "if_descr"))
 		}
 	}
@@ -234,7 +242,7 @@ func (c *conn) kea(ctx context.Context, res *connectors.Result, b *builder) erro
 		return err
 	} else if ok {
 		for _, row := range rs {
-			f := connectors.Fields{MAC: normMAC(str(row, "hw_address")), Hostname: str(row, "hostname"), IPs: ips(str(row, "ip_address")), Notes: str(row, "description")}
+			f := connectors.Fields{MACs: macs(str(row, "hw_address")), Hostname: str(row, "hostname"), IPs: ips(str(row, "ip_address")), Notes: str(row, "description")}
 			b.add(connectors.KindStatic, BackendKea, str(row, "uuid"), f, "")
 		}
 	}
@@ -272,7 +280,7 @@ func (c *conn) neighbours(ctx context.Context, res *connectors.Result, b *builde
 			continue
 		}
 		for _, row := range r {
-			f := connectors.Fields{MAC: normMAC(str(row, "mac")), Hostname: str(row, "hostname"), IPs: ips(str(row, "ip"))}
+			f := connectors.Fields{MACs: macs(str(row, "mac")), Hostname: str(row, "hostname"), IPs: ips(str(row, "ip"))}
 			b.add(e.kind, "neigh", "", f, str(row, "intf_description", "intf"))
 		}
 	}

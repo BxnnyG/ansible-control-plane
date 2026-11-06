@@ -5,10 +5,13 @@ package connectors
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/netip"
+	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -53,13 +56,47 @@ type Network struct {
 
 // Fields are the normalized attributes of a host observation (ADR-0018).
 type Fields struct {
-	MAC      string   `json:"mac,omitempty"`
+	// MACs are lower-case colon-separated addresses; the first is primary.
+	MACs     []string `json:"macs,omitempty"`
 	Hostname string   `json:"hostname,omitempty"`
 	FQDN     string   `json:"fqdn,omitempty"`
 	IPs      []string `json:"ips,omitempty"`
 	Tags     []string `json:"tags,omitempty"`
 	Notes    string   `json:"notes,omitempty"`
 	Status   string   `json:"status,omitempty"`
+	// Interface is the network interface the entity was seen on (if known).
+	Interface string `json:"interface,omitempty"`
+}
+
+// UnmarshalJSON reads the current format and observations stored before the
+// MAC list existed (single "mac" key, extra MACs as "mac:<mac>" tags).
+func (f *Fields) UnmarshalJSON(b []byte) error {
+	type plain Fields
+	aux := struct {
+		*plain
+		MAC string `json:"mac"`
+	}{plain: (*plain)(f)}
+	if err := json.Unmarshal(b, &aux); err != nil {
+		return err
+	}
+	if aux.MAC != "" && !slices.Contains(f.MACs, aux.MAC) {
+		f.MACs = append([]string{aux.MAC}, f.MACs...)
+	}
+	tags := f.Tags[:0:0]
+	for _, t := range f.Tags {
+		if m, ok := strings.CutPrefix(t, "mac:"); ok {
+			if !slices.Contains(f.MACs, m) {
+				f.MACs = append(f.MACs, m)
+			}
+			continue
+		}
+		tags = append(tags, t)
+	}
+	f.Tags = tags
+	if len(f.Tags) == 0 {
+		f.Tags = nil
+	}
+	return nil
 }
 
 // HostObservation is one observed entity of a connector.

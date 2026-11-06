@@ -118,7 +118,7 @@ func TestSyncStoresAndReplacesSet(t *testing.T) {
 	e.script.Set(connectors.Result{
 		Networks: []connectors.Network{{ExternalKey: "lan", CIDR: netip.MustParsePrefix("192.0.2.5/24"), VLAN: vlan(10), Interface: "lan0"}},
 		Observations: []connectors.HostObservation{
-			{ExternalKey: "m1", Kind: connectors.KindLease, Fields: connectors.Fields{MAC: "02:00:00:00:00:01", IPs: []string{"192.0.2.10"}}},
+			{ExternalKey: "m1", Kind: connectors.KindLease, Fields: connectors.Fields{MACs: []string{"02:00:00:00:00:01"}, IPs: []string{"192.0.2.10"}}},
 			{ExternalKey: "m2", Kind: connectors.KindVM, Fields: connectors.Fields{Hostname: "vm2"}},
 		},
 		Alerts: []connectors.Alert{{Host: "x", Message: "m"}},
@@ -145,7 +145,7 @@ func TestSyncStoresAndReplacesSet(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.script.Set(connectors.Result{Observations: []connectors.HostObservation{
-		{ExternalKey: "m1", Kind: connectors.KindStatic, Fields: connectors.Fields{MAC: "02:00:00:00:00:01", Hostname: "h1"}},
+		{ExternalKey: "m1", Kind: connectors.KindStatic, Fields: connectors.Fields{MACs: []string{"02:00:00:00:00:01"}, Hostname: "h1"}},
 	}})
 	if _, err := e.svc.Run(ctx, c, connectors.TriggerSchedule); err != nil {
 		t.Fatal(err)

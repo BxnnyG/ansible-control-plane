@@ -1,6 +1,7 @@
 package connectors
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -107,5 +108,20 @@ func TestValidateResult(t *testing.T) {
 	}
 	if _, err := validate(Result{Networks: []Network{{ExternalKey: "n"}}}); err == nil {
 		t.Error("invalid CIDR accepted")
+	}
+}
+
+func TestFieldsLegacyJSON(t *testing.T) {
+	var f Fields
+	in := `{"mac":"02:00:00:00:00:01","tags":["a","mac:02:00:00:00:00:02"],"hostname":"h"}`
+	if err := json.Unmarshal([]byte(in), &f); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(f.MACs, ",") != "02:00:00:00:00:01,02:00:00:00:00:02" || strings.Join(f.Tags, ",") != "a" || f.Hostname != "h" {
+		t.Errorf("legacy = %+v", f)
+	}
+	var g Fields
+	if err := json.Unmarshal([]byte(`{"macs":["02:00:00:00:00:03"],"interface":"lan"}`), &g); err != nil || len(g.MACs) != 1 || g.Interface != "lan" {
+		t.Errorf("new = %+v %v", g, err)
 	}
 }
