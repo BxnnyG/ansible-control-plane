@@ -738,6 +738,83 @@ export interface FleetHostFilter {
   conflicts?: boolean;
 }
 
+/** Match kind of a group rule; the set is open (NetBox kinds follow in M6). */
+export type GroupRuleKind = 'subnet' | 'proxmox_tag' | (string & {});
+export type GroupRuleMode = 'add-only' | 'sync';
+
+export interface GroupRule {
+  id: string;
+  name: string;
+  kind: GroupRuleKind;
+  /** Kind specific parameters: {cidr} for subnet, {tag} for proxmox_tag. */
+  params: Record<string, unknown>;
+  inventory_id: string;
+  group: string;
+  mode: GroupRuleMode;
+  enabled: boolean;
+  last_applied_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GroupRuleInput {
+  name: string;
+  kind: GroupRuleKind;
+  params: Record<string, unknown>;
+  inventory_id: string;
+  group: string;
+  mode?: GroupRuleMode;
+  enabled?: boolean;
+}
+
+export type GroupRuleUpdate = Partial<GroupRuleInput>;
+
+export interface GroupRuleAdd {
+  name: string;
+  /** Only set for hosts that are created. */
+  ansible_host?: string;
+  create_host: boolean;
+  fleet_host_id: string;
+}
+
+export interface GroupRuleSkipped {
+  fleet_host_id: string;
+  name: string;
+  reason: string;
+}
+
+/** The pure diff of a rule against the current inventory state. */
+export interface GroupRulePlan {
+  group_create: boolean;
+  matched: number;
+  add: GroupRuleAdd[];
+  remove: string[];
+  keep: number;
+  untrack: string[];
+  skipped: GroupRuleSkipped[];
+}
+
+export interface GroupRulePreview {
+  rule: GroupRule;
+  inventory_mode: InventoryMode;
+  plan: GroupRulePlan;
+}
+
+export interface GroupRuleApplied {
+  rule: GroupRule;
+  inventory_mode: InventoryMode;
+  plan: GroupRulePlan;
+  result: {
+    group_created: boolean;
+    hosts_created: string[];
+    added: string[];
+    removed: string[];
+    version: number;
+    /** Set for git inventories when a commit was written. */
+    commit: InventoryCommitResult | null;
+  };
+}
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -990,6 +1067,31 @@ export const api = {
       request<ConnectorSync[]>(
         'GET',
         connectorsPath(ws, `${encodeURIComponent(id)}/syncs`) + (limit ? `?limit=${limit}` : ''),
+      ),
+  },
+  groupRules: {
+    list: (ws: string) => request<GroupRule[]>('GET', fleetPath(ws, 'group-rules')),
+    get: (ws: string, id: string) =>
+      request<GroupRule>('GET', fleetPath(ws, `group-rules/${encodeURIComponent(id)}`)),
+    create: (ws: string, r: GroupRuleInput) =>
+      request<GroupRule>('POST', fleetPath(ws, 'group-rules'), r),
+    update: (ws: string, id: string, r: GroupRuleUpdate) =>
+      request<GroupRule>('PUT', fleetPath(ws, `group-rules/${encodeURIComponent(id)}`), r),
+    remove: (ws: string, id: string) =>
+      request<void>('DELETE', fleetPath(ws, `group-rules/${encodeURIComponent(id)}`)),
+    /** Dry run: what an apply would add and remove. Nothing is written. */
+    preview: (ws: string, id: string) =>
+      request<GroupRulePreview>(
+        'GET',
+        fleetPath(ws, `group-rules/${encodeURIComponent(id)}/preview`),
+      ),
+    /** Explicit apply; git inventories get a commit on their write branch (409 git_conflict on a moved branch). */
+    apply: (ws: string, id: string, inventoryVersion?: number) =>
+      request<GroupRuleApplied>(
+        'POST',
+        fleetPath(ws, `group-rules/${encodeURIComponent(id)}/apply`),
+        undefined,
+        inventoryVersion,
       ),
   },
   fleet: {
