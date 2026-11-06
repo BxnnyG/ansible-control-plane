@@ -55,7 +55,14 @@ export interface BreakGlassCredentials {
   totp: string;
 }
 
-export type SecretType = 'ssh_key' | 'password' | 'token' | 'vault_password' | 'file';
+export type SecretType =
+  | 'ssh_key'
+  | 'password'
+  | 'token'
+  | 'vault_password'
+  | 'file'
+  | 'api_key_pair'
+  | 'api_token';
 
 /** Non-secret view of a stored secret; values are write-only and never returned. */
 export interface SecretMeta {
@@ -540,6 +547,203 @@ export interface TemplateWebhook {
   secret?: string;
 }
 
+export type ConnectorFieldKind = 'string' | 'bool' | 'int';
+
+export interface ConnectorField {
+  key: string;
+  label: string;
+  kind: ConnectorFieldKind;
+  required: boolean;
+  help?: string;
+}
+
+/** Registered connector type with its config schema and setup help. */
+export interface ConnectorType {
+  type: string;
+  label: string;
+  /** Accepted secret types; empty when the type needs no credentials. */
+  secret_types: SecretType[];
+  secret_required: boolean;
+  base_url: boolean;
+  fields: ConnectorField[];
+  help?: string;
+}
+
+export interface ConnectorSecretRef {
+  id: string;
+  name: string;
+  type: SecretType;
+}
+
+export interface ConnectorCounts {
+  networks: number;
+  observations: number;
+  alerts: number;
+  warnings?: string[];
+}
+
+export type ConnectorStatus = 'disabled' | 'pending' | 'ok' | 'error';
+
+/** Connector; the credential is only referenced, never returned. */
+export interface Connector {
+  id: string;
+  type: string;
+  name: string;
+  base_url: string;
+  config: Record<string, string | number | boolean>;
+  secret: ConnectorSecretRef | null;
+  interval_seconds: number;
+  enabled: boolean;
+  status: ConnectorStatus;
+  last_sync_at: string | null;
+  last_success_at: string | null;
+  next_sync_at: string;
+  last_error: string;
+  last_duration_ms: number;
+  backoff_count: number;
+  counts: ConnectorCounts;
+  warnings: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConnectorInput {
+  type: string;
+  name: string;
+  base_url?: string;
+  config?: Record<string, string | number | boolean>;
+  secret_id?: string | null;
+  interval_seconds?: number;
+  enabled?: boolean;
+}
+
+/** PATCH body: omitted keys stay, `secret_id: null` removes the credential. */
+export type ConnectorUpdate = Partial<Omit<ConnectorInput, 'type'>>;
+
+/** Unsaved configuration to probe (setup wizard "test before save"). */
+export interface ConnectorTestInput {
+  type: string;
+  base_url?: string;
+  config?: Record<string, string | number | boolean>;
+  secret_id?: string | null;
+}
+
+export interface ConnectorTestResult {
+  ok: boolean;
+  error: string;
+}
+
+export interface ConnectorSync {
+  id: string;
+  trigger: 'schedule' | 'manual';
+  status: 'ok' | 'error';
+  started_at: string;
+  finished_at: string;
+  duration_ms: number;
+  counts: ConnectorCounts;
+  error: string;
+}
+
+export interface FleetNetwork {
+  id: string;
+  connector_id: string;
+  connector: string;
+  external_key: string;
+  cidr: string;
+  vlan: number | null;
+  interface: string;
+  description: string;
+  source: string;
+  first_seen: string;
+  last_seen: string;
+}
+
+export interface FleetHost {
+  id: string;
+  name: string;
+  kind: string;
+  status: string;
+  hostname: string;
+  fqdn: string;
+  ips: string[];
+  macs: string[];
+  tags: string[];
+  /** Names of the connectors that contributed. */
+  connectors: string[];
+  open_conflicts: number;
+  first_seen: string;
+  last_seen: string;
+}
+
+export interface FleetSource {
+  connector_id: string;
+  connector: string;
+  type: string;
+}
+
+export interface FleetHostFields {
+  kind?: string;
+  hostname?: string;
+  fqdn?: string;
+  macs?: string[];
+  ips?: string[];
+  tags?: string[];
+  notes?: string;
+  status?: string;
+  interface?: string;
+  /** Per field: the winning connector (scalars) or all contributors (lists). */
+  sources?: Record<string, FleetSource[]>;
+}
+
+export interface FleetObservation {
+  connector_id: string;
+  connector: string;
+  connector_type: string;
+  external_key: string;
+  kind: string;
+  fields: {
+    macs?: string[];
+    hostname?: string;
+    fqdn?: string;
+    ips?: string[];
+    tags?: string[];
+    notes?: string;
+    status?: string;
+    interface?: string;
+  };
+  first_seen: string;
+  last_seen: string;
+}
+
+export type ConflictState = 'open' | 'acknowledged' | 'resolved';
+
+export interface FleetConflict {
+  id: string;
+  type: string;
+  state: ConflictState;
+  fingerprint: string;
+  host_ids: string[];
+  details: Record<string, unknown>;
+  acknowledged_by: string | null;
+  acknowledged_at: string | null;
+  first_seen: string;
+  last_seen: string;
+  resolved_at: string | null;
+}
+
+export interface FleetHostDetail extends FleetHost {
+  fields: FleetHostFields;
+  keys: { kind: 'mac' | 'name' | 'ip'; value: string }[];
+  observations: FleetObservation[];
+  conflicts: FleetConflict[];
+}
+
+export interface FleetHostFilter {
+  network?: string;
+  q?: string;
+  conflicts?: boolean;
+}
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -769,6 +973,49 @@ export const api = {
         version,
       ),
   },
+  connectorTypes: (ws: string) =>
+    request<ConnectorType[]>('GET', fleetPath(ws, 'connector-types')),
+  connectors: {
+    list: (ws: string) => request<Connector[]>('GET', connectorsPath(ws)),
+    get: (ws: string, id: string) =>
+      request<Connector>('GET', connectorsPath(ws, encodeURIComponent(id))),
+    create: (ws: string, c: ConnectorInput) => request<Connector>('POST', connectorsPath(ws), c),
+    update: (ws: string, id: string, c: ConnectorUpdate) =>
+      request<Connector>('PATCH', connectorsPath(ws, encodeURIComponent(id)), c),
+    remove: (ws: string, id: string) =>
+      request<void>('DELETE', connectorsPath(ws, encodeURIComponent(id))),
+    /** Probes a saved connector (read-only). */
+    test: (ws: string, id: string) =>
+      request<ConnectorTestResult>('POST', connectorsPath(ws, `${encodeURIComponent(id)}/test`)),
+    /** Probes an unsaved configuration. */
+    testConfig: (ws: string, c: ConnectorTestInput) =>
+      request<ConnectorTestResult>('POST', connectorsPath(ws, 'test'), c),
+    /** Queues a sync now; the sync loop picks it up. */
+    sync: (ws: string, id: string) =>
+      request<{ status: string }>('POST', connectorsPath(ws, `${encodeURIComponent(id)}/sync`)),
+    syncs: (ws: string, id: string, limit?: number) =>
+      request<ConnectorSync[]>(
+        'GET',
+        connectorsPath(ws, `${encodeURIComponent(id)}/syncs`) + (limit ? `?limit=${limit}` : ''),
+      ),
+  },
+  fleet: {
+    networks: (ws: string) => request<FleetNetwork[]>('GET', fleetPath(ws, 'networks')),
+    hosts: (ws: string, f: FleetHostFilter = {}) => {
+      const q = new URLSearchParams();
+      if (f.network) q.set('network', f.network);
+      if (f.q) q.set('q', f.q);
+      if (f.conflicts) q.set('conflicts', 'true');
+      const qs = q.toString();
+      return request<FleetHost[]>('GET', fleetPath(ws, 'hosts') + (qs ? `?${qs}` : ''));
+    },
+    host: (ws: string, id: string) =>
+      request<FleetHostDetail>('GET', fleetPath(ws, `hosts/${encodeURIComponent(id)}`)),
+    conflicts: (ws: string, state?: ConflictState) =>
+      request<FleetConflict[]>('GET', fleetPath(ws, 'conflicts') + (state ? `?state=${state}` : '')),
+    ackConflict: (ws: string, id: string) =>
+      request<FleetConflict>('POST', fleetPath(ws, `conflicts/${encodeURIComponent(id)}/ack`)),
+  },
 };
 
 function secretsPath(ws: string, id?: string): string {
@@ -800,6 +1047,16 @@ function templatesPath(ws: string, id?: string, sub?: string): string {
   if (id) p += `/${encodeURIComponent(id)}`;
   if (sub) p += `/${sub}`;
   return p;
+}
+
+function connectorsPath(ws: string, sub?: string): string {
+  let p = `/api/v1/workspaces/${encodeURIComponent(ws)}/connectors`;
+  if (sub) p += `/${sub}`;
+  return p;
+}
+
+function fleetPath(ws: string, sub: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(ws)}/${sub}`;
 }
 
 function schedulesPath(ws: string, idOrSub: string): string {

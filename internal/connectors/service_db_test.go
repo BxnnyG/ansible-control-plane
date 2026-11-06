@@ -303,3 +303,99 @@ func TestRunDueTimeoutAndTest(t *testing.T) {
 		t.Errorf("connector synced again before it was due, calls=%d", e.script.Calls())
 	}
 }
+
+func TestUpdateDeleteAndSyncs(t *testing.T) {
+	e := setup(t, 0)
+	ctx := context.Background()
+	c := e.create(t, "u", 60)
+	e.script.Set(connectors.Result{})
+	if _, err := e.svc.Run(ctx, c, connectors.TriggerManual); err != nil {
+		t.Fatal(err)
+	}
+	// Push the next sync into the future, then a connection change makes it due.
+	if _, err := e.pool.Exec(ctx, `UPDATE connectors SET next_sync_at = now() + interval '1 hour' WHERE id = $1`, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	name, secs := "renamed", 120
+	u, err := e.svc.Update(ctx, e.ws, c.ID, connectors.UpdateInput{Name: &name, IntervalSeconds: &secs, Config: map[string]any{"note": "x"}})
+	if err != nil || u.Name != "renamed" || u.IntervalSeconds != 120 || !u.SecretID.Valid {
+		t.Fatalf("update: %+v %v", u, err)
+	}
+	if got, _ := e.svc.Get(ctx, e.ws, c.ID); got.NextSyncAt.Time.After(time.Now().Add(time.Minute)) {
+		t.Error("config change must make the connector due")
+	}
+	if u, err = e.svc.Update(ctx, e.ws, c.ID, connectors.UpdateInput{ClearSecret: true}); err != nil || u.SecretID.Valid {
+		t.Fatalf("clear secret: %+v %v", u, err)
+	}
+	other := uuid.New()
+	for name, in := range map[string]connectors.UpdateInput{
+		"foreign secret": {SecretID: &other},
+		"short interval": {IntervalSeconds: new(int)},
+		"unknown option": {Config: map[string]any{"bogus": 1}},
+		"empty name":     {Name: new(string)},
+	} {
+		if _, err := e.svc.Update(ctx, e.ws, c.ID, in); !errors.Is(err, connectors.ErrInvalidConfig) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	e.create(t, "dup", 60)
+	dup := "dup"
+	if _, err := e.svc.Update(ctx, e.ws, c.ID, connectors.UpdateInput{Name: &dup}); !errors.Is(err, connectors.ErrConflict) {
+		t.Errorf("duplicate name: %v", err)
+	}
+	if _, err := e.svc.Update(ctx, e.ws, uuid.New(), connectors.UpdateInput{Name: &name}); !errors.Is(err, connectors.ErrNotFound) {
+		t.Errorf("unknown connector: %v", err)
+	}
+
+	syncs, err := e.svc.ListSyncs(ctx, e.ws, c.ID, 10)
+	if err != nil || len(syncs) != 1 || syncs[0].Trigger != connectors.TriggerManual {
+		t.Fatalf("syncs %+v %v", syncs, err)
+	}
+	if _, err := e.svc.ListSyncs(ctx, e.ws, uuid.New(), 10); !errors.Is(err, connectors.ErrNotFound) {
+		t.Errorf("syncs of unknown connector: %v", err)
+	}
+	refs, err := e.svc.SecretRefs(ctx, e.ws)
+	if err != nil || refs[e.secret].Name != "tok" || refs[e.secret].Type != secrets.TypeAPIToken {
+		t.Errorf("secret refs %+v %v", refs, err)
+	}
+
+	before := e.synced.Load()
+	if err := e.svc.Delete(ctx, e.ws, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	if e.synced.Load() != before+1 {
+		t.Error("delete must re-merge the fleet")
+	}
+	if err := e.svc.Delete(ctx, e.ws, c.ID); !errors.Is(err, connectors.ErrNotFound) {
+		t.Errorf("second delete: %v", err)
+	}
+}
+
+func TestTestConfig(t *testing.T) {
+	e := setup(t, 0)
+	ctx := context.Background()
+	sid := e.secret
+	in := connectors.TestInput{Type: fake.Type, SecretID: &sid, Config: map[string]any{"note": "n"}}
+	e.script.Set(connectors.Result{})
+	if err := e.svc.TestConfig(ctx, e.ws, in); err != nil {
+		t.Errorf("probe: %v", err)
+	}
+	if list, _ := e.svc.List(ctx, e.ws); len(list) != 0 {
+		t.Error("an unsaved test must store nothing")
+	}
+	e.script.Fail(errors.New("auth failed for " + apiToken))
+	if err := e.svc.TestConfig(ctx, e.ws, in); err == nil || strings.Contains(err.Error(), apiToken) {
+		t.Errorf("probe failure must be reported with the secret masked: %v", err)
+	}
+	other := uuid.New()
+	for name, bad := range map[string]connectors.TestInput{
+		"unknown type":   {Type: "nope"},
+		"foreign secret": {Type: fake.Type, SecretID: &other},
+		"bad option":     {Type: fake.Type, Config: map[string]any{"bogus": true}},
+	} {
+		err := e.svc.TestConfig(ctx, e.ws, bad)
+		if !errors.Is(err, connectors.ErrInvalidConfig) && !errors.Is(err, connectors.ErrUnknownType) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
