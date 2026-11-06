@@ -277,4 +277,3 @@ func (s *Store) writeConflicts(ctx context.Context, q *dbgen.Queries, ws uuid.UU
 	}
 	return sum, nil
 }
-

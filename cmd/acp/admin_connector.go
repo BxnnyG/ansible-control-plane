@@ -18,6 +18,7 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/connectors"
 	"github.com/BxnnyG/ansible-control-plane/internal/db"
 	"github.com/BxnnyG/ansible-control-plane/internal/db/dbgen"
+	"github.com/BxnnyG/ansible-control-plane/internal/fleet"
 	"github.com/BxnnyG/ansible-control-plane/internal/secrets"
 )
 
@@ -220,7 +221,7 @@ func runAdminConnector(ctx context.Context, args []string, cfg config.Config, in
 	}
 	q := dbgen.New(pool)
 	sec := secrets.NewService(q, sp)
-	svc := connectors.New(connectors.Options{DB: pool, Registry: reg, Secrets: sec})
+	svc := connectors.New(connectors.Options{DB: pool, Registry: reg, Secrets: sec, PostSync: fleet.NewStore(pool, nil)})
 	ws, err := (&admin.InventoryOps{Q: q}).Workspace(ctx, a.Workspace)
 	if err != nil {
 		return err

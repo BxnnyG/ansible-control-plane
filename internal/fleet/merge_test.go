@@ -236,7 +236,7 @@ func TestMergeStableOrderAndInputIndependence(t *testing.T) {
 	if !reflect.DeepEqual(order, exp) {
 		t.Fatalf("order = %v, want %v", order, exp)
 	}
-	rng := rand.New(rand.NewSource(1))
+	rng := rand.New(rand.NewSource(1)) //nolint:gosec // deterministic shuffle in a test
 	for i := range 20 {
 		shuffled := append([]Observation(nil), in...)
 		rng.Shuffle(len(shuffled), func(a, b int) { shuffled[a], shuffled[b] = shuffled[b], shuffled[a] })

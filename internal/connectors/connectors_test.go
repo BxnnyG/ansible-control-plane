@@ -125,3 +125,13 @@ func TestFieldsLegacyJSON(t *testing.T) {
 		t.Errorf("new = %+v %v", g, err)
 	}
 }
+
+func TestValidatePriority(t *testing.T) {
+	r := testRegistry()
+	if err := r.Validate("plain", "", map[string]any{CfgPriority: 500}, "", false); err != nil {
+		t.Errorf("priority rejected: %v", err)
+	}
+	if err := r.Validate("plain", "", map[string]any{CfgPriority: "high"}, "", false); err == nil {
+		t.Error("string priority accepted")
+	}
+}

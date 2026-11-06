@@ -19,6 +19,7 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/connectors"
 	"github.com/BxnnyG/ansible-control-plane/internal/db"
 	"github.com/BxnnyG/ansible-control-plane/internal/db/dbgen"
+	"github.com/BxnnyG/ansible-control-plane/internal/fleet"
 	"github.com/BxnnyG/ansible-control-plane/internal/gitops"
 	"github.com/BxnnyG/ansible-control-plane/internal/inventory"
 	"github.com/BxnnyG/ansible-control-plane/internal/policy"
@@ -149,7 +150,8 @@ func run(args []string) error {
 		go auth.RunSessionCleanup(ctx, q, auth.DefaultCleanupInterval, log)
 		go schedSvc.Run(ctx, schedules.DefaultTick, log)
 		go prj.RunScheduler(ctx, projects.DefaultScheduleTick, projects.DefaultScheduleConcurrency, log)
-		conSvc := connectors.New(connectors.Options{DB: pool, Registry: newConnectorRegistry(), Secrets: sec})
+		conSvc := connectors.New(connectors.Options{DB: pool, Registry: newConnectorRegistry(), Secrets: sec,
+			PostSync: fleet.NewStore(pool, nil)})
 		go conSvc.RunScheduler(ctx, connectors.DefaultTick, connectors.DefaultConcurrency, log)
 		log.Info("login enabled", "oidc", cfg.OIDCEnabled(), "breakglass", cfg.BreakGlassEnabled)
 	case cfg.AuthEnabled():
