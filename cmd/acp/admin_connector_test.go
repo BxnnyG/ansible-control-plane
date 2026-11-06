@@ -65,3 +65,39 @@ func TestReadSecretValueStdin(t *testing.T) {
 		t.Error("empty secret accepted")
 	}
 }
+
+func TestBuildUpdate(t *testing.T) {
+	spec := connectors.Spec{Fields: []connectors.Field{{Key: "n", Kind: connectors.FieldInt}}}
+	stored := []byte(`{"n":1,"tls_skip_verify":true,"keep":"x","drop":"y"}`)
+	a, err := parseConnectorArgs([]string{"update", "--workspace", "w", "--connector", "c", "--ca-file", "ca.pem",
+		"--insecure-skip-verify=false", "--set", "n=5", "--unset", "drop", "--enable", "--url", "https://h"}, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	up, err := buildUpdate(a, spec, stored, func(string) ([]byte, error) { return []byte("PEM"), nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := up.Config
+	if c["n"] != 5 || c["keep"] != "x" || c["ca_pem"] != "PEM" || c["drop"] != nil || c["tls_skip_verify"] != nil {
+		t.Errorf("config=%v", c)
+	}
+	if up.BaseURL == nil || *up.BaseURL != "https://h" || up.Enabled == nil || !*up.Enabled || up.IntervalSeconds != nil {
+		t.Errorf("update=%+v", up)
+	}
+	// Flags that do not touch the config leave it untouched.
+	a, _ = parseConnectorArgs([]string{"update", "--workspace", "w", "--connector", "c", "--disable"}, io.Discard)
+	up, _ = buildUpdate(a, spec, stored, nil)
+	if up.Config != nil || up.Enabled == nil || *up.Enabled {
+		t.Errorf("disable-only update=%+v", up)
+	}
+	for _, bad := range [][]string{
+		{"update", "--workspace", "w", "--connector", "c"},
+		{"update", "--workspace", "w", "--connector", "c", "--enable", "--disable"},
+		{"update", "--workspace", "w", "--connector", "c", "--interval", "1s"},
+	} {
+		if _, err := parseConnectorArgs(bad, io.Discard); err == nil {
+			t.Errorf("%v accepted", bad)
+		}
+	}
+}

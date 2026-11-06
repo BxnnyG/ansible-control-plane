@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -22,7 +23,7 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/secrets"
 )
 
-const connectorUsage = "usage: acp admin connector <list --workspace SLUG | types | create --workspace SLUG --type T --name N [--url URL] [--secret NAME|ID | --secret-file PATH|- --secret-type TYPE] [--interval 5m] [--ca-file PATH] [--insecure-skip-verify] [--timeout SECONDS] [--set key=value ...] [--disabled] | test|sync --workspace SLUG --connector NAME|ID>"
+const connectorUsage = "usage: acp admin connector <list --workspace SLUG | types | create --workspace SLUG --type T --name N [--url URL] [--secret NAME|ID | --secret-file PATH|- --secret-type TYPE] [--interval 5m] [--ca-file PATH] [--insecure-skip-verify] [--timeout SECONDS] [--set key=value ...] [--disabled] | update --workspace SLUG --connector NAME|ID [--url URL] [--secret NAME|ID] [--interval 5m] [--ca-file PATH] [--insecure-skip-verify=BOOL] [--timeout SECONDS] [--set key=value ...] [--unset key ...] [--enable | --disable] | test|sync --workspace SLUG --connector NAME|ID>"
 
 type setFlags []string
 
@@ -40,7 +41,11 @@ type connectorArgs struct {
 	InsecureSkipVerify        bool
 	TimeoutSeconds            int
 	Set                       []string
+	Unset                     []string
 	Disabled                  bool
+	Enable                    bool
+	// Given records which flags were set explicitly (used by update).
+	Given map[string]bool
 }
 
 // parseConnectorArgs parses and validates flags without touching the database.
@@ -52,7 +57,7 @@ func parseConnectorArgs(args []string, stderr io.Writer) (connectorArgs, error) 
 	a := connectorArgs{Sub: args[0]}
 	fs := flag.NewFlagSet("connector "+a.Sub, flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	var sets setFlags
+	var sets, unsets setFlags
 	switch a.Sub {
 	case "types":
 	case "list":
@@ -74,6 +79,19 @@ func parseConnectorArgs(args []string, stderr io.Writer) (connectorArgs, error) 
 		fs.IntVar(&a.TimeoutSeconds, "timeout", 0, "request timeout in seconds")
 		fs.Var(&sets, "set", "type specific option key=value (repeatable)")
 		fs.BoolVar(&a.Disabled, "disabled", false, "create the connector disabled")
+	case "update":
+		fs.StringVar(&a.Workspace, "workspace", "", "workspace slug")
+		fs.StringVar(&a.Connector, "connector", "", "connector name or id")
+		fs.StringVar(&a.URL, "url", "", "base URL")
+		fs.StringVar(&a.Secret, "secret", "", "existing secret (name or id)")
+		fs.DurationVar(&a.Interval, "interval", 0, "sync interval")
+		fs.StringVar(&a.CAFile, "ca-file", "", "PEM file with additional CA certificates")
+		fs.BoolVar(&a.InsecureSkipVerify, "insecure-skip-verify", false, "skip TLS verification (insecure)")
+		fs.IntVar(&a.TimeoutSeconds, "timeout", 0, "request timeout in seconds")
+		fs.Var(&sets, "set", "type specific option key=value (repeatable)")
+		fs.Var(&unsets, "unset", "remove a config key (repeatable)")
+		fs.BoolVar(&a.Enable, "enable", false, "enable the connector")
+		fs.BoolVar(&a.Disabled, "disable", false, "disable the connector")
 	default:
 		return connectorArgs{}, fmt.Errorf("unknown connector command %q\n%s", a.Sub, connectorUsage)
 	}
@@ -83,7 +101,9 @@ func parseConnectorArgs(args []string, stderr io.Writer) (connectorArgs, error) 
 	if fs.NArg() > 0 {
 		return connectorArgs{}, fmt.Errorf("unexpected argument %q", fs.Arg(0))
 	}
-	a.Set = sets
+	a.Set, a.Unset = sets, unsets
+	a.Given = map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { a.Given[f.Name] = true })
 	if a.Sub == "types" {
 		return a, nil
 	}
@@ -94,6 +114,19 @@ func parseConnectorArgs(args []string, stderr io.Writer) (connectorArgs, error) 
 	case "test", "sync":
 		if a.Connector == "" {
 			return connectorArgs{}, errors.New("--connector is required")
+		}
+	case "update":
+		if a.Connector == "" {
+			return connectorArgs{}, errors.New("--connector is required")
+		}
+		if a.Enable && a.Disabled {
+			return connectorArgs{}, errors.New("use either --enable or --disable")
+		}
+		if a.Given["interval"] && a.Interval < connectors.MinInterval {
+			return connectorArgs{}, fmt.Errorf("--interval must be at least %s", connectors.MinInterval)
+		}
+		if len(a.Given) <= 2 {
+			return connectorArgs{}, errors.New("nothing to update")
 		}
 	case "create":
 		if a.Type == "" || a.Name == "" {
@@ -282,6 +315,29 @@ func runAdminConnector(ctx context.Context, args []string, cfg config.Config, in
 	if err != nil {
 		return err
 	}
+	if a.Sub == "update" {
+		spec, ok := reg.Spec(c.Type)
+		if !ok {
+			return fmt.Errorf("%w: %q", connectors.ErrUnknownType, c.Type)
+		}
+		up, err := buildUpdate(a, spec, c.Config, os.ReadFile)
+		if err != nil {
+			return err
+		}
+		if a.Secret != "" {
+			id, err := findSecret(ctx, sec, ws, a.Secret)
+			if err != nil {
+				return err
+			}
+			up.SecretID = &id
+		}
+		u, err := svc.Update(ctx, ws, c.ID, up)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintf(stdout, "connector: %s\nid: %s\nenabled: %v\n", u.Name, u.ID, u.Enabled)
+		return nil
+	}
 	if a.Sub == "test" {
 		if err := svc.Test(ctx, ws, c.ID); err != nil {
 			return fmt.Errorf("test failed: %w", err)
@@ -295,4 +351,50 @@ func runAdminConnector(ctx context.Context, args []string, cfg config.Config, in
 	}
 	_, _ = fmt.Fprintf(stdout, "connector: %s\nstatus: ok\nnetworks: %d\nobservations: %d\nalerts: %d\n", c.Name, counts.Networks, counts.Observations, counts.Alerts)
 	return nil
+}
+
+// buildUpdate turns explicitly given update flags into an UpdateInput. Config
+// changes are merged into the stored config; --unset removes keys and
+// --insecure-skip-verify=false clears the skip flag.
+func buildUpdate(a connectorArgs, spec connectors.Spec, stored []byte, readFile func(string) ([]byte, error)) (connectors.UpdateInput, error) {
+	var up connectors.UpdateInput
+	if a.Given["url"] {
+		up.BaseURL = &a.URL
+	}
+	if a.Given["interval"] {
+		n := int(a.Interval / time.Second)
+		up.IntervalSeconds = &n
+	}
+	switch {
+	case a.Enable:
+		t := true
+		up.Enabled = &t
+	case a.Disabled:
+		f := false
+		up.Enabled = &f
+	}
+	if !(a.Given["ca-file"] || a.Given["insecure-skip-verify"] || a.Given["timeout"] || len(a.Set) > 0 || len(a.Unset) > 0) {
+		return up, nil
+	}
+	cfg := map[string]any{}
+	if len(stored) > 0 {
+		if err := json.Unmarshal(stored, &cfg); err != nil {
+			return up, fmt.Errorf("decode stored config: %w", err)
+		}
+	}
+	for _, k := range a.Unset {
+		delete(cfg, k)
+	}
+	if a.Given["insecure-skip-verify"] && !a.InsecureSkipVerify {
+		delete(cfg, connectors.CfgTLSSkipVerify)
+	}
+	add, err := buildConfig(a, spec, readFile)
+	if err != nil {
+		return up, err
+	}
+	for k, v := range add {
+		cfg[k] = v
+	}
+	up.Config = cfg
+	return up, nil
 }

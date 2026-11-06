@@ -154,6 +154,10 @@ Run inside the app container, for example
   `--ca-file`, `--insecure-skip-verify`, `--timeout SECONDS`, `--set key=value` and
   `--disabled`. Secret values are never accepted as command-line arguments.
   `test` and `sync` take `--connector NAME|ID`.
+- `acp admin connector update --connector NAME|ID` – changes only the given settings:
+  `--url`, `--secret NAME|ID`, `--interval`, `--ca-file` (a PEM bundle may hold several
+  CA certificates), `--insecure-skip-verify=true|false`, `--timeout`, `--set key=value`,
+  `--unset key`, `--enable` / `--disable`. Config changes are merged into the stored config.
 - `acp admin fleet merge|hosts|conflicts` – re-run the merge, list hosts, list
   conflicts (`--state open|resolved|all`). All take `--workspace SLUG`.
 - `acp admin group-rule list|preview|apply` – `--rule NAME|ID` selects a rule;
