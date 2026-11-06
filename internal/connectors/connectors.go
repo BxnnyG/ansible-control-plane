@@ -165,6 +165,9 @@ const (
 	CfgCAPEM         = "ca_pem"
 	CfgTLSSkipVerify = "tls_skip_verify"
 	CfgTimeoutSecs   = "timeout_seconds"
+	// CfgPriority overrides the source priority of the host merge
+	// (ADR-0010); valid for every connector type. Higher wins.
+	CfgPriority = "priority"
 )
 
 // HTTPFields is the schema fragment for the shared HTTP/TLS options.
@@ -292,7 +295,7 @@ func (r *Registry) Validate(t, baseURL string, cfg map[string]any, secretType st
 			return bad("%v", err)
 		}
 	}
-	known := map[string]Field{}
+	known := map[string]Field{CfgPriority: {Key: CfgPriority, Kind: FieldInt}}
 	for _, f := range spec.Fields {
 		known[f.Key] = f
 	}

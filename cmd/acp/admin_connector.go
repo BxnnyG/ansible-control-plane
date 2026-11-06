@@ -112,7 +112,7 @@ func parseConnectorArgs(args []string, stderr io.Writer) (connectorArgs, error) 
 // using the spec to coerce values.
 func buildConfig(a connectorArgs, spec connectors.Spec, readFile func(string) ([]byte, error)) (map[string]any, error) {
 	cfg := map[string]any{}
-	kinds := map[string]string{}
+	kinds := map[string]string{connectors.CfgPriority: connectors.FieldInt}
 	for _, f := range spec.Fields {
 		kinds[f.Key] = f.Kind
 	}
