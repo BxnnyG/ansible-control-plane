@@ -37,7 +37,6 @@ type env struct {
 	ctx   context.Context
 	q     *dbgen.Queries
 	ws    uuid.UUID
-	user  uuid.UUID
 	inv   *inventory.Service
 	rules *grouprules.Service
 	fleet *fakeFleet
