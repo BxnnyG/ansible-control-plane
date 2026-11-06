@@ -310,3 +310,14 @@ func TestNewAndSpec(t *testing.T) {
 		t.Error("incomplete key pair accepted")
 	}
 }
+
+func TestBuilderDropsPlaceholderHostnames(t *testing.T) {
+	var res connectors.Result
+	b := &builder{res: &res, seen: map[string]bool{}}
+	b.add(connectors.KindLease, "dnsmasq", "", connectors.Fields{MACs: []string{"02:00:00:00:00:01"}, Hostname: "*"}, "")
+	b.add(connectors.KindLease, "dnsmasq", "", connectors.Fields{MACs: []string{"02:00:00:00:00:02"}, Hostname: " host-a "}, "")
+	b.add(connectors.KindLease, "dnsmasq", "", connectors.Fields{Hostname: "*"}, "")
+	if len(res.Observations) != 2 || res.Observations[0].Fields.Hostname != "" || res.Observations[1].Fields.Hostname != "host-a" {
+		t.Errorf("observations = %+v", res.Observations)
+	}
+}

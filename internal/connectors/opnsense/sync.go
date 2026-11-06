@@ -84,6 +84,7 @@ type builder struct {
 func newBuilder(res *connectors.Result) *builder { return &builder{res: res, seen: map[string]bool{}} }
 
 func (b *builder) add(kind, source, uniq string, f connectors.Fields, iface string) {
+	f.Hostname = cleanHostname(f.Hostname)
 	if len(f.MACs) == 0 && len(f.IPs) == 0 && f.Hostname == "" {
 		return
 	}
@@ -99,6 +100,17 @@ func (b *builder) add(kind, source, uniq string, f connectors.Fields, iface stri
 		f.Interface = iface
 	}
 	b.res.Observations = append(b.res.Observations, connectors.HostObservation{ExternalKey: key, Kind: kind, Fields: f})
+}
+
+// cleanHostname drops placeholders that DHCP servers report for clients
+// without a name (dnsmasq uses "*").
+func cleanHostname(h string) string {
+	h = strings.TrimSpace(h)
+	switch h {
+	case "*", "-", "?":
+		return ""
+	}
+	return h
 }
 
 // networks reads interfaces and VLANs. Both are optional.
