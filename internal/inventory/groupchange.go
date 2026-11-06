@@ -40,12 +40,12 @@ type GroupChange struct {
 
 // GroupChangeResult lists what a change actually did.
 type GroupChangeResult struct {
-	GroupCreated bool
-	HostsCreated []string
-	Added        []string // hosts that became members
-	Removed      []string // hosts that stopped being members
-	Version      int
-	Commit       *CommitResult // set for git inventories when a commit was attempted
+	GroupCreated bool          `json:"group_created"`
+	HostsCreated []string      `json:"hosts_created"`
+	Added        []string      `json:"added"`   // hosts that became members
+	Removed      []string      `json:"removed"` // hosts that stopped being members
+	Version      int           `json:"version"`
+	Commit       *CommitResult `json:"commit"` // set for git inventories when a commit was written
 }
 
 // Changed reports whether the change modified the inventory.

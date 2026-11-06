@@ -49,6 +49,7 @@ type routerOpts struct {
 	schedules   SchedulesAPI
 	connectors  ConnectorsAPI
 	fleet       FleetAPI
+	groupRules  GroupRulesAPI
 	stream      *runStream
 	publicURL   string
 }
@@ -111,6 +112,9 @@ func Router(log *slog.Logger, db Pinger, static fs.FS, opts ...Option) http.Hand
 		}
 		if ro.fleet != nil {
 			fleetRoutes(r, ro.az, ro.store, ro.fleet, log)
+		}
+		if ro.groupRules != nil {
+			groupRuleRoutes(r, ro.az, ro.store, ro.groupRules, log)
 		}
 		if ro.vaultIDs != nil && ro.vaultOps != nil {
 			vaultRoutes(r, ro.az, ro.store, ro.vaultIDs, ro.vaultOps, log)

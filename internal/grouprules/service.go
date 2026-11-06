@@ -419,6 +419,11 @@ func (s *Service) Apply(ctx context.Context, ws, id uuid.UUID, in ApplyInput) (A
 	if err != nil {
 		return Applied{}, err
 	}
+	for _, l := range []*[]string{&res.HostsCreated, &res.Added, &res.Removed} {
+		if *l == nil {
+			*l = []string{}
+		}
+	}
 	if after, gerr := s.Get(ctx, ws, id); gerr == nil {
 		rule = after
 	}
