@@ -60,17 +60,26 @@ type ConnectorSync struct {
 }
 
 type GroupRule struct {
-	ID          uuid.UUID
-	WorkspaceID uuid.UUID
-	Name        string
-	Kind        string
-	Params      []byte
-	InventoryID uuid.UUID
-	GroupName   string
-	Enabled     bool
-	CreatedBy   pgtype.UUID
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	ID            uuid.UUID
+	WorkspaceID   uuid.UUID
+	Name          string
+	Kind          string
+	Params        []byte
+	InventoryID   uuid.UUID
+	GroupName     string
+	Enabled       bool
+	CreatedBy     pgtype.UUID
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+	Mode          string
+	LastAppliedAt pgtype.Timestamptz
+	LastAppliedBy pgtype.UUID
+}
+
+type GroupRuleMember struct {
+	RuleID   uuid.UUID
+	HostName string
+	AddedAt  pgtype.Timestamptz
 }
 
 type Host struct {
