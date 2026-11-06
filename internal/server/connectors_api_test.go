@@ -95,11 +95,20 @@ type fakeFleet struct {
 	acked     []uuid.UUID
 }
 
-func (f *fakeFleet) Networks(_ context.Context, _ uuid.UUID, allow func(uuid.UUID, netip.Prefix) bool) ([]fleet.NetworkView, error) {
+func (f *fakeFleet) Networks(_ context.Context, _ uuid.UUID, allow func(uuid.UUID, netip.Prefix) bool, v fleet.Visible) ([]fleet.NetworkView, error) {
 	out := []fleet.NetworkView{}
 	for id, p := range f.netPrefix {
 		if allow == nil || allow(id, p) {
-			out = append(out, fleet.NetworkView{ID: id, CIDR: p.String()})
+			nv := fleet.NetworkView{ID: id, CIDR: p.String()}
+			for _, h := range f.hosts {
+				for _, ip := range h.IPs {
+					if a, err := netip.ParseAddr(ip); err == nil && p.Contains(a) && (v == nil || v(h.IPs)) {
+						nv.HostCount++
+						break
+					}
+				}
+			}
+			out = append(out, nv)
 		}
 	}
 	return out, nil
@@ -144,6 +153,14 @@ func (f *fakeFleet) Conflicts(_ context.Context, _ uuid.UUID, state string, v fl
 	out := []fleet.ConflictView{}
 	for _, c := range f.conflicts {
 		if (state == "" || c.State == state) && f.visibleConflict(c, v) {
+			c.Hosts = []fleet.ConflictHost{}
+			for _, id := range c.HostIDs {
+				for _, h := range f.hosts {
+					if h.ID == id {
+						c.Hosts = append(c.Hosts, fleet.ConflictHost{ID: id, Name: h.Name})
+					}
+				}
+			}
 			out = append(out, c)
 		}
 	}
@@ -437,8 +454,17 @@ func TestFleetAPIFiltersAndScopes(t *testing.T) {
 	}
 	var nets []fleet.NetworkView
 	_ = json.Unmarshal(scoped.do("GET", "/networks", "").Body.Bytes(), &nets)
-	if len(nets) != 1 || nets[0].ID.String() != netA {
+	if len(nets) != 1 || nets[0].ID.String() != netA || nets[0].HostCount != 2 {
 		t.Errorf("scoped networks %+v", nets)
+	}
+	var allNets []fleet.NetworkView
+	_ = json.Unmarshal(unscoped.do("GET", "/networks", "").Body.Bytes(), &allNets)
+	total := 0
+	for _, n := range allNets {
+		total += n.HostCount
+	}
+	if len(allNets) != 2 || total != 3 {
+		t.Errorf("unscoped host counts %+v", allNets)
 	}
 	hostB := scoped.fleet.hosts[1].ID.String()
 	if rec := scoped.do("GET", "/hosts/"+hostB, ""); rec.Code != 404 {
@@ -456,7 +482,7 @@ func TestFleetAPIFiltersAndScopes(t *testing.T) {
 	}
 	var cs []fleet.ConflictView
 	_ = json.Unmarshal(scoped.do("GET", "/conflicts", "").Body.Bytes(), &cs)
-	if len(cs) != 1 || cs[0].Type != "ip_conflict" {
+	if len(cs) != 1 || cs[0].Type != "ip_conflict" || len(cs[0].Hosts) != 2 || cs[0].Hosts[0].Name != "host-a" {
 		t.Errorf("scoped conflicts %+v", cs)
 	}
 

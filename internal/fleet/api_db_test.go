@@ -27,11 +27,17 @@ func TestReadAPI(t *testing.T) {
 	e.observe(t, "opnsense", "c", connectors.Fields{Hostname: "far1", IPs: []string{"198.51.100.7"}}, e.now)
 	e.merge(t)
 
-	nets, err := e.store.Networks(ctx, e.ws, nil)
+	nets, err := e.store.Networks(ctx, e.ws, nil, nil)
 	if err != nil || len(nets) != 1 || nets[0].CIDR != "192.0.2.0/24" || nets[0].ConnectorName != "opnsense-1" {
 		t.Fatalf("networks %+v %v", nets, err)
 	}
-	if none, _ := e.store.Networks(ctx, e.ws, func(uuid.UUID, netip.Prefix) bool { return false }); len(none) != 0 {
+	if nets[0].HostCount != 2 {
+		t.Errorf("host count %d, want 2", nets[0].HostCount)
+	}
+	if hid, _ := e.store.Networks(ctx, e.ws, nil, func([]string) bool { return false }); len(hid) != 1 || hid[0].HostCount != 0 {
+		t.Errorf("host count must respect visibility: %+v", hid)
+	}
+	if none, _ := e.store.Networks(ctx, e.ws, func(uuid.UUID, netip.Prefix) bool { return false }, nil); len(none) != 0 {
 		t.Error("allow filter ignored")
 	}
 
@@ -77,6 +83,9 @@ func TestReadAPI(t *testing.T) {
 	open, err := e.store.Conflicts(ctx, e.ws, fleet.StateOpen, nil)
 	if err != nil || len(open) != 1 {
 		t.Fatalf("conflicts %+v %v", open, err)
+	}
+	if len(open[0].Hosts) != len(open[0].HostIDs) || (open[0].Hosts[0].Name != "web1" && open[0].Hosts[1].Name != "web1") {
+		t.Errorf("conflict host names: %+v", open[0].Hosts)
 	}
 	if hidden, _ := e.store.Conflicts(ctx, e.ws, "", scoped); len(hidden) != 0 {
 		t.Error("conflict with invisible hosts must be hidden")

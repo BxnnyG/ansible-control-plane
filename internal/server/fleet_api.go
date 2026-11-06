@@ -22,7 +22,7 @@ import (
 // FleetAPI is the fleet read model used by the HTTP layer; *fleet.Store
 // implements it. Visible narrows results to the caller's network scopes.
 type FleetAPI interface {
-	Networks(ctx context.Context, ws uuid.UUID, allow func(id uuid.UUID, cidr netip.Prefix) bool) ([]fleet.NetworkView, error)
+	Networks(ctx context.Context, ws uuid.UUID, allow func(id uuid.UUID, cidr netip.Prefix) bool, visible fleet.Visible) ([]fleet.NetworkView, error)
 	Hosts(ctx context.Context, ws uuid.UUID, f fleet.HostFilter, visible fleet.Visible) ([]fleet.HostView, error)
 	Host(ctx context.Context, ws, id uuid.UUID, visible fleet.Visible) (fleet.HostDetail, error)
 	Conflicts(ctx context.Context, ws uuid.UUID, state string, visible fleet.Visible) ([]fleet.ConflictView, error)
@@ -96,7 +96,7 @@ func fleetRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc FleetA
 			}
 			allow = func(id uuid.UUID, _ netip.Prefix) bool { return own[id] }
 		}
-		list, err := svc.Networks(req.Context(), d.Workspace.ID, allow)
+		list, err := svc.Networks(req.Context(), d.Workspace.ID, allow, vis)
 		if err != nil {
 			fail(w, "list networks", err)
 			return

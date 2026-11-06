@@ -49,13 +49,20 @@ type NetworkView struct {
 	Source        string    `json:"source"`
 	FirstSeen     time.Time `json:"first_seen"`
 	LastSeen      time.Time `json:"last_seen"`
+	HostCount     int       `json:"host_count"`
 }
 
 // Networks lists the workspace networks that allow accepts (nil allows all).
-func (s *Store) Networks(ctx context.Context, ws uuid.UUID, allow func(id uuid.UUID, cidr netip.Prefix) bool) ([]NetworkView, error) {
+// HostCount counts the merged hosts with an address in the network that
+// visible allows (nil allows all).
+func (s *Store) Networks(ctx context.Context, ws uuid.UUID, allow func(id uuid.UUID, cidr netip.Prefix) bool, visible Visible) ([]NetworkView, error) {
 	rows, err := s.q.ListNetworks(ctx, ws)
 	if err != nil {
 		return nil, fmt.Errorf("list networks: %w", err)
+	}
+	ips, err := s.hostIPs(ctx, ws)
+	if err != nil {
+		return nil, err
 	}
 	conns, err := s.q.ListConnectors(ctx, ws)
 	if err != nil {
@@ -76,6 +83,11 @@ func (s *Store) Networks(ctx context.Context, ws uuid.UUID, allow func(id uuid.U
 		if n.Vlan.Valid {
 			vl := int(n.Vlan.Int32)
 			v.VLAN = &vl
+		}
+		for _, hostIPs := range ips {
+			if visible.ok(hostIPs) && hasIPIn(hostIPs, n.Cidr) {
+				v.HostCount++
+			}
 		}
 		out = append(out, v)
 	}
@@ -135,12 +147,36 @@ type ConflictView struct {
 	State          string          `json:"state"`
 	Fingerprint    string          `json:"fingerprint"`
 	HostIDs        []uuid.UUID     `json:"host_ids"`
+	Hosts          []ConflictHost  `json:"hosts"`
 	Details        json.RawMessage `json:"details"`
 	AcknowledgedBy *uuid.UUID      `json:"acknowledged_by"`
 	AcknowledgedAt *time.Time      `json:"acknowledged_at"`
 	FirstSeen      time.Time       `json:"first_seen"`
 	LastSeen       time.Time       `json:"last_seen"`
 	ResolvedAt     *time.Time      `json:"resolved_at"`
+}
+
+// ConflictHost names a host referenced by a conflict.
+type ConflictHost struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+}
+
+// hostInfo is the display name and merged addresses of a host.
+type hostInfo struct {
+	name string
+	ips  []string
+}
+
+// withHosts fills Hosts with the conflict's hosts that visible allows.
+func (v ConflictView) withHosts(info map[uuid.UUID]hostInfo, visible Visible) ConflictView {
+	v.Hosts = []ConflictHost{}
+	for _, id := range v.HostIDs {
+		if h, ok := info[id]; ok && visible.ok(h.ips) {
+			v.Hosts = append(v.Hosts, ConflictHost{ID: id, Name: h.name})
+		}
+	}
+	return v
 }
 
 func conflictView(c dbgen.HostConflict) ConflictView {
@@ -378,14 +414,26 @@ func hostsVisible(ids []uuid.UUID, ips map[uuid.UUID][]string, visible Visible) 
 }
 
 func (s *Store) hostIPs(ctx context.Context, ws uuid.UUID) (map[uuid.UUID][]string, error) {
+	info, err := s.hostInfos(ctx, ws)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[uuid.UUID][]string, len(info))
+	for id, h := range info {
+		out[id] = h.ips
+	}
+	return out, nil
+}
+
+func (s *Store) hostInfos(ctx context.Context, ws uuid.UUID) (map[uuid.UUID]hostInfo, error) {
 	rows, err := s.q.ListHosts(ctx, ws)
 	if err != nil {
 		return nil, fmt.Errorf("list hosts: %w", err)
 	}
-	out := make(map[uuid.UUID][]string, len(rows))
+	out := make(map[uuid.UUID]hostInfo, len(rows))
 	for _, h := range rows {
 		v, _ := hostView(h, 0)
-		out[h.ID] = v.IPs
+		out[h.ID] = hostInfo{name: v.Name, ips: v.IPs}
 	}
 	return out, nil
 }
@@ -397,11 +445,13 @@ func (s *Store) Conflicts(ctx context.Context, ws uuid.UUID, state string, visib
 	if err != nil {
 		return nil, fmt.Errorf("list conflicts: %w", err)
 	}
-	var ips map[uuid.UUID][]string
-	if visible != nil {
-		if ips, err = s.hostIPs(ctx, ws); err != nil {
-			return nil, err
-		}
+	info, err := s.hostInfos(ctx, ws)
+	if err != nil {
+		return nil, err
+	}
+	ips := make(map[uuid.UUID][]string, len(info))
+	for id, h := range info {
+		ips[id] = h.ips
 	}
 	out := []ConflictView{}
 	for _, c := range rows {
@@ -410,7 +460,7 @@ func (s *Store) Conflicts(ctx context.Context, ws uuid.UUID, state string, visib
 			continue
 		}
 		if hostsVisible(c.HostIds, ips, visible) {
-			out = append(out, v)
+			out = append(out, v.withHosts(info, visible))
 		}
 	}
 	return out, nil
@@ -428,14 +478,16 @@ func (s *Store) Acknowledge(ctx context.Context, ws, id, user uuid.UUID, visible
 	if idx < 0 || rows[idx].State != "open" {
 		return ConflictView{}, ErrNotFound
 	}
-	if visible != nil {
-		ips, err := s.hostIPs(ctx, ws)
-		if err != nil {
-			return ConflictView{}, err
-		}
-		if !hostsVisible(rows[idx].HostIds, ips, visible) {
-			return ConflictView{}, ErrNotFound
-		}
+	info, err := s.hostInfos(ctx, ws)
+	if err != nil {
+		return ConflictView{}, err
+	}
+	ips := make(map[uuid.UUID][]string, len(info))
+	for id, h := range info {
+		ips[id] = h.ips
+	}
+	if !hostsVisible(rows[idx].HostIds, ips, visible) {
+		return ConflictView{}, ErrNotFound
 	}
 	n, err := s.q.AcknowledgeHostConflict(ctx, dbgen.AcknowledgeHostConflictParams{ID: id, WorkspaceID: ws,
 		AcknowledgedBy: pgtype.UUID{Bytes: user, Valid: true}, AcknowledgedAt: ts(s.now())})
@@ -451,7 +503,7 @@ func (s *Store) Acknowledge(ctx context.Context, ws, id, user uuid.UUID, visible
 	}
 	for _, c := range rows {
 		if c.ID == id {
-			return conflictView(c), nil
+			return conflictView(c).withHosts(info, visible), nil
 		}
 	}
 	return ConflictView{}, ErrNotFound
