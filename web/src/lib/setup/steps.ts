@@ -10,6 +10,7 @@ export interface SetupStepDef {
 export const SETUP_STEPS: readonly SetupStepDef[] = [
   { id: 'workspace', title: 'Workspace' },
   { id: 'authentication', title: 'Authentication' },
+  { id: 'connectors', title: 'Connectors' },
   { id: 'summary', title: 'Summary' },
 ];
 
