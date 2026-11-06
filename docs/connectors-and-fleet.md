@@ -57,9 +57,15 @@ observations, and Kea subnets are added as networks.
 ### Proxmox VE
 
 Create an API token on a dedicated user (Datacenter, Permissions, API Tokens)
-and give the user or token the built-in role **PVEAuditor** on path `/`. With
-privilege separation enabled the token needs the role itself. PVEAuditor is
-read-only.
+and give the built-in role **PVEAuditor** on path `/`. With privilege
+separation enabled (the default) a token's rights are the intersection of the
+token's and the user's permissions, so grant PVEAuditor to **both** the user
+and the token. PVEAuditor is read-only.
+
+Guest IPs come from the QEMU guest agent (VMs) and the container interface list
+(LXC). Templates are skipped. Interfaces local to the guest (loopback, Docker
+`docker*`/`br-*`, `veth*`, CNI/Kubernetes and similar bridges) are ignored, since
+their addresses (for example `172.17.0.1`) repeat on every Docker host.
 
 **Credential** (secret type `api_token`): the token in the form
 `user@realm!name=secret`, for example `acp@pve!monitor=00000000-0000-0000-0000-000000000000`.

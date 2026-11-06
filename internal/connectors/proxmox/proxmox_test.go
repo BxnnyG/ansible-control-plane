@@ -136,7 +136,7 @@ func TestSyncFull(t *testing.T) {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	want := []string{"lxc:proxmox:200", "lxc:proxmox:201", "node:proxmox:pve1", "vm:proxmox:100", "vm:proxmox:101", "vm:proxmox:102", "vm:proxmox:900"}
+	want := []string{"lxc:proxmox:200", "lxc:proxmox:201", "node:proxmox:pve1", "vm:proxmox:100", "vm:proxmox:101", "vm:proxmox:102"}
 	if strings.Join(keys, " ") != strings.Join(want, " ") {
 		t.Fatalf("observations = %v", keys)
 	}
@@ -155,7 +155,6 @@ func TestSyncFull(t *testing.T) {
 			"proxmox:web proxmox:prod node:pve1", "running", "Web frontend\nowner: team-a", ""},
 		{"vm:proxmox:101", "02:00:00:00:10:03", "vm-noagent", "", "node:pve1", "running", "", ""},
 		{"vm:proxmox:102", "02:00:00:00:10:04", "vm-stopped", "", "proxmox:lab proxmox:test node:pve1", "stopped", "powered off", "nodes/pve1/qemu/102/agent/network-get-interfaces"},
-		{"vm:proxmox:900", "02:00:00:00:10:09", "tmpl", "", "node:pve1", "template", "", "nodes/pve1/qemu/900/agent/network-get-interfaces"},
 		{"lxc:proxmox:200", "02:00:00:00:20:01", "ct-running", "192.0.2.30 2001:db8:0:1::30", "proxmox:dns node:pve1", "running", "DNS container", ""},
 		{"lxc:proxmox:201", "02:00:00:00:20:02", "ct-stopped", "", "node:pve1", "stopped", "", "nodes/pve1/lxc/201/interfaces"},
 	}
@@ -171,6 +170,10 @@ func TestSyncFull(t *testing.T) {
 				t.Errorf("unexpected request %s", tc.noAgent)
 			}
 		})
+	}
+	// Templates are skipped without any request.
+	if s.requested("nodes/pve1/qemu/900/config") {
+		t.Error("template config requested")
 	}
 	if obs["vm:proxmox:100"].Kind != connectors.KindVM || obs["lxc:proxmox:200"].Kind != connectors.KindLXC || obs["node:proxmox:pve1"].Kind != connectors.KindNode {
 		t.Error("wrong kinds")
@@ -202,11 +205,11 @@ func TestSyncFailures(t *testing.T) {
 	}{
 		{"401 on version", with(base(), "version", code(401)), "401", 0, 0},
 		{"401 on guest config", with(base(), "nodes/pve1/qemu/100/config", code(401)), "401", 0, 0},
-		{"403 on guest config", with(base(), "nodes/pve1/qemu/100/config", code(403)), "", 2, 7},
-		{"403 on network", with(base(), "nodes/pve1/network", code(403)), "", 2, 7},
+		{"403 on guest config", with(base(), "nodes/pve1/qemu/100/config", code(403)), "", 2, 6},
+		{"403 on network", with(base(), "nodes/pve1/network", code(403)), "", 2, 6},
 		{"403 on resources", with(base(), "cluster/resources", code(403)), "", 1, 1},
 		{"agent 401", with(base(), "nodes/pve1/qemu/100/agent/network-get-interfaces", code(401)), "401", 0, 0},
-		{"lxc interfaces fail", with(base(), "nodes/pve1/lxc/200/interfaces", code(500)), "", 2, 7},
+		{"lxc interfaces fail", with(base(), "nodes/pve1/lxc/200/interfaces", code(500)), "", 2, 6},
 		{"not proxmox", with(base(), "version", route{file: "nodes.json"}), "version", 0, 0},
 	}
 	for _, tc := range cases {
@@ -292,6 +295,17 @@ func TestSplitTags(t *testing.T) {
 	for in, want := range map[string]string{"": "", "a;b": "proxmox:a proxmox:b", "a,b c": "proxmox:a proxmox:b proxmox:c"} {
 		if got := strings.Join(splitTags(in), " "); got != want {
 			t.Errorf("%q -> %q", in, got)
+		}
+	}
+}
+
+func TestVirtualIface(t *testing.T) {
+	for name, want := range map[string]bool{
+		"lo": true, "docker0": true, "br-0a1b2c": true, "veth9f": true, "cni0": true, "flannel.1": true, "virbr0": true,
+		"eth0": false, "ens18": false, "local0": false, "wg0": false, "tailscale0": false, "vmbr0": false,
+	} {
+		if virtualIface(name) != want {
+			t.Errorf("virtualIface(%q) = %v", name, !want)
 		}
 	}
 }

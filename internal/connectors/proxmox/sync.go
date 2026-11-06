@@ -72,7 +72,9 @@ func (c *conn) Sync(ctx context.Context) (connectors.Result, error) {
 	}
 	sort.Slice(guests, func(i, j int) bool { return guests[i].VMID < guests[j].VMID })
 	for _, g := range guests {
-		if g.Type != "qemu" && g.Type != "lxc" {
+		// Templates are images, not machines: they never run and often share
+		// names, so they are not observed.
+		if (g.Type != "qemu" && g.Type != "lxc") || g.Template == 1 {
 			continue
 		}
 		if err := c.guest(ctx, &res, g); err != nil {
@@ -199,11 +201,7 @@ func (c *conn) guest(ctx context.Context, res *connectors.Result, g resource) er
 		kind = connectors.KindLXC
 	}
 	base := fmt.Sprintf("nodes/%s/%s/%d", url.PathEscape(g.Node), g.Type, g.VMID)
-	status := g.Status
-	if g.Template == 1 {
-		status = "template"
-	}
-	f := connectors.Fields{Hostname: g.Name, Status: status}
+	f := connectors.Fields{Hostname: g.Name, Status: g.Status}
 	tags := splitTags(g.Tags)
 
 	var raw map[string]any
@@ -275,6 +273,24 @@ func agentEnabled(v string) bool {
 	return false
 }
 
+// virtualIfacePrefixes name guest interfaces whose addresses are local to the
+// guest (loopback, container bridges and veths, overlay plumbing). Their IPs
+// repeat across guests (Docker's 172.17.0.1 on every Docker host) and would
+// cause false conflicts, so they are never reported.
+var virtualIfacePrefixes = []string{
+	"lo", "docker", "br-", "veth", "cni", "flannel", "cali", "cilium", "vxlan",
+	"kube-", "virbr", "podman", "lxcbr", "lxdbr", "weave", "tunl", "dummy",
+}
+
+func virtualIface(name string) bool {
+	for _, p := range virtualIfacePrefixes {
+		if name == p || (p != "lo" && strings.HasPrefix(name, p)) {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *conn) agentIPs(ctx context.Context, res *connectors.Result, base string) (ips, macs []string, err error) {
 	var out struct {
 		Result []struct {
@@ -290,7 +306,10 @@ func (c *conn) agentIPs(ctx context.Context, res *connectors.Result, base string
 		return nil, nil, err
 	}
 	for _, i := range out.Result {
-		if m := normMAC(i.HW); m != "" && i.Name != "lo" {
+		if virtualIface(i.Name) {
+			continue
+		}
+		if m := normMAC(i.HW); m != "" {
 			macs = appendUnique(macs, m)
 		}
 		for _, a := range i.IPs {
@@ -314,7 +333,7 @@ func (c *conn) lxcIPs(ctx context.Context, res *connectors.Result, base string) 
 		return nil, nil, err
 	}
 	for _, i := range out {
-		if i.Name == "lo" {
+		if virtualIface(i.Name) {
 			continue
 		}
 		if m := normMAC(i.HWAddr); m != "" {
