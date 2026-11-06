@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { canAck, conflictDetails, conflictHosts, conflictLabel, fieldRows, stateParam } from './fleet';
+import {
+  canAck,
+  conflictDetails,
+  conflictHosts,
+  conflictLabel,
+  fieldRows,
+  stateParam,
+} from './fleet';
 
 describe('fieldRows', () => {
   it('lists present fields with their sources and skips empty ones', () => {
@@ -51,9 +58,7 @@ describe('conflicts', () => {
 
 describe('conflictHosts', () => {
   it('uses host names and falls back to numbered labels', () => {
-    expect(
-      conflictHosts({ host_ids: ['a', 'b'], hosts: [{ id: 'a', name: 'web1' }] }),
-    ).toEqual([
+    expect(conflictHosts({ host_ids: ['a', 'b'], hosts: [{ id: 'a', name: 'web1' }] })).toEqual([
       { id: 'a', label: 'web1' },
       { id: 'b', label: 'host 2' },
     ]);

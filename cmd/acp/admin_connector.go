@@ -373,7 +373,7 @@ func buildUpdate(a connectorArgs, spec connectors.Spec, stored []byte, readFile 
 		f := false
 		up.Enabled = &f
 	}
-	if !(a.Given["ca-file"] || a.Given["insecure-skip-verify"] || a.Given["timeout"] || len(a.Set) > 0 || len(a.Unset) > 0) {
+	if !a.Given["ca-file"] && !a.Given["insecure-skip-verify"] && !a.Given["timeout"] && len(a.Set) == 0 && len(a.Unset) == 0 {
 		return up, nil
 	}
 	cfg := map[string]any{}
