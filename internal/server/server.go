@@ -39,23 +39,24 @@ type Pinger interface {
 type Option func(*routerOpts)
 
 type routerOpts struct {
-	auth        *auth.Service
-	az          *policy.Authorizer
-	store       APIStore
-	secrets     SecretsAPI
-	projects    ProjectsAPI
-	inventories InventoriesAPI
-	vaultIDs    VaultIdentitiesAPI
-	vaultOps    VaultOpsAPI
-	runs        RunsAPI
-	schedules   SchedulesAPI
-	connectors  ConnectorsAPI
-	fleet       FleetAPI
-	fleetAdd    FleetAdder
-	groupRules  GroupRulesAPI
-	remediation RemediationAPI
-	stream      *runStream
-	publicURL   string
+	auth          *auth.Service
+	az            *policy.Authorizer
+	store         APIStore
+	secrets       SecretsAPI
+	projects      ProjectsAPI
+	inventories   InventoriesAPI
+	vaultIDs      VaultIdentitiesAPI
+	vaultOps      VaultOpsAPI
+	runs          RunsAPI
+	schedules     SchedulesAPI
+	connectors    ConnectorsAPI
+	notifications NotificationsAPI
+	fleet         FleetAPI
+	fleetAdd      FleetAdder
+	groupRules    GroupRulesAPI
+	remediation   RemediationAPI
+	stream        *runStream
+	publicURL     string
 
 	metricsToken string
 }
@@ -122,6 +123,9 @@ func Router(log *slog.Logger, db Pinger, static fs.FS, opts ...Option) http.Hand
 		}
 		if ro.inventories != nil {
 			inventoryRoutes(r, ro.az, ro.store, ro.inventories, log)
+		}
+		if ro.notifications != nil {
+			notificationRoutes(r, ro.az, ro.store, ro.notifications, log)
 		}
 		if ro.connectors != nil {
 			connectorRoutes(r, ro.az, ro.store, ro.connectors, hookLim, ro.publicURL, log)

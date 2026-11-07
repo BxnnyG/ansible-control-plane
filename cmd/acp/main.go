@@ -161,7 +161,8 @@ func run(args []string) error {
 		go runs.RunLogRetention(ctx, q, cfg.RunLogRetentionDays, runs.RetentionInterval, log)
 		opts = append(opts, server.WithAuth(svc), server.WithPolicy(az, q),
 			server.WithSecrets(sec), server.WithProjects(prj), server.WithPublicURL(cfg.PublicURL),
-			server.WithInventories(invSvc), server.WithVault(vids, vops), server.WithRuns(runSvc), server.WithSchedules(schedSvc))
+			server.WithInventories(invSvc), server.WithVault(vids, vops), server.WithRuns(runSvc), server.WithSchedules(schedSvc),
+			server.WithNotifications(notify.NewService(notify.ServiceOptions{DB: pool, Secrets: sec, PublicURL: cfg.PublicURL})))
 		go auth.RunSessionCleanup(ctx, q, auth.DefaultCleanupInterval, log)
 		go schedSvc.Run(ctx, schedules.DefaultTick, log)
 		notifyDisp := notify.New(notify.DispatcherOptions{DB: pool, Secrets: sec, PublicURL: cfg.PublicURL, RetentionDays: cfg.RunLogRetentionDays})

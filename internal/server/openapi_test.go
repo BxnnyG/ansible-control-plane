@@ -47,6 +47,7 @@ func apiRouteTable(t *testing.T) map[string]string {
 	groupRuleRoutes(r, az, st, nil, quiet)
 	remediationRoutes(r, az, st, nil, nil, quiet)
 	vaultRoutes(r, az, st, nil, nil, quiet)
+	notificationRoutes(r, az, st, nil, quiet)
 
 	sessionOnly := map[string]bool{"POST /api/auth/logout": true, "GET /api/v1/me": true}
 	out := map[string]string{}
