@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildChannelConfig,
+  channelsWithoutRules,
   emptyFields,
   fieldsFromConfig,
   parseRecipients,
@@ -123,5 +124,15 @@ describe('helpers', () => {
   it('toggles events in canonical order', () => {
     expect(toggleEvent(['run.drift'], 'run.failed')).toEqual(['run.failed', 'run.drift']);
     expect(toggleEvent(['run.failed'], 'run.failed')).toEqual([]);
+  });
+});
+
+describe('channelsWithoutRules', () => {
+  it('returns channels that no rule references', () => {
+    const ch = (id: string) => ({ id }) as never;
+    const rule = (channel_id: string) => ({ channel_id }) as never;
+    expect(
+      channelsWithoutRules([ch('a'), ch('b')], [rule('a')]).map((c: { id: string }) => c.id),
+    ).toEqual(['b']);
   });
 });

@@ -82,6 +82,7 @@ export type ConnectorSync = S['ConnectorSync'];
 export type NotificationChannel = S['NotificationChannel'];
 export type NotificationChannelInput = S['NotificationChannelInput'];
 export type NotificationChannelPatch = S['NotificationChannelPatch'];
+export type NotificationChannelDraft = S['NotificationChannelDraft'];
 export type NotificationTestResult = S['NotificationTestResult'];
 export type NotificationRule = S['NotificationRule'];
 export type NotificationRuleInput = S['NotificationRuleInput'];
@@ -421,6 +422,9 @@ export const api = {
           'POST',
           notificationsPath(ws, `channels/${encodeURIComponent(id)}/test`),
         ),
+      /** Tests an unsaved definition; the credential value is used in memory only. */
+      testDraft: (ws: string, d: NotificationChannelDraft) =>
+        request<NotificationTestResult>('POST', notificationsPath(ws, 'channels/test'), d),
     },
     rules: {
       list: (ws: string) => request<NotificationRule[]>('GET', notificationsPath(ws, 'rules')),

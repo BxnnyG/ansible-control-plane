@@ -1662,6 +1662,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace}/notifications/channels/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a test message through an unsaved channel definition.
+         * @description The config is validated like on create. `secret_value` is used only in memory and is never stored, logged, audited or returned. Without any secret and with `channel_id`, the stored secret of that channel is used. Rate limited per user.
+         */
+        post: operations["testNotificationChannelDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace}/notifications/channels/{id}": {
         parameters: {
             query?: never;
@@ -2997,6 +3020,24 @@ export interface components {
             tls_ca_pem?: string;
             tls_skip_verify?: boolean;
             enabled?: boolean;
+        };
+        NotificationChannelDraft: {
+            /** @enum {string} */
+            type: "webhook" | "matrix" | "smtp" | "gotify" | "ntfy";
+            config: {
+                [key: string]: unknown;
+            };
+            /** Format: uuid */
+            secret_id?: string | null;
+            /** @description Unsaved credential; used in memory only. */
+            secret_value?: string;
+            tls_ca_pem?: string;
+            tls_skip_verify?: boolean;
+            /**
+             * Format: uuid
+             * @description Existing channel whose stored secret is used when no secret is given.
+             */
+            channel_id?: string | null;
         };
         NotificationTestResult: {
             ok: boolean;
@@ -6321,6 +6362,41 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["NotificationChannel"];
                 };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    testNotificationChannelDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationChannelDraft"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTestResult"];
+                };
+            };
+            /** @description Rate limited. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Error"];
         };

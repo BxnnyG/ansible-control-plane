@@ -235,3 +235,12 @@ export function toggleEvent(events: readonly EventKind[], kind: EventKind): Even
   else set.add(kind);
   return EVENT_KINDS.map((e) => e.kind).filter((k) => set.has(k));
 }
+
+/** Channels that no rule references (they never send anything automatically). */
+export function channelsWithoutRules(
+  channels: readonly NotificationChannel[],
+  rules: readonly NotificationRule[],
+): NotificationChannel[] {
+  const used = new Set(rules.map((r) => r.channel_id));
+  return channels.filter((c) => !used.has(c.id));
+}
