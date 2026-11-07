@@ -96,7 +96,28 @@ Both are workspace-wide. Channel and rule changes and tests are audited.
 
 ## UI
 
-Open **Notifications** in the workspace navigation. The page has three sections: channels (create, edit, enable/disable, test, delete), rules (pick channel, event kinds and an optional template) and recent deliveries with status filter. Secrets are selected from the secrets store and never shown.
+Open **Notifications** in the workspace navigation. The page has three sections: channels (create, edit, enable/disable, test, delete), rules (pick channel, event kinds and an optional template) and recent deliveries with status filter. Secrets are never shown.
+
+### Creating a channel
+
+1. **New channel**, pick the type and a name. A collapsible **Setup guide** under the name explains the steps for the chosen type (see below). Each field has a help text; defaults are suggested (ntfy server `https://ntfy.sh`, SMTP port hint per security mode).
+2. **Credential**: choose *None*, an *Existing secret*, or *Enter new credential*. A new credential is stored by the form as an encrypted secret named `notify-<channel name>` (type `password` for SMTP, `api_token` for Gotify, `token` otherwise) before the channel is saved; if saving the channel fails, that secret is removed again. For an existing secret you can optionally replace its value; this changes the shared secret for everything that uses it.
+3. **Send test** works before saving (see draft test below) and on edits.
+4. **Create**. Channels without any rule show a hint with a link to the rules tab: a channel only sends automatically once a rule references it.
+
+### Draft test
+
+`POST /api/v1/workspaces/{workspace}/notifications/channels/test` sends the sample message through an unsaved definition (`type`, `config`, optional `secret_id` or `secret_value`, TLS options and optional `channel_id`). The config is validated like on create (invalid input returns 422). Credential precedence: `secret_value`, then `secret_id`, then the stored secret of `channel_id`, so edits of an existing channel can be tested without retyping the credential. `secret_value` is used in memory only: it is never stored, logged, audited or returned, and error texts are sanitized. The response is `{ok, error}` like the saved-channel test; the audit entry `notification.channel.test_draft` records only type and result. Requires `notification.manage`; limited to 10 requests per minute and user (HTTP 429). Because the draft credential travels in the request body, use HTTPS (the default).
+
+### Setup per type
+
+The app container sends every message itself, so it must be allowed to reach the target (firewall and egress allowlist). The same guides are available in the UI.
+
+- **ntfy:** use `https://ntfy.sh` or your own server; choose an unguessable topic (on public servers the topic is the only protection); an access token (`tk_...`) is optional and only needed for servers with access control; subscribe to the topic in the ntfy app; priority 1-5 is optional.
+- **Matrix:** create a dedicated bot user; get its access token (Element: Settings, Help & About, Advanced, or the login API); invite the bot to the room and accept the invite; use the internal room ID (`!abc:server`, Room settings, Advanced), not the alias. **Encrypted rooms are not supported:** the sender posts plain `m.room.message` events without end-to-end encryption, so use an unencrypted room.
+- **SMTP:** port 587 with STARTTLS, 465 with TLS, 25 without encryption (requires the explicit insecure confirmation). Providers with two-factor authentication need an app password. The From address must be allowed by the server. Empty port means the default of the chosen mode.
+- **Gotify:** create an application in Gotify and use its application token (not a client token); URL is the base URL without `/message`.
+- **Webhook:** HMAC (default): header `X-ACP-Signature: sha256=<hex>`, the HMAC-SHA256 of the raw body keyed with the credential (no header without a credential); bearer: `Authorization: Bearer <credential>`. Every request has `X-ACP-Event`. Verify on the raw bytes, for example `printf "sha256=%s" "$(openssl dgst -sha256 -hmac "$KEY" -hex < body.json | sed 's/^.* //')"`, and compare in constant time.
 
 ## CLI
 
@@ -135,4 +156,4 @@ Other commands: `channel update` (`--set`, `--unset`, `--clear-secret`, `--enabl
 
 ## Limitations
 
-One template filter per rule, no test before saving, no per-user subscriptions, digests or quiet hours, and runs imported already finished (Semaphore migration) emit no events.
+One template filter per rule, no per-user subscriptions, digests or quiet hours, and runs imported already finished (Semaphore migration) emit no events.

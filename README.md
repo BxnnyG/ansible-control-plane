@@ -14,7 +14,7 @@ A self-hosted web platform to run, organize and monitor Ansible – Semaphore's 
 - Read-only connectors (OPNsense, Proxmox VE, NetBox, Checkmk and alert webhooks) feeding a merged fleet view with host status, conflicts, unmanaged devices and group rules
 - Manual remediation: alert rules map to a template and limit; never automatic
 - Migration tool from Semaphore UI
-- Run notifications (webhook, Matrix, e-mail, Gotify, ntfy) for failed, recovered, drift and finished runs
+- Run notifications (webhook, Matrix, e-mail, Gotify, ntfy) for failed, recovered, drift and finished runs, configurable and testable in the UI with setup guides
 - Operations: backup and restore, worker egress allowlist, Prometheus metrics, OpenAPI 3.1 spec
 
 ## Quickstart
