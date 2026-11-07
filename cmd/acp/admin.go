@@ -19,7 +19,7 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/secrets"
 )
 
-const adminUsage = "usage: acp admin <create-breakglass --username NAME [--generate] | set-breakglass-password --username NAME [--generate] | reset-breakglass-totp --username NAME | rotate-master-key --new-key-file PATH | inventory import|list ... | project list|sync ... | template list|create ... | run start|show|list ... | connector list|types|create|test|sync ... | fleet merge|hosts|conflicts ... | group-rule list|preview|apply ... | remediation list|create ... | alert remediate ...>"
+const adminUsage = "usage: acp admin <create-breakglass --username NAME [--generate] | set-breakglass-password --username NAME [--generate] | reset-breakglass-totp --username NAME | rotate-master-key --new-key-file PATH | inventory import|list ... | project list|sync ... | template list|create ... | run start|show|list ... | connector list|types|create|test|sync ... | fleet merge|hosts|conflicts ... | group-rule list|preview|apply ... | remediation list|create ... | alert remediate ... | notification channel|rule|delivery ...>"
 
 // runAdmin executes operator tasks. Secrets (generated password, TOTP secret)
 // go to stdout only; prompts and hints go to stderr.
@@ -32,6 +32,9 @@ func runAdmin(ctx context.Context, args []string, cfg config.Config, in *os.File
 	}
 	if args[0] == "connector" {
 		return runAdminConnector(ctx, args[1:], cfg, in, stdout, stderr)
+	}
+	if args[0] == "notification" {
+		return runAdminNotification(ctx, args[1:], cfg, in, stdout, stderr)
 	}
 	if args[0] == "fleet" {
 		return runAdminFleet(ctx, args[1:], cfg, stdout, stderr)
