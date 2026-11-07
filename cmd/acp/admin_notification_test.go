@@ -82,3 +82,13 @@ func TestApplyConfigFlags(t *testing.T) {
 		t.Error("non-object config accepted")
 	}
 }
+
+func TestParseNotificationDeleteSecret(t *testing.T) {
+	a, err := parseNotificationArgs([]string{"channel", "delete", "--workspace", "w", "--channel", "c", "--delete-secret"}, io.Discard)
+	if err != nil || !a.DeleteSecret {
+		t.Errorf("delete-secret: %v %+v", err, a)
+	}
+	if _, err := parseNotificationArgs([]string{"channel", "test", "--workspace", "w", "--channel", "c", "--delete-secret"}, io.Discard); err == nil {
+		t.Error("--delete-secret must be rejected on test")
+	}
+}

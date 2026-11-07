@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/BxnnyG/ansible-control-plane/internal/admin"
 	"github.com/BxnnyG/ansible-control-plane/internal/config"
@@ -20,7 +21,7 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/secrets"
 )
 
-const notificationUsage = "usage: acp admin notification <channel list --workspace SLUG | channel create --workspace SLUG --type webhook|matrix|smtp|gotify|ntfy --name N [--config-file PATH|- | --set key=value ...] [--secret NAME|ID | --secret-file PATH|- [--secret-type TYPE]] [--ca-file PATH] [--insecure-skip-verify] [--disabled] | channel update --workspace SLUG --channel NAME|ID [--name N] [--config-file PATH|-] [--set key=value ...] [--unset key ...] [--secret NAME|ID | --secret-file PATH|- [--secret-type TYPE] | --clear-secret] [--ca-file PATH] [--insecure-skip-verify=BOOL] [--enable | --disable] | channel delete|test --workspace SLUG --channel NAME|ID | rule list --workspace SLUG | rule create --workspace SLUG --channel NAME|ID --event KIND ... [--template NAME|ID] [--disabled] | rule delete --workspace SLUG --rule ID | delivery list --workspace SLUG --channel NAME|ID [--status pending|sent|failed] [--limit N]>"
+const notificationUsage = "usage: acp admin notification <channel list --workspace SLUG | channel create --workspace SLUG --type webhook|matrix|smtp|gotify|ntfy --name N [--config-file PATH|- | --set key=value ...] [--secret NAME|ID | --secret-file PATH|- [--secret-type TYPE]] [--ca-file PATH] [--insecure-skip-verify] [--disabled] | channel update --workspace SLUG --channel NAME|ID [--name N] [--config-file PATH|-] [--set key=value ...] [--unset key ...] [--secret NAME|ID | --secret-file PATH|- [--secret-type TYPE] | --clear-secret] [--ca-file PATH] [--insecure-skip-verify=BOOL] [--enable | --disable] | channel delete --workspace SLUG --channel NAME|ID [--delete-secret] | channel test --workspace SLUG --channel NAME|ID | rule list --workspace SLUG | rule create --workspace SLUG --channel NAME|ID --event KIND ... [--template NAME|ID] [--disabled] | rule delete --workspace SLUG --rule ID | delivery list --workspace SLUG --channel NAME|ID [--status pending|sent|failed] [--limit N]>"
 
 // notificationArgs are the validated flags of `acp admin notification`.
 type notificationArgs struct {
@@ -38,6 +39,7 @@ type notificationArgs struct {
 	Events                    []string
 	Template                  string
 	Status                    string
+	DeleteSecret              bool
 	Limit                     int
 	Given                     map[string]bool
 }
@@ -76,6 +78,9 @@ func parseNotificationArgs(args []string, stderr io.Writer) (notificationArgs, e
 		}
 	case "channel delete", "channel test":
 		fs.StringVar(&a.Channel, "channel", "", "channel name or id")
+		if a.Sub == "delete" {
+			fs.BoolVar(&a.DeleteSecret, "delete-secret", false, "also delete the channel's secret if nothing else references it")
+		}
 	case "rule create":
 		fs.StringVar(&a.Channel, "channel", "", "channel name or id")
 		fs.Var(&events, "event", "event kind: run.failed, run.recovered, run.drift, run.finished (repeatable)")
@@ -206,10 +211,11 @@ func applyConfigFlags(a notificationArgs, base json.RawMessage, in io.Reader, re
 }
 
 type notifyEnv struct {
-	q   *dbgen.Queries
-	svc *notify.Service
-	sec *secrets.Service
-	ws  uuid.UUID
+	pool *pgxpool.Pool
+	q    *dbgen.Queries
+	svc  *notify.Service
+	sec  *secrets.Service
+	ws   uuid.UUID
 }
 
 func (e *notifyEnv) audit(ctx context.Context, action, targetType, id string, details map[string]any) {
@@ -311,7 +317,7 @@ func runAdminNotification(ctx context.Context, args []string, cfg config.Config,
 	if err != nil {
 		return err
 	}
-	e := &notifyEnv{q: q, sec: sec, ws: ws, svc: notify.NewService(notify.ServiceOptions{DB: pool, Secrets: sec, PublicURL: cfg.PublicURL})}
+	e := &notifyEnv{pool: pool, q: q, sec: sec, ws: ws, svc: notify.NewService(notify.ServiceOptions{DB: pool, Secrets: sec, PublicURL: cfg.PublicURL})}
 	switch a.Group + " " + a.Sub {
 	case "channel list":
 		list, err := e.svc.ListChannels(ctx, ws)
@@ -335,6 +341,17 @@ func runAdminNotification(ctx context.Context, args []string, cfg config.Config,
 		}
 		e.audit(ctx, "notification.channel.delete", "notification_channel", c.ID.String(), nil)
 		_, _ = fmt.Fprintf(stdout, "deleted channel %s\n", c.Name)
+		if a.DeleteSecret && c.SecretID != nil {
+			m, err := e.sec.Get(ctx, ws, *c.SecretID)
+			if err != nil {
+				return fmt.Errorf("channel deleted, but secret lookup failed: %w", err)
+			}
+			if err := deleteUnreferencedSecret(ctx, e.pool, e.sec, ws, m); err != nil {
+				return fmt.Errorf("channel deleted, secret kept: %w", err)
+			}
+			e.audit(ctx, "secret.delete", "secret", m.ID.String(), map[string]any{"name": m.Name, "type": m.Type})
+			_, _ = fmt.Fprintf(stdout, "deleted secret %s\n", m.Name)
+		}
 	case "channel test":
 		c, err := e.channel(ctx, a.Channel)
 		if err != nil {

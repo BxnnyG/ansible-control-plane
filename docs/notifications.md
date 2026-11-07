@@ -123,7 +123,7 @@ docker compose exec app acp admin notification delivery list --workspace default
   --channel ops-hook --status failed --limit 20
 ```
 
-Other commands: `channel update` (`--set`, `--unset`, `--clear-secret`, `--enable`, `--disable`, `--ca-file`, `--insecure-skip-verify`), `channel delete`, `rule delete --rule ID`. Run without arguments for the full usage.
+Other commands: `channel update` (`--set`, `--unset`, `--clear-secret`, `--enable`, `--disable`, `--ca-file`, `--insecure-skip-verify`), `channel delete [--delete-secret]` (also deletes the channel's secret once nothing else references it; otherwise the secret is kept and the command reports why), `rule delete --rule ID`. Stored secrets can be listed and removed with `acp admin secret list|delete`. Run without arguments for the full usage.
 
 ## Troubleshooting
 
