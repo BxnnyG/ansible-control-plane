@@ -112,6 +112,11 @@ func pgUUID(id *uuid.UUID) pgtype.UUID {
 	return pgtype.UUID{Bytes: *id, Valid: true}
 }
 
+// actorUUID maps the zero UUID (no acting user, e.g. CLI) to NULL.
+func actorUUID(id uuid.UUID) pgtype.UUID {
+	return pgtype.UUID{Bytes: id, Valid: id != uuid.Nil}
+}
+
 func uuidPtr(u pgtype.UUID) *uuid.UUID {
 	if !u.Valid {
 		return nil
@@ -177,7 +182,7 @@ func (s *Service) CreateChannel(ctx context.Context, ws uuid.UUID, in ChannelInp
 	}
 	row, err := s.q.CreateNotificationChannel(ctx, dbgen.CreateNotificationChannelParams{
 		WorkspaceID: ws, Name: in.Name, Type: in.Type, Config: cfg, SecretID: pgUUID(in.SecretID),
-		TlsCaPem: in.TLSCAPEM, TlsSkipVerify: in.TLSSkipVerify, Enabled: in.Enabled, CreatedBy: pgUUID(&actor)})
+		TlsCaPem: in.TLSCAPEM, TlsSkipVerify: in.TLSSkipVerify, Enabled: in.Enabled, CreatedBy: actorUUID(actor)})
 	if err != nil {
 		return ChannelView{}, fmt.Errorf("create channel: %w", mapErr(err))
 	}
@@ -218,7 +223,7 @@ func (s *Service) UpdateChannel(ctx context.Context, ws, id uuid.UUID, in Channe
 	}
 	row, err := s.q.UpdateNotificationChannel(ctx, dbgen.UpdateNotificationChannelParams{
 		ID: id, WorkspaceID: ws, Name: in.Name, Config: cfg, SecretID: pgUUID(in.SecretID),
-		TlsCaPem: in.TLSCAPEM, TlsSkipVerify: in.TLSSkipVerify, Enabled: in.Enabled, UpdatedBy: pgUUID(&actor)})
+		TlsCaPem: in.TLSCAPEM, TlsSkipVerify: in.TLSSkipVerify, Enabled: in.Enabled, UpdatedBy: actorUUID(actor)})
 	if err != nil {
 		return ChannelView{}, fmt.Errorf("update channel: %w", mapErr(err))
 	}
@@ -276,7 +281,7 @@ func (s *Service) CreateRule(ctx context.Context, ws uuid.UUID, in RuleInput, ac
 		return RuleView{}, err
 	}
 	row, err := s.q.CreateNotificationRule(ctx, dbgen.CreateNotificationRuleParams{WorkspaceID: ws, ChannelID: in.ChannelID,
-		Events: events, TemplateID: pgUUID(in.TemplateID), Enabled: in.Enabled, CreatedBy: pgUUID(&actor)})
+		Events: events, TemplateID: pgUUID(in.TemplateID), Enabled: in.Enabled, CreatedBy: actorUUID(actor)})
 	if err != nil {
 		return RuleView{}, fmt.Errorf("create rule: %w", err)
 	}

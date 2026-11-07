@@ -195,7 +195,7 @@ type fakeSMTP struct {
 
 func startSMTP(t *testing.T, cfg *tls.Config) *fakeSMTP {
 	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
