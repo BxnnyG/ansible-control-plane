@@ -34,6 +34,7 @@ tags:
   - {name: schedules}
   - {name: connectors}
   - {name: fleet}
+  - {name: notifications}
   - {name: hooks}
 paths:
   /api/auth/config:
@@ -1276,6 +1277,110 @@ paths:
         '429': {description: Rate limited.}
         default: {$ref: '#/components/responses/Error'}
 
+  /api/v1/workspaces/{workspace}/notifications/channels:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [notifications]
+      operationId: listNotificationChannels
+      x-acp-permission: notification.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/NotificationChannel'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      tags: [notifications]
+      operationId: createNotificationChannel
+      x-acp-permission: notification.manage
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/NotificationChannelInput'}}}}
+      responses:
+        '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/NotificationChannel'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/notifications/channels/{id}:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [notifications]
+      operationId: getNotificationChannel
+      x-acp-permission: notification.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/NotificationChannel'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    patch:
+      tags: [notifications]
+      operationId: updateNotificationChannel
+      x-acp-permission: notification.manage
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/NotificationChannelPatch'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/NotificationChannel'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      tags: [notifications]
+      operationId: deleteNotificationChannel
+      x-acp-permission: notification.manage
+      security: *mutating
+      responses:
+        '204': {$ref: '#/components/responses/NoContent'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/notifications/channels/{id}/test:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [notifications]
+      operationId: testNotificationChannel
+      x-acp-permission: notification.manage
+      security: *mutating
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/NotificationTestResult'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/notifications/rules:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [notifications]
+      operationId: listNotificationRules
+      x-acp-permission: notification.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/NotificationRule'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      tags: [notifications]
+      operationId: createNotificationRule
+      x-acp-permission: notification.manage
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/NotificationRuleInput'}}}}
+      responses:
+        '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/NotificationRule'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/notifications/rules/{id}:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    patch:
+      tags: [notifications]
+      operationId: updateNotificationRule
+      x-acp-permission: notification.manage
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/NotificationRulePatch'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/NotificationRule'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      tags: [notifications]
+      operationId: deleteNotificationRule
+      x-acp-permission: notification.manage
+      security: *mutating
+      responses:
+        '204': {$ref: '#/components/responses/NoContent'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/notifications/deliveries:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [notifications]
+      operationId: listNotificationDeliveries
+      x-acp-permission: notification.read
+      parameters:
+        - {name: channel_id, in: query, required: true, schema: {type: string, format: uuid}}
+        - {name: status, in: query, required: false, schema: {type: string, enum: [pending, sent, failed]}}
+        - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 200, default: 50}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/NotificationDelivery'}}}}}
+        default: {$ref: '#/components/responses/Error'}
 components:
   securitySchemes:
     sessionCookie:
@@ -2497,3 +2602,84 @@ components:
         limit: {type: string}
         hosts: {type: array, items: {type: string}}
         skipped: {type: array, items: {$ref: '#/components/schemas/BulkRunSkipped'}}
+    NotificationChannel:
+      type: object
+      description: Notification channel. Credentials are never returned, only the id of the referenced secret.
+      required: [id, name, type, config, secret_id, tls_ca_pem, tls_skip_verify, enabled, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        type: {type: string, enum: [webhook, matrix, smtp, gotify, ntfy]}
+        config: {type: object, additionalProperties: true, description: Type specific, non-secret settings.}
+        secret_id: {type: [string, 'null'], format: uuid}
+        tls_ca_pem: {type: string}
+        tls_skip_verify: {type: boolean}
+        enabled: {type: boolean}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    NotificationChannelInput:
+      type: object
+      required: [name, type]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 80}
+        type: {type: string, enum: [webhook, matrix, smtp, gotify, ntfy]}
+        config: {type: object, additionalProperties: true}
+        secret_id: {type: [string, 'null'], format: uuid}
+        tls_ca_pem: {type: string}
+        tls_skip_verify: {type: boolean}
+        enabled: {type: boolean, default: true}
+    NotificationChannelPatch:
+      type: object
+      description: Partial update; `config` replaces the whole config, `secret_id` null removes the credential. The type is immutable.
+      properties:
+        name: {type: string, minLength: 1, maxLength: 80}
+        config: {type: object, additionalProperties: true}
+        secret_id: {type: [string, 'null'], format: uuid}
+        tls_ca_pem: {type: string}
+        tls_skip_verify: {type: boolean}
+        enabled: {type: boolean}
+    NotificationTestResult:
+      type: object
+      required: [ok, error]
+      properties:
+        ok: {type: boolean}
+        error: {type: string, description: Sanitized error text of a failed send.}
+    NotificationRule:
+      type: object
+      required: [id, channel_id, events, template_id, enabled, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        channel_id: {type: string, format: uuid}
+        events: {type: array, items: {type: string, enum: [run.failed, run.recovered, run.drift, run.finished]}}
+        template_id: {type: [string, 'null'], format: uuid, description: Restrict the rule to one template; null matches all.}
+        enabled: {type: boolean}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    NotificationRuleInput:
+      type: object
+      required: [channel_id, events]
+      properties:
+        channel_id: {type: string, format: uuid}
+        events: {type: array, minItems: 1, items: {type: string, enum: [run.failed, run.recovered, run.drift, run.finished]}}
+        template_id: {type: [string, 'null'], format: uuid}
+        enabled: {type: boolean, default: true}
+    NotificationRulePatch:
+      type: object
+      properties:
+        channel_id: {type: string, format: uuid}
+        events: {type: array, minItems: 1, items: {type: string, enum: [run.failed, run.recovered, run.drift, run.finished]}}
+        template_id: {type: [string, 'null'], format: uuid}
+        enabled: {type: boolean}
+    NotificationDelivery:
+      type: object
+      required: [id, run_id, kind, status, attempts, next_attempt_at, last_error, sent_at, created_at]
+      properties:
+        id: {type: string, format: uuid}
+        run_id: {type: string, format: uuid}
+        kind: {type: string}
+        status: {type: string, enum: [pending, sent, failed]}
+        attempts: {type: integer}
+        next_attempt_at: {type: string, format: date-time}
+        last_error: {type: string}
+        sent_at: {type: [string, 'null'], format: date-time}
+        created_at: {type: string, format: date-time}
