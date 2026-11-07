@@ -86,8 +86,10 @@
     <ChannelsTab
       ws={session.slug}
       {channels}
+      {rules}
       {secrets}
       {canManage}
+      onrules={() => (tab = 'rules')}
       reload={() => load(session.slug as string)}
     />
   {:else if tab === 'rules'}
