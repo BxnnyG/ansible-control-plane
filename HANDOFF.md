@@ -1,6 +1,7 @@
 # Handoff
 
 ## Goal
+- v1.1 in progress (branch `feat/v1.1-notifications`, user choice 2026-11-07): run notifications, all channels (webhook, Matrix, SMTP, Gotify, ntfy), all events (failed, recovered, drift, every run). ADR-0021. Step 1 done: migration 00019 (outbox via trigger on runs status), internal/notify (senders, dispatcher, service), wired in serve. Next: API/policy/OpenAPI/CLI (in progress), UI, docs, deploy + live test.
 - v1.0.0 released 2026-11-07 (M8 merged to main, tags `m8` + `v1.0.0`, pushed). Next: v1.x backlog (PLAN.md "Known limitations and v1.x candidates").
 - M8 summary: security review (22 findings, docs/local/security-review-m8.md) fixed incl. F-01..F-07; job process isolation (ADR-0020, per-slot job uids, file caps on worker supervisor); worker egress allowlist live (scripts/worker-egress.sh, acp-worker-egress.service, .env ACP_WORKER_EGRESS_CIDRS/PORTS); backup/restore scripts; OIDC rate limit; CLI audit; secrets lost-update guard; acp_ metrics (internal :8082 or ACP_METRICS_TOKEN, public 404 otherwise); OpenAPI spec api/openapi.yaml + generated TS types + drift test; UI schedule overrides + survey form; CHANGELOG, SECURITY.md, docs/operations.md operator guide.
 - M8 live: deployed 2026-11-07 (ACP DB backup /opt/backups/acp-2026-11-07-0549/, no new migrations, goose 18). Verified: job isolation enabled (CapEff e1), egress rules 6+6, security headers, infra ping identical to baseline.
