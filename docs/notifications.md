@@ -1,0 +1,138 @@
+# Run notifications
+
+Operator guide for run notifications (v1.1). Design rationale: [ADR-0021](adr/0021-run-notifications.md).
+
+## Concepts
+
+- **Channel:** a destination (webhook, Matrix, SMTP e-mail, Gotify, ntfy) with non-secret config, an optional credential from the secrets store, and TLS options (extra CA bundle, skip-verify).
+- **Rule:** connects a channel to one or more event kinds, optionally limited to one template. Rules can be disabled.
+- **Delivery:** one row per (run, channel) with status `pending`, `sent` or `failed`, attempt count and `last_error`.
+
+### Event kinds
+
+| Kind | Fires when |
+| --- | --- |
+| `run.failed` | Run ended `failed` or `lost` |
+| `run.recovered` | Run `succeeded` and the previous terminal run of the template (ignoring `cancelled`) was `failed` or `lost` |
+| `run.drift` | Check-mode run `succeeded` with changed hosts (`hosts_changed > 0`) |
+| `run.finished` | Every terminal status, including `cancelled` |
+
+A run can match several kinds, but a channel gets at most one message per run. Precedence: `run.failed` > `run.recovered` > `run.drift` > `run.finished`.
+
+### Delivery semantics
+
+- Delivery is **at-least-once**: a crash between sending and recording the result can produce a duplicate. Receivers should deduplicate on `run.id` plus `X-ACP-Event`.
+- Failed sends are retried with exponential backoff (30 s base, capped at 30 min), at most 5 attempts, then the delivery is `failed`. Permanent errors (for example a rejected configuration) fail immediately. `last_error` never contains secrets.
+- Events and deliveries are pruned together with run logs after `ACP_RUN_LOG_RETENTION_DAYS` (default 90, `0` keeps everything).
+- Messages contain workspace, template name, status, trigger, host counts, duration and a link built from `ACP_PUBLIC_URL`. They never contain log lines, params or variables.
+- The app container sends the messages, so it needs outbound access to the targets. Private addresses are allowed; this is why channel management is admin-only.
+
+## Channel configuration
+
+| Type | Config fields | Secret (optional unless noted) |
+| --- | --- | --- |
+| `webhook` | `url`, `auth` (`hmac` default, or `bearer`) | HMAC key or bearer token |
+| `matrix` | `homeserver`, `room_id` | Access token (required) |
+| `smtp` | `host`, `port`, `security` (`starttls` default, `tls`, `none`), `insecure` (must be true for `none`), `username`, `from`, `to` (list) | Password |
+| `gotify` | `url`, `priority` | App token (required) |
+| `ntfy` | `url`, `topic`, `priority` | Access token |
+
+Secrets live only in the secrets store and are resolved per send. Any secret type holding a single value works; the CLI creates `api_token` secrets by default (`--secret-type password` for SMTP is fine). Redirects and environment proxies are not followed; the timeout is 10 s; TLS 1.2+ is enforced.
+
+## Webhook payload (schema version 1)
+
+`POST` with `Content-Type: application/json` and header `X-ACP-Event: <kind>`.
+
+```json
+{
+  "version": 1,
+  "event": "run.failed",
+  "workspace": "default",
+  "run": {
+    "id": "00000000-0000-0000-0000-000000000000",
+    "template": "site-update",
+    "status": "failed",
+    "trigger": "schedule",
+    "check": false,
+    "hosts_ok": 3,
+    "hosts_changed": 1,
+    "hosts_failed": 1,
+    "hosts_unreachable": 0,
+    "duration_seconds": 42.5,
+    "finished_at": "2026-01-01T12:00:00Z",
+    "url": "https://acp.example.com/runs/00000000-0000-0000-0000-000000000000"
+  }
+}
+```
+
+Test messages from the test action carry `"test": true`.
+
+With `auth: hmac` and a secret set, the header `X-ACP-Signature: sha256=<hex>` is the HMAC-SHA256 of the raw request body. With `auth: bearer`, the secret is sent as `Authorization: Bearer <token>` instead.
+
+Verify a signature (shell; `body.json` is the raw body, `$KEY` the shared key, `$SIG` the header value):
+
+```sh
+expected="sha256=$(openssl dgst -sha256 -hmac "$KEY" -hex < body.json | awk '{print $NF}')"
+[ "$expected" = "$SIG" ] && echo valid || echo invalid
+```
+
+Python receiver:
+
+```python
+import hmac, hashlib
+def valid(key: bytes, body: bytes, header: str) -> bool:
+    mac = "sha256=" + hmac.new(key, body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(mac, header)
+```
+
+Always compare over the raw bytes, not re-serialized JSON.
+
+## Permissions
+
+- `notification.read` (editor and above): list channels, rules and deliveries.
+- `notification.manage` (admin and above): create, change and delete channels and rules, send test messages.
+
+Both are workspace-wide. Channel and rule changes and tests are audited.
+
+## UI
+
+Open **Notifications** in the workspace navigation. The page has three sections: channels (create, edit, enable/disable, test, delete), rules (pick channel, event kinds and an optional template) and recent deliveries with status filter. Secrets are selected from the secrets store and never shown.
+
+## CLI
+
+Secret values are read from a file or stdin, never from arguments:
+
+```sh
+# Webhook with HMAC key
+printf '%s' "$KEY" | docker compose exec -T app acp admin notification channel create \
+  --workspace default --type webhook --name ops-hook \
+  --set url=https://hooks.example.com/acp --secret-file /dev/stdin
+
+# SMTP with password
+printf '%s' "$PW" | docker compose exec -T app acp admin notification channel create \
+  --workspace default --type smtp --name mail --set host=smtp.example.org --set port=587 \
+  --set from=acp@example.org --set 'to=["ops@example.org"]' \
+  --secret-file /dev/stdin --secret-type password
+
+docker compose exec app acp admin notification channel test --workspace default --channel ops-hook
+docker compose exec app acp admin notification rule create --workspace default \
+  --channel ops-hook --event run.failed --event run.recovered [--template site-update]
+docker compose exec app acp admin notification channel list --workspace default
+docker compose exec app acp admin notification rule list --workspace default
+docker compose exec app acp admin notification delivery list --workspace default \
+  --channel ops-hook --status failed --limit 20
+```
+
+Other commands: `channel update` (`--set`, `--unset`, `--clear-secret`, `--enable`, `--disable`, `--ca-file`, `--insecure-skip-verify`), `channel delete`, `rule delete --rule ID`. Run without arguments for the full usage.
+
+## Troubleshooting
+
+- **Nothing arrives:** check that an enabled rule exists for the channel, the channel is enabled, and the event kind matches (a failed run only sends `run.failed`, not also `run.finished`, to the same channel). Then list deliveries.
+- **Delivery `failed`:** read `last_error` (`delivery list`). Typical causes: DNS or firewall from the app container, TLS verification (use `--ca-file`), wrong credentials, wrong Matrix room or ntfy topic.
+- **Delivery stays `pending`:** a retry is scheduled (`next_attempt_at`); the dispatcher runs inside `serve`, so the app must be running.
+- **Duplicates:** expected rarely (at-least-once); deduplicate on `run.id`.
+- **Test works, real runs do not:** the test bypasses rules; verify rules and the template filter.
+
+## Limitations
+
+One template filter per rule, no test before saving, no per-user subscriptions, digests or quiet hours, and runs imported already finished (Semaphore migration) emit no events.

@@ -2,7 +2,7 @@
 
 A self-hosted web platform to run, organize and monitor Ansible – Semaphore's simplicity, AWX's structure, a modern UI, plus a network-aware fleet view fed by connectors (OPNsense, Proxmox VE, NetBox, monitoring).
 
-> **Status:** v1.0.0 - all milestones M1-M8 are done. See [`CHANGELOG.md`](CHANGELOG.md) for the release notes and [`PLAN.md`](PLAN.md) for scope, roadmap and known limitations.
+> **Status:** v1.0.0 released (milestones M1-M8); v1.1 adds run notifications. See [`CHANGELOG.md`](CHANGELOG.md) for the release notes and [`PLAN.md`](PLAN.md) for scope, roadmap and known limitations.
 
 ## Features
 
@@ -14,6 +14,7 @@ A self-hosted web platform to run, organize and monitor Ansible – Semaphore's 
 - Read-only connectors (OPNsense, Proxmox VE, NetBox, Checkmk and alert webhooks) feeding a merged fleet view with host status, conflicts, unmanaged devices and group rules
 - Manual remediation: alert rules map to a template and limit; never automatic
 - Migration tool from Semaphore UI
+- Run notifications (webhook, Matrix, e-mail, Gotify, ntfy) for failed, recovered, drift and finished runs
 - Operations: backup and restore, worker egress allowlist, Prometheus metrics, OpenAPI 3.1 spec
 
 ## Quickstart
@@ -61,6 +62,7 @@ group/host counts (never variable values). The project must be synced first.
 - [`docs/migration-from-semaphore.md`](docs/migration-from-semaphore.md) – migration from Semaphore UI
 - [`docs/projects-and-inventories.md`](docs/projects-and-inventories.md) – operator guide: projects, inventories, vault
 - [`docs/connectors-and-fleet.md`](docs/connectors-and-fleet.md) – operator guide: connectors, fleet, conflicts, network scopes, group rules
+- [`docs/notifications.md`](docs/notifications.md) – operator guide: run notification channels, rules, webhook format
 - [`docs/adr/`](docs/adr/) – architecture decision records
 
 ## License

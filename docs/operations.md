@@ -295,6 +295,10 @@ Hardening checklist:
 
 Vulnerabilities: see [`../SECURITY.md`](../SECURITY.md).
 
+## Notifications
+
+Run notifications (webhook, Matrix, SMTP, Gotify, ntfy) are configured per workspace; the app container needs outbound access to the targets. See [`notifications.md`](notifications.md). Delivery rows and events are pruned with `ACP_RUN_LOG_RETENTION_DAYS`.
+
 ## Troubleshooting
 
 | Symptom | Cause and fix |
