@@ -65,6 +65,9 @@ INSERT INTO templates (workspace_id, project_id, inventory_id, name, slug, playb
 INSERT INTO templates (workspace_id, project_id, inventory_id, name, slug, playbook)
   SELECT w.id, p.id, i.id, 'slow', 'slow', 'slow.yml'
   FROM workspaces w, projects p, inventories i WHERE w.slug = 'e2e' AND p.slug = 'fixture' AND i.slug = 'inv';
+INSERT INTO templates (workspace_id, project_id, inventory_id, name, slug, playbook)
+  SELECT w.id, p.id, i.id, 'isolation', 'isolation', 'isolation.yml'
+  FROM workspaces w, projects p, inventories i WHERE w.slug = 'e2e' AND p.slug = 'fixture' AND i.slug = 'inv';
 SQL
 $DC exec -T app acp admin project sync --workspace e2e --project fixture 2>&1 | cut -c1-200 | tail -n 5
 
@@ -117,6 +120,16 @@ psql_ -c "UPDATE runs SET cancel_requested_at = now() WHERE id = '$run2'" >/dev/
 st=$(wait_status "$run2" '^(succeeded|failed|cancelled|lost)$' 60) || die "run 2 did not stop (status: $st)"
 [ "$st" = cancelled ] || die "run 2 status $st"
 echo "run 2 ok: $st"
+
+step "run 3: job isolation (negative tests)"
+run3=$(enqueue isolation)
+st=$(wait_status "$run3" '^(succeeded|failed|cancelled|lost)$' 120) || die "run 3 did not finish (status: $st)"
+log3=$(psql_ -c "SELECT string_agg(data, '' ORDER BY seq) FROM run_log_chunks WHERE run_id = '$run3'")
+[ "$st" = succeeded ] || { echo "$log3" | grep -E "FAILED|fatal|assert" | cut -c1-200 | head -n 10 >&2; die "run 3 status $st (job reached worker internals?)"; }
+echo "$log3" | grep -q "e2e isolation ok" || die "isolation log lacks marker"
+echo "$log3" | grep -q "$(cat "$E2E_DIR/secrets/worker.token")" && die "worker token appears in run log"
+wp=$($DC exec -T worker sh -c "grep -E '^Cap(Eff|Prm):' /proc/1/status | head -n 2" | tr -d '\r')
+echo "run 3 ok (worker caps: $(echo $wp | tr '\n' ' '))"
 
 step "result"
 echo "PASS: e2e run execution (success + cancel)"

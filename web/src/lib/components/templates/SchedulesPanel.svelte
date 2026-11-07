@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api, type Schedule } from '$lib/api';
+  import { api, type Schedule, type Template } from '$lib/api';
   import { describeError } from '$lib/errors';
   import { btn, btnDanger, btnPrimary, card, fmtDate, td, th } from '$lib/ui';
   import FormError from '$lib/components/FormError.svelte';
@@ -8,9 +8,11 @@
   let {
     ws,
     templateId,
+    template,
     canRead,
     canWrite,
-  }: { ws: string; templateId: string; canRead: boolean; canWrite: boolean } = $props();
+  }: { ws: string; templateId: string; template: Template; canRead: boolean; canWrite: boolean } =
+    $props();
 
   let items = $state<Schedule[]>([]);
   let loading = $state(true);
@@ -63,6 +65,7 @@
           <ScheduleForm
             {ws}
             {templateId}
+            {template}
             schedule={editing === 'new' ? null : editing}
             ondone={() => {
               editing = null;

@@ -51,14 +51,18 @@ func requirementsKey(project string) (string, []string, error) {
 // installRequirements installs collections and roles into
 // <cache>/galaxy/<key>, reusing a finished install. A file lock serializes
 // concurrent runs with the same requirements. Output goes to out.
-func (r *Runner) installRequirements(ctx context.Context, project string, env []string, out io.Writer) (*galaxyCache, error) {
+func (r *Runner) installRequirements(ctx context.Context, project string, env []string, job *jobIdent, out io.Writer) (*galaxyCache, error) {
 	key, files, err := requirementsKey(project)
 	if err != nil || key == "" {
 		return nil, err
 	}
 	root := filepath.Join(r.CacheDir, "galaxy")
-	if err := os.MkdirAll(root, 0o700); err != nil {
+	if err := os.MkdirAll(root, cacheMode(job)); err != nil {
 		return nil, fmt.Errorf("create galaxy cache: %w", err)
+	}
+	if job != nil { // MkdirAll is subject to the umask
+		_ = os.Chmod(r.CacheDir, cacheMode(job))
+		_ = os.Chmod(root, cacheMode(job))
 	}
 	final := filepath.Join(root, key)
 	res := &galaxyCache{Collections: filepath.Join(final, "collections"), Roles: filepath.Join(final, "roles")}
@@ -87,6 +91,10 @@ func (r *Runner) installRequirements(ctx context.Context, project string, env []
 	if err := os.MkdirAll(filepath.Join(tmp, "roles"), 0o700); err != nil {
 		return nil, fmt.Errorf("create galaxy dir: %w", err)
 	}
+	if err := giveTree(tmp, job); err != nil {
+		_ = os.RemoveAll(tmp)
+		return nil, fmt.Errorf("prepare galaxy dir: %w", err)
+	}
 	for _, f := range files {
 		file := filepath.Join(project, f)
 		kinds, err := requirementKinds(f, project)
@@ -99,12 +107,17 @@ func (r *Runner) installRequirements(ctx context.Context, project string, env []
 			cmd := exec.CommandContext(ctx, r.galaxyBin(), kind, "install", "-r", file, "-p", target) //nolint:gosec // fixed argv
 			cmd.Dir = project
 			cmd.Env = env
+			cmd.SysProcAttr = &syscall.SysProcAttr{Credential: job.credential()}
 			cmd.Stdout, cmd.Stderr = out, out
 			if err := cmd.Run(); err != nil {
 				_ = os.RemoveAll(tmp)
 				return nil, fmt.Errorf("ansible-galaxy %s install (%s): %w", kind, f, err)
 			}
 		}
+	}
+	if err := reclaim(tmp, job, true); err != nil {
+		_ = os.RemoveAll(tmp)
+		return nil, fmt.Errorf("take over galaxy dir: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(tmp, ".done"), nil, 0o600); err != nil {
 		return nil, fmt.Errorf("mark galaxy cache: %w", err)

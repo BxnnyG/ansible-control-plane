@@ -228,12 +228,25 @@ Stack decisions are recorded in `docs/adr/`.
 | M2 ✅ | Auth (OIDC + break-glass), setup wizard (SETUP-1/3/4), workspaces, roles + scopes, secrets store, audit |
 | M3 ✅ | Git projects, inventories (DB + Git-synced), vault integration, surveys from `argument_specs` (GIT-4 requirements install moved to M4) |
 | M4 ✅ | Worker, templates, `requirements.yml` install (GIT-4), live logs, run history, per-host results, schedules, webhooks |
-| M7 (done) | Semaphore migration: dry run → import → comparison → cutover |
+| M7 ✅ | Semaphore migration: dry run → import → comparison → cutover |
 | M5 ✅ | Connector framework, OPNsense (Kea/dnsmasq/ISC), Proxmox VE, host merge, conflicts, group rules; decisions in ADR-0018, operator guide `docs/connectors-and-fleet.md` |
 | M6 ✅ | NetBox, monitoring (Checkmk, alert webhook incl. Alertmanager format), host status, network counts, unmanaged list, remediation rules, bulk runs; decisions in ADR-0019 |
-| M8 | Hardening: security review, backup/restore, docs, release `v1.0.0` |
+| M8 ✅ | Hardening: security review, job process isolation (ADR-0020), worker egress allowlist, backup/restore, OpenAPI spec, docs, release `v1.0.0` |
 
 Execution order (decided 2026-11-05): M4 → M7 → M5 → M6 → M8. Migration comes first because real runs need the migrated SSH keys and ACP should replace Semaphore in daily use before connectors add value. Milestone numbers stay unchanged so branches and tags remain stable.
+
+### Known limitations and v1.x candidates
+
+- Per-worker claim scoping: the worker token claims any queued run (ADR-0020 follow-up); matters only with several workers.
+- OpenAPI spec does not describe SSE event payloads.
+- Survey fields lack min/max/regex validation.
+- Worker egress allowlist is IPv4 only (no IPv6 rules) and requires IP-based inventories (no DNS).
+- No browser (UI) end-to-end tests; the UI is covered by unit and type checks only.
+- NetBox connector is not verified against a live instance; Checkmk and Alertmanager formats are verified with fixtures only.
+- No secret rotation for alert webhook connectors; group rules are not auto-applied after a sync; resolved conflicts are never pruned.
+- Concurrent mutations: scope check and write are separate steps (ADR-0007); clients should send `If-Match`.
+- Session login behind a reverse proxy shares one rate limit budget (no trusted-proxy setting).
+- Notification channels for failed runs (see open question 3).
 
 ## 12. Risks
 

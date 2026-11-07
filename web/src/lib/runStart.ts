@@ -1,5 +1,5 @@
 import type { RunOverrides, Template } from './api';
-import type { FormField } from './survey';
+import { surveyToVars, varsToSurvey, type FormField } from './survey';
 
 export interface StartForm {
   limit: string;
@@ -12,6 +12,8 @@ export interface StartForm {
   extraVarsJson: string;
   /** Survey values by dotted key; checkboxes hold 'true'/'false'. */
   survey: Record<string, string>;
+  /** Raw JSON object replacing the survey inputs ("advanced" mode); null when the form is used. */
+  surveyRaw: string | null;
 }
 
 export function initialStartForm(t: Template, fields: readonly FormField[]): StartForm {
@@ -27,43 +29,33 @@ export function initialStartForm(t: Template, fields: readonly FormField[]): Sta
     verbosity: t.verbosity,
     extraVarsJson: '',
     survey,
+    surveyRaw: null,
   };
 }
 
-function coerce(f: FormField, raw: string): { value?: unknown; error?: string } {
-  switch (f.type) {
-    case 'int': {
-      const n = Number(raw);
-      return Number.isInteger(n) ? { value: n } : { error: `${f.label} must be an integer.` };
+/** Form state for editing stored overrides (schedules) on top of the template defaults. */
+export function startFormFromOverrides(
+  t: Template,
+  fields: readonly FormField[],
+  ov: RunOverrides | null | undefined,
+): StartForm {
+  const form = initialStartForm(t, fields);
+  if (!ov) return form;
+  if (ov.limit !== undefined) form.limit = ov.limit;
+  if (ov.tags !== undefined) form.tags = ov.tags;
+  if (ov.skip_tags !== undefined) form.skipTags = ov.skip_tags;
+  if (ov.check !== undefined) form.check = ov.check;
+  if (ov.diff !== undefined) form.diff = ov.diff;
+  if (ov.verbosity !== undefined) form.verbosity = ov.verbosity;
+  if (ov.extra_vars && Object.keys(ov.extra_vars).length > 0) {
+    const { survey, rest } = varsToSurvey(fields, ov.extra_vars);
+    Object.assign(form.survey, survey);
+    if (Object.keys(rest).length > 0) {
+      if (t.allow_vars_override) form.extraVarsJson = JSON.stringify(rest, null, 2);
+      else form.surveyRaw = JSON.stringify(ov.extra_vars, null, 2);
     }
-    case 'float': {
-      const n = Number(raw);
-      return Number.isFinite(n) ? { value: n } : { error: `${f.label} must be a number.` };
-    }
-    case 'bool':
-      return { value: raw === 'true' };
-    case 'list':
-    case 'dict':
-    case 'raw':
-      try {
-        return { value: JSON.parse(raw) as unknown };
-      } catch {
-        return { error: `${f.label} must be valid JSON.` };
-      }
-    default:
-      return { value: raw };
   }
-}
-
-function setPath(target: Record<string, unknown>, key: string, value: unknown): void {
-  const parts = key.split('.');
-  let cur = target;
-  for (const p of parts.slice(0, -1)) {
-    const next = cur[p];
-    if (next === null || typeof next !== 'object' || Array.isArray(next)) cur[p] = {};
-    cur = cur[p] as Record<string, unknown>;
-  }
-  cur[parts[parts.length - 1]] = value;
+  return form;
 }
 
 /**
@@ -97,16 +89,21 @@ export function buildStartRequest(
       errors.push('Extra variables must be a JSON object.');
     }
   }
-  for (const f of fields) {
-    if (f.group) continue;
-    const raw = String(form.survey[f.key] ?? '');
-    if (raw === '' && f.kind !== 'checkbox') {
-      if (f.required) errors.push(`${f.label} is required.`);
-      continue;
+  if (form.surveyRaw !== null) {
+    if (form.surveyRaw.trim()) {
+      try {
+        const v: unknown = JSON.parse(form.surveyRaw);
+        if (v === null || typeof v !== 'object' || Array.isArray(v))
+          throw new Error('not an object');
+        Object.assign(vars, v);
+      } catch {
+        errors.push('Survey values must be a JSON object.');
+      }
     }
-    const c = coerce(f, raw);
-    if (c.error) errors.push(c.error);
-    else setPath(vars, f.key, c.value);
+  } else {
+    const sv = surveyToVars(fields, form.survey);
+    errors.push(...sv.errors);
+    Object.assign(vars, sv.vars);
   }
   if (Object.keys(vars).length > 0) ov.extra_vars = vars;
   return { overrides: ov, errors };

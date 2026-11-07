@@ -2,12 +2,15 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -35,8 +38,8 @@ func TestRoutes(t *testing.T) {
 	if c := get(bad, "/readyz").Code; c != 503 {
 		t.Errorf("readyz down %d", c)
 	}
-	if c := get(ok, "/metrics").Code; c != 200 {
-		t.Errorf("metrics %d", c)
+	if rec := get(ok, "/metrics"); rec.Code != http.StatusNotFound || strings.Contains(rec.Body.String(), "go_goroutines") {
+		t.Errorf("metrics without a token: want 404, got %d", rec.Code)
 	}
 	if c := get(ok, "/some/spa/route").Code; c != 200 {
 		t.Errorf("spa fallback %d", c)
@@ -95,5 +98,73 @@ func TestWorkerAPIListener(t *testing.T) {
 		if c := get(h, p).Code; c != http.StatusNotFound {
 			t.Errorf("%s on worker listener: %d", p, c)
 		}
+	}
+}
+
+func TestMetricsBearerToken(t *testing.T) {
+	log := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	h := Router(log, fakePing{}, DefaultStatic(), WithMetricsToken("s3cret-token"))
+	req := func(auth string) *httptest.ResponseRecorder {
+		r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/metrics", nil)
+		if auth != "" {
+			r.Header.Set("Authorization", auth)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, r)
+		return rec
+	}
+	if c := req("").Code; c != http.StatusUnauthorized {
+		t.Errorf("no token: %d", c)
+	}
+	if c := req("Bearer wrong").Code; c != http.StatusUnauthorized {
+		t.Errorf("wrong token: %d", c)
+	}
+	if rec := req("Bearer s3cret-token"); rec.Code != 200 || !strings.Contains(rec.Body.String(), "go_goroutines") {
+		t.Errorf("valid token: %d", rec.Code)
+	}
+}
+
+func TestWorkerListenerServesMetrics(t *testing.T) {
+	log := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	h := WorkerAPIHandler(http.NotFoundHandler(), log)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/metrics", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, r)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "go_goroutines") {
+		t.Errorf("worker listener metrics: %d", rec.Code)
+	}
+}
+
+func TestSecurityHeaders(t *testing.T) {
+	log := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	static := fstest.MapFS{"index.html": {Data: []byte(`<html><head><script>var a=1;</script><script src="/x.js"></script></head>` +
+		`<body><script>{ boot("x") }</script></body></html>`)}}
+	h := Router(log, fakePing{}, static)
+	rec := get(h, "/")
+	hd := rec.Header()
+	csp := hd.Get("Content-Security-Policy")
+	for _, want := range []string{"default-src 'self'", "frame-ancestors 'none'", "object-src 'none'", "'sha256-"} {
+		if !strings.Contains(csp, want) {
+			t.Errorf("CSP lacks %q: %s", want, csp)
+		}
+	}
+	if strings.Count(csp, "'sha256-") != 2 {
+		t.Errorf("want 2 inline script hashes: %s", csp)
+	}
+	if strings.Contains(csp, "script-src 'self' 'unsafe-inline'") || strings.Contains(csp, "unsafe-eval") {
+		t.Errorf("script-src too loose: %s", csp)
+	}
+	if hd.Get("X-Content-Type-Options") != "nosniff" || hd.Get("X-Frame-Options") != "DENY" || hd.Get("Referrer-Policy") != "same-origin" {
+		t.Errorf("headers: %v", hd)
+	}
+	if hd.Get("Strict-Transport-Security") != "" {
+		t.Error("HSTS must not be sent without TLS")
+	}
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/healthz", nil)
+	r.TLS = &tls.ConnectionState{}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, r)
+	if rec.Header().Get("Strict-Transport-Security") == "" {
+		t.Error("HSTS missing on TLS")
 	}
 }

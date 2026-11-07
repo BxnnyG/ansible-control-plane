@@ -18,7 +18,10 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/db/dbgen"
 )
 
-type memStore struct{ rows map[uuid.UUID]dbgen.Secret }
+type memStore struct {
+	rows         map[uuid.UUID]dbgen.Secret
+	beforeUpdate func() // test hook: runs once before the next update
+}
 
 func newMem() *memStore { return &memStore{rows: map[uuid.UUID]dbgen.Secret{}} }
 
@@ -55,7 +58,16 @@ func (m *memStore) ListSecretsMeta(_ context.Context, ws uuid.UUID) ([]dbgen.Lis
 }
 
 func (m *memStore) UpdateSecretWithEnvelope(_ context.Context, a dbgen.UpdateSecretWithEnvelopeParams) (dbgen.UpdateSecretWithEnvelopeRow, error) {
+	if m.beforeUpdate != nil {
+		f := m.beforeUpdate
+		m.beforeUpdate = nil
+		f()
+	}
 	s := m.rows[a.ID]
+	if !s.UpdatedAt.Time.Equal(a.UpdatedAt.Time) {
+		return dbgen.UpdateSecretWithEnvelopeRow{}, pgx.ErrNoRows
+	}
+	s.UpdatedAt = pgtype.Timestamptz{Time: s.UpdatedAt.Time.Add(time.Microsecond), Valid: true}
 	s.Name, s.Description, s.Metadata = a.Name, a.Description, a.Metadata
 	s.EnvVersion, s.EnvKeyID, s.EnvWrapNonce, s.EnvWrappedDek = a.EnvVersion, a.EnvKeyID, a.EnvWrapNonce, a.EnvWrappedDek
 	s.EnvNonce, s.EnvCiphertext = a.EnvNonce, a.EnvCiphertext
@@ -196,5 +208,44 @@ func TestConnectorSecretTypes(t *testing.T) {
 		if (err == nil) != tc.ok {
 			t.Errorf("%s %q: err=%v, want ok=%v", tc.typ, tc.val, err, tc.ok)
 		}
+	}
+}
+
+// A name-only PUT that loses the race against a value PUT must keep the new value.
+func TestUpdateDoesNotLoseConcurrentUpdate(t *testing.T) {
+	svc, st := testService(t)
+	ctx := context.Background()
+	ws := uuid.New()
+	m, err := svc.Create(ctx, ws, CreateInput{Name: "k", Type: TypePassword, Value: []byte("old-value-test")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.beforeUpdate = func() { // concurrent writer commits between our read and write
+		if _, err := svc.Update(ctx, ws, m.ID, UpdateInput{Value: []byte("new-value-test")}); err != nil {
+			t.Error(err)
+		}
+	}
+	newName := "renamed"
+	if _, err := svc.Update(ctx, ws, m.ID, UpdateInput{Name: &newName}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.Resolve(ctx, ws, m.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got.Value.Reveal()) != "new-value-test" || st.rows[m.ID].Name != "renamed" {
+		t.Fatalf("lost update: name=%q", st.rows[m.ID].Name)
+	}
+}
+
+func TestUpdateDeletedWhileRacing(t *testing.T) {
+	svc, st := testService(t)
+	ctx := context.Background()
+	ws := uuid.New()
+	m, _ := svc.Create(ctx, ws, CreateInput{Name: "k", Type: TypePassword, Value: []byte("old-value-test")})
+	st.beforeUpdate = func() { delete(st.rows, m.ID) }
+	n := "x"
+	if _, err := svc.Update(ctx, ws, m.ID, UpdateInput{Name: &n}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("want ErrNotFound, got %v", err)
 	}
 }

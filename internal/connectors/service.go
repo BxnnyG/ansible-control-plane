@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/BxnnyG/ansible-control-plane/internal/db/dbgen"
+	"github.com/BxnnyG/ansible-control-plane/internal/metrics"
 	"github.com/BxnnyG/ansible-control-plane/internal/secrets"
 )
 
@@ -410,6 +411,7 @@ func (s *Service) Run(ctx context.Context, c dbgen.Connector, trigger string) (C
 	pctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 	defer cancel()
 	finished := s.o.Now()
+	metrics.ConnectorSyncs.WithLabelValues(c.Type, metrics.Result(serr)).Inc()
 	if serr != nil {
 		msg := sanitize(serr, plain)
 		if err := s.persistError(pctx, c, trigger, started, finished, msg); err != nil {
@@ -420,6 +422,7 @@ func (s *Service) Run(ctx context.Context, c dbgen.Connector, trigger string) (C
 	if err := s.persistOK(pctx, c, trigger, started, finished, res, counts); err != nil {
 		return counts, fmt.Errorf("store sync result: %w", err)
 	}
+	metrics.ConnectorLastSuccess.WithLabelValues(c.Type).SetToCurrentTime()
 	if s.o.PostSync != nil {
 		if err := s.o.PostSync.AfterSync(pctx, c.WorkspaceID, c.ID); err != nil {
 			slog.Error("post-sync hook failed", "connector", c.ID, "error", err)
@@ -674,7 +677,15 @@ func (s *Service) DeleteConnector(ctx context.Context, ws, id uuid.UUID, policy 
 	if err != nil {
 		return false, err
 	}
-	n, err := s.q.DeleteConnector(ctx, dbgen.DeleteConnectorParams{ID: id, WorkspaceID: ws})
+	// Connector and secret go in one transaction: a crash never leaves an
+	// orphaned generated secret (e.g. the bearer secret of an alert webhook).
+	tx, err := s.o.DB.Begin(ctx)
+	if err != nil {
+		return false, fmt.Errorf("delete connector: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := s.q.WithTx(tx)
+	n, err := q.DeleteConnector(ctx, dbgen.DeleteConnectorParams{ID: id, WorkspaceID: ws})
 	if err != nil {
 		return false, fmt.Errorf("delete connector: %w", err)
 	}
@@ -683,7 +694,10 @@ func (s *Service) DeleteConnector(ctx context.Context, ws, id uuid.UUID, policy 
 	}
 	deleted := false
 	if c.SecretID.Valid && policy != KeepSecret {
-		deleted = s.deleteSecretIfUnused(ctx, ws, c, policy)
+		deleted = s.deleteSecretIfUnused(ctx, tx, q, ws, c, policy)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return false, fmt.Errorf("delete connector: %w", err)
 	}
 	if s.o.PostSync != nil {
 		if err := s.o.PostSync.AfterSync(ctx, ws, id); err != nil {
@@ -693,9 +707,13 @@ func (s *Service) DeleteConnector(ctx context.Context, ws, id uuid.UUID, policy 
 	return deleted, nil
 }
 
-func (s *Service) deleteSecretIfUnused(ctx context.Context, ws uuid.UUID, c dbgen.Connector, policy SecretPolicy) bool {
+// deleteSecretIfUnused runs inside the delete transaction. The secret delete
+// is wrapped in a savepoint: when other objects still reference the secret the
+// statement fails, the savepoint is rolled back and the connector delete
+// still commits.
+func (s *Service) deleteSecretIfUnused(ctx context.Context, tx pgx.Tx, q *dbgen.Queries, ws uuid.UUID, c dbgen.Connector, policy SecretPolicy) bool {
 	sid := c.SecretID.Bytes
-	sec, err := s.q.GetSecret(ctx, dbgen.GetSecretParams{ID: sid, WorkspaceID: ws})
+	sec, err := q.GetSecret(ctx, dbgen.GetSecretParams{ID: sid, WorkspaceID: ws})
 	if err != nil {
 		return false
 	}
@@ -703,15 +721,19 @@ func (s *Service) deleteSecretIfUnused(ctx context.Context, ws uuid.UUID, c dbge
 		return false
 	}
 	var refs int
-	if err := s.o.DB.QueryRow(ctx, `SELECT count(*) FROM connectors WHERE secret_id = $1`, sid).Scan(&refs); err != nil || refs > 0 {
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM connectors WHERE secret_id = $1`, sid).Scan(&refs); err != nil || refs > 0 {
 		return false
 	}
-	// Deleting fails (and the secret stays) while other objects still reference it.
-	if err := s.q.DeleteSecret(ctx, dbgen.DeleteSecretParams{ID: sid, WorkspaceID: ws}); err != nil {
+	sp, err := tx.Begin(ctx)
+	if err != nil {
+		return false
+	}
+	if err := q.WithTx(sp).DeleteSecret(ctx, dbgen.DeleteSecretParams{ID: sid, WorkspaceID: ws}); err != nil {
+		_ = sp.Rollback(ctx)
 		slog.Warn("secret of deleted connector kept", "connector", c.ID, "error", err)
 		return false
 	}
-	return true
+	return sp.Commit(ctx) == nil
 }
 
 // TestInput describes an unsaved connector configuration to probe.

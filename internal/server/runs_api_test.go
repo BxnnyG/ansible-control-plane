@@ -39,7 +39,10 @@ func (f *fakeRuns) ListTemplates(context.Context, uuid.UUID) ([]runs.Template, e
 	return []runs.Template{f.tpl()}, f.err
 }
 func (f *fakeRuns) GetTemplate(context.Context, uuid.UUID, uuid.UUID) (runs.Template, error) {
-	return f.tpl(), f.err
+	t := f.tpl()
+	t.ExtraVars = map[string]any{"app_version": "1.2.3"}
+	t.EnvVars = map[string]any{"MY_SETTING": "value"}
+	return t, f.err
 }
 func (f *fakeRuns) CreateTemplate(_ context.Context, _ uuid.UUID, in runs.TemplateInput) (runs.Template, error) {
 	f.tplInputs = append(f.tplInputs, in)
@@ -352,5 +355,41 @@ func TestRunsRoleMatrix(t *testing.T) {
 		if got := policy.Allowed(tc.role, tc.perm); got != tc.allow {
 			t.Errorf("%s %s = %v, want %v", tc.role, tc.perm, got, tc.allow)
 		}
+	}
+}
+
+func TestTemplateVarsMaskedForReadOnlyRoles(t *testing.T) {
+	tid := uuid.NewString()
+	for role, masked := range map[string]bool{policy.RoleViewer: true, policy.RoleOperator: true, policy.RoleEditor: false, policy.RoleAdmin: false} {
+		rec := doRuns(runsRouter(role, newFakeRuns(), &[]string{}), "GET", "/templates/"+tid, "")
+		body := rec.Body.String()
+		if rec.Code != 200 {
+			t.Fatalf("%s: %d", role, rec.Code)
+		}
+		if masked == (strings.Contains(body, "1.2.3") || strings.Contains(body, `"value"`)) {
+			t.Errorf("%s: masked=%v but body %s", role, masked, body)
+		}
+		if !strings.Contains(body, "app_version") || !strings.Contains(body, "MY_SETTING") {
+			t.Errorf("%s: keys must stay visible: %s", role, body)
+		}
+	}
+}
+
+func TestTemplateConnectionVarsNeedAdmin(t *testing.T) {
+	body := `{"name":"deploy","project_id":"` + uuid.NewString() + `","inventory_id":"` + uuid.NewString() +
+		`","playbook":"site.yml","extra_vars":{"ansible_ssh_common_args":"-o ProxyCommand=x"}}`
+	survey := `{"survey":[{"name":"ansible_connection","type":"str"}]}`
+	for role, want := range map[string]int{policy.RoleEditor: 422, policy.RoleAdmin: 201, policy.RoleOwner: 201} {
+		fr := newFakeRuns()
+		if rec := doRuns(runsRouter(role, fr, &[]string{}), "POST", "/templates", body); rec.Code != want {
+			t.Errorf("%s create: %d, want %d (%s)", role, rec.Code, want, rec.Body.String())
+		}
+		if want == 422 && len(fr.tplInputs) != 0 {
+			t.Errorf("%s: input must not reach the service", role)
+		}
+	}
+	fr := newFakeRuns()
+	if rec := doRuns(runsRouter(policy.RoleEditor, fr, &[]string{}), "PUT", "/templates/"+uuid.NewString(), survey); rec.Code != 422 {
+		t.Errorf("editor survey: %d %s", rec.Code, rec.Body.String())
 	}
 }

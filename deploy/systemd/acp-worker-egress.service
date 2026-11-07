@@ -1,0 +1,13 @@
+[Unit]
+Description=ACP worker egress allowlist (iptables)
+After=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/ansible-control-plane/scripts/worker-egress.sh apply
+ExecStop=/opt/ansible-control-plane/scripts/worker-egress.sh remove
+
+[Install]
+WantedBy=multi-user.target

@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -84,6 +85,10 @@ type Options struct {
 	LockDuration  time.Duration
 	IPMaxFailures int
 	IPWindow      time.Duration
+	// OIDCRateMax requests per OIDCRateWindow and source IP are allowed on
+	// the OIDC login and callback endpoints (defaults: 20 per minute).
+	OIDCRateMax    int
+	OIDCRateWindow time.Duration
 }
 
 // Service handles login, logout and session authentication.
@@ -95,6 +100,8 @@ type Service struct {
 
 	bg      breakGlassSettings
 	limiter *ipLimiter
+	// oidcLimiter bounds requests per source IP on the OIDC login and callback endpoints.
+	oidcLimiter *ipLimiter
 
 	mu       sync.Mutex
 	provider *oidc.Provider
@@ -137,6 +144,14 @@ func New(o Options) (*Service, error) {
 	}
 	s := &Service{o: o, sealer: sl, secure: pu.Scheme == "https"}
 	s.bg, s.limiter = newBreakGlassSettings(o)
+	oMax, oWin := o.OIDCRateMax, o.OIDCRateWindow
+	if oMax <= 0 {
+		oMax = defaultOIDCRateMax
+	}
+	if oWin <= 0 {
+		oWin = defaultOIDCRateWindow
+	}
+	s.oidcLimiter = newIPLimiter(oMax, oWin)
 	// The __Host- prefix requires Secure, so it is only used over HTTPS.
 	pre := ""
 	if s.secure {
@@ -198,14 +213,35 @@ func (s *Service) oauth(p *oidc.Provider) *oauth2.Config {
 func (s *Service) Routes(r chi.Router) {
 	r.Get("/api/auth/config", s.handleConfig)
 	if s.o.Issuer != "" {
-		r.Get("/api/auth/oidc/login", s.handleLogin)
-		r.Get(callbackPath, s.handleCallback)
+		r.With(s.oidcRateLimit).Get("/api/auth/oidc/login", s.handleLogin)
+		r.With(s.oidcRateLimit).Get(callbackPath, s.handleCallback)
 	}
 	if s.o.BreakGlass {
 		r.Post("/api/auth/breakglass/login", s.handleBreakGlassLogin)
 	}
 	r.With(s.Require).Post("/api/auth/logout", s.handleLogout)
 	r.With(s.Require).Get("/api/v1/me", s.handleMe)
+}
+
+// oidcRateLimit limits the OIDC browser endpoints per source IP. Browser
+// navigations (Accept: text/html) are redirected to the login page with an
+// error code; all responses carry 429-style Retry-After.
+func (s *Service) oidcRateLimit(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		wait, ok := s.oidcLimiter.allow(clientIP(r), s.o.Now())
+		if ok {
+			next.ServeHTTP(w, r)
+			return
+		}
+		noStore(w)
+		s.recordLogin("oidc", "rate_limited")
+		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+		if strings.Contains(r.Header.Get("Accept"), "text/html") {
+			http.Redirect(w, r, loginPath+"?error=rate_limited", http.StatusSeeOther)
+			return
+		}
+		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "too many attempts"})
+	})
 }
 
 func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -244,6 +280,7 @@ func (s *Service) handleCallback(w http.ResponseWriter, r *http.Request) {
 	fc, _ := r.Cookie(s.names.flow)
 	s.clearCookie(w, s.names.flow, true)
 	fail := func(code, reason string) {
+		s.recordLogin("oidc", "failed")
 		s.audit(r.Context(), nil, "auth.login_failed", map[string]any{"reason": reason})
 		http.Redirect(w, r, loginPath+"?error="+code, http.StatusSeeOther)
 	}
@@ -346,6 +383,7 @@ func (s *Service) handleCallback(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if len(ms) == 0 {
+			s.recordLogin("oidc", "denied")
 			s.audit(r.Context(), &user, "auth.login_denied", map[string]any{
 				"reason": "no_access", "method": "oidc", "roles_received": len(roles), "roles": roles, "role_source": roleSource})
 			http.Redirect(w, r, loginPath+"?error=no_access", http.StatusSeeOther)
@@ -357,6 +395,7 @@ func (s *Service) handleCallback(w http.ResponseWriter, r *http.Request) {
 		fail("login_failed", "session_failed")
 		return
 	}
+	s.recordLogin("oidc", "success")
 	s.audit(r.Context(), &user, "auth.login", map[string]any{"method": "oidc", "roles": len(roles)})
 	http.Redirect(w, r, s.o.PublicURL+safeReturnTo(st.ReturnTo), http.StatusSeeOther)
 }

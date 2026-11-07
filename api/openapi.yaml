@@ -1,0 +1,2499 @@
+openapi: 3.1.0
+info:
+  title: Ansible Control Plane API
+  version: 1.0.0
+  description: |
+    REST API of the app listener. Hand-maintained; `internal/server/openapi_test.go`
+    fails when a registered route or its declared permission differs from this file.
+    The frontend types are generated from it (`npm run gen:api` in `web/`).
+
+    Every operation carries `x-acp-permission`: a policy permission (see
+    `internal/policy`), `authenticated` (session only, acts on the caller's own
+    data) or `public` (no session; hooks authenticate by signature or token).
+    Workspace permissions answer 404 for non-members and 403 for missing rights.
+
+    Mutating requests with a session need the CSRF token of the `acp_csrf`
+    cookie in the `X-CSRF-Token` header. The worker API (internal listener) is
+    not part of this document.
+servers:
+  - url: /
+security:
+  - sessionCookie: []
+x-security-mutating: &mutating
+  - sessionCookie: []
+    csrfHeader: []
+tags:
+  - {name: auth}
+  - {name: workspaces}
+  - {name: secrets}
+  - {name: projects}
+  - {name: inventories}
+  - {name: vault}
+  - {name: templates}
+  - {name: runs}
+  - {name: schedules}
+  - {name: connectors}
+  - {name: fleet}
+  - {name: hooks}
+paths:
+  /api/auth/config:
+    get:
+      tags: [auth]
+      operationId: authConfig
+      summary: Enabled login methods
+      x-acp-permission: public
+      security: []
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/AuthConfig'}}}}
+  /api/auth/oidc/login:
+    get:
+      tags: [auth]
+      operationId: oidcLogin
+      summary: Start the OIDC login (browser redirect)
+      x-acp-permission: public
+      security: []
+      parameters:
+        - {name: return_to, in: query, required: false, schema: {type: string}, description: Local path to return to after login.}
+      responses:
+        '303': {description: Redirect to the identity provider, or to the login page with an error code.}
+        '429': {$ref: '#/components/responses/Error'}
+  /api/auth/oidc/callback:
+    get:
+      tags: [auth]
+      operationId: oidcCallback
+      summary: OIDC redirect target (browser redirect)
+      x-acp-permission: public
+      security: []
+      parameters:
+        - {name: code, in: query, required: false, schema: {type: string}}
+        - {name: state, in: query, required: false, schema: {type: string}}
+      responses:
+        '303': {description: Redirect to the application, or to the login page with an error code.}
+        '429': {$ref: '#/components/responses/Error'}
+  /api/auth/breakglass/login:
+    post:
+      tags: [auth]
+      operationId: breakGlassLogin
+      summary: Break-glass admin login (password and TOTP)
+      x-acp-permission: public
+      security: []
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/BreakGlassCredentials'}}}}
+      responses:
+        '200': {description: Session cookies set, content: {application/json: {schema: {$ref: '#/components/schemas/StatusResponse'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      summary: End the session
+      x-acp-permission: authenticated
+      security: *mutating
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/LogoutResult'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/me:
+    get:
+      tags: [auth]
+      operationId: me
+      summary: The signed-in user and memberships
+      x-acp-permission: authenticated
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Me'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/openapi.yaml:
+    get:
+      tags: [auth]
+      operationId: openapiSpec
+      summary: This OpenAPI document
+      x-acp-permission: authenticated
+      responses:
+        '200': {description: OK, content: {application/yaml: {schema: {type: string}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces:
+    get:
+      tags: [workspaces]
+      operationId: listWorkspaces
+      summary: Workspaces the caller is a member of
+      x-acp-permission: authenticated
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/WorkspaceSummary'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [workspaces]
+      operationId: getWorkspace
+      summary: Workspace with the caller's role and permissions
+      x-acp-permission: workspace.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/WorkspaceDetail'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/setup:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [workspaces]
+      operationId: getSetup
+      summary: First-run wizard status
+      x-acp-permission: workspace.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/SetupStatus'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    put:
+      tags: [workspaces]
+      operationId: setWorkspaceName
+      summary: Rename the workspace
+      x-acp-permission: workspace.manage
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/WorkspaceNameInput'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/SetupStatus'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/setup/complete:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    post:
+      tags: [workspaces]
+      operationId: completeSetup
+      summary: Mark the first-run wizard as completed
+      x-acp-permission: workspace.manage
+      security: *mutating
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/SetupStatus'}}}}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/v1/workspaces/{workspace}/secrets:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [secrets]
+      operationId: listSecrets
+      summary: Secret metadata (values are never returned)
+      x-acp-permission: secrets.meta.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/SecretMeta'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      tags: [secrets]
+      operationId: createSecret
+      x-acp-permission: secrets.write
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/SecretCreate'}}}}
+      responses:
+        '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/SecretMeta'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/secrets/{id}:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [secrets]
+      operationId: getSecret
+      x-acp-permission: secrets.meta.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/SecretMeta'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    put:
+      tags: [secrets]
+      operationId: updateSecret
+      x-acp-permission: secrets.write
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/SecretUpdate'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/SecretMeta'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      tags: [secrets]
+      operationId: deleteSecret
+      x-acp-permission: secrets.write
+      security: *mutating
+      responses:
+        '204': {$ref: '#/components/responses/NoContent'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/v1/workspaces/{workspace}/vault-identities:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [vault]
+      operationId: listVaultIdentities
+      x-acp-permission: vault.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/VaultIdentity'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      tags: [vault]
+      operationId: createVaultIdentity
+      x-acp-permission: vault.manage
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VaultIdentityInput'}}}}
+      responses:
+        '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/VaultIdentity'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/vault-identities/{id}:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [vault]
+      operationId: getVaultIdentity
+      x-acp-permission: vault.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/VaultIdentity'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    put:
+      tags: [vault]
+      operationId: updateVaultIdentity
+      x-acp-permission: vault.manage
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VaultIdentityInput'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/VaultIdentity'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      tags: [vault]
+      operationId: deleteVaultIdentity
+      x-acp-permission: vault.manage
+      security: *mutating
+      responses:
+        '204': {$ref: '#/components/responses/NoContent'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/v1/workspaces/{workspace}/projects:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [projects]
+      operationId: listProjects
+      x-acp-permission: project.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Project'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      tags: [projects]
+      operationId: createProject
+      x-acp-permission: project.write
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ProjectInput'}}}}
+      responses:
+        '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Project'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/projects/{id}:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [projects]
+      operationId: getProject
+      x-acp-permission: project.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Project'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    put:
+      tags: [projects]
+      operationId: updateProject
+      summary: Partial update; omitted fields stay, null clears nullable fields
+      x-acp-permission: project.write
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ProjectUpdate'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Project'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      tags: [projects]
+      operationId: deleteProject
+      x-acp-permission: project.write
+      security: *mutating
+      responses:
+        '204': {$ref: '#/components/responses/NoContent'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/projects/{id}/hostkey/scan:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [projects]
+      operationId: scanProjectHostKeys
+      x-acp-permission: project.write
+      security: *mutating
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/HostKeyScan'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/projects/{id}/hostkey/confirm:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [projects]
+      operationId: confirmProjectHostKey
+      x-acp-permission: project.write
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/HostKeyConfirmInput'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Project'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/projects/{id}/test:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [projects]
+      operationId: testProject
+      summary: Probe the remote (read-only)
+      x-acp-permission: project.sync
+      security: *mutating
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/OkResult'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/projects/{id}/sync:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [projects]
+      operationId: syncProject
+      x-acp-permission: project.sync
+      security: *mutating
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/ProjectRevision'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/projects/{id}/revisions:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [projects]
+      operationId: listProjectRevisions
+      x-acp-permission: project.read
+      parameters:
+        - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/ProjectRevision'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/projects/{id}/revisions/latest:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [projects]
+      operationId: getLatestProjectRevision
+      x-acp-permission: project.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/ProjectRevision'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/projects/{id}/webhook:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [projects]
+      operationId: getProjectWebhook
+      x-acp-permission: project.write
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/ProjectWebhook'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    put:
+      tags: [projects]
+      operationId: setProjectWebhook
+      summary: Enable or disable the webhook; the secret is returned once on enable
+      x-acp-permission: project.write
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ProjectWebhookInput'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/ProjectWebhook'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      tags: [projects]
+      operationId: deleteProjectWebhook
+      x-acp-permission: project.write
+      security: *mutating
+      responses:
+        '204': {$ref: '#/components/responses/NoContent'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/projects/{id}/webhook/rotate:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [projects]
+      operationId: rotateProjectWebhook
+      x-acp-permission: project.write
+      security: *mutating
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/ProjectWebhook'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/projects/{id}/vault:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [vault]
+      operationId: listProjectVault
+      summary: Vault-encrypted files and inline values of the latest revision
+      x-acp-permission: vault.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/VaultListing'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/projects/{id}/vault/decrypt:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [vault]
+      operationId: decryptProjectVault
+      x-acp-permission: vault.decrypt
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VaultDecryptInput'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/VaultDecrypted'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/projects/{id}/vault/encrypt:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [vault]
+      operationId: encryptProjectVault
+      x-acp-permission: vault.manage
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VaultEncryptInput'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/VaultWriteResult'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/projects/{id}/vault/rekey:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [vault]
+      operationId: rekeyProjectVault
+      x-acp-permission: vault.manage
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VaultRekeyInput'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/VaultWriteResult'}}}}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/v1/workspaces/{workspace}/inventories:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [inventories]
+      operationId: listInventories
+      x-acp-permission: inventory.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Inventory'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      tags: [inventories]
+      operationId: createInventory
+      x-acp-permission: inventory.write
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/InventoryInput'}}}}
+      responses:
+        '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Inventory'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/inventories/{id}:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [inventories]
+      operationId: getInventory
+      x-acp-permission: inventory.read
+      responses:
+        '200': {description: OK, headers: {ETag: {$ref: '#/components/headers/ETag'}}, content: {application/json: {schema: {$ref: '#/components/schemas/Inventory'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    put:
+      tags: [inventories]
+      operationId: updateInventory
+      description: Optimistic locking through `If-Match` (409 `version_conflict` on a stale version).
+      x-acp-permission: inventory.write
+      security: *mutating
+      parameters: [{$ref: '#/components/parameters/IfMatch'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/InventoryUpdate'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Inventory'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      tags: [inventories]
+      operationId: deleteInventory
+      x-acp-permission: inventory.write
+      security: *mutating
+      responses:
+        '204': {$ref: '#/components/responses/NoContent'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/inventories/{id}/import:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [inventories]
+      operationId: importInventory
+      x-acp-permission: inventory.write
+      security: *mutating
+      parameters: [{$ref: '#/components/parameters/IfMatch'}]
+      requestBody: {required: false, content: {application/json: {schema: {$ref: '#/components/schemas/InventoryImportInput'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/InventoryImportResult'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/inventories/{id}/render:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [inventories]
+      operationId: renderInventory
+      summary: '`ansible-inventory --list` shape; vault values masked unless exported'
+      x-acp-permission: inventory.read
+      parameters:
+        - {name: export, in: query, required: false, schema: {type: boolean}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/InventoryRender'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/inventories/{id}/diff:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [inventories]
+      operationId: diffInventory
+      x-acp-permission: inventory.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/InventoryDiff'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/inventories/{id}/commit:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [inventories]
+      operationId: commitInventory
+      x-acp-permission: inventory.write
+      security: *mutating
+      parameters: [{$ref: '#/components/parameters/IfMatch'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/InventoryCommitInput'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/InventoryCommitResult'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/inventories/{id}/groups:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [inventories]
+      operationId: listInventoryGroups
+      x-acp-permission: inventory.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/InventoryGroup'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      tags: [inventories]
+      operationId: createInventoryGroup
+      x-acp-permission: inventory.write
+      security: *mutating
+      parameters: [{$ref: '#/components/parameters/IfMatch'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/InventoryGroupInput'}}}}
+      responses:
+        '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/InventoryGroup'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/inventories/{id}/groups/{gid}:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}, {$ref: '#/components/parameters/Gid'}]
+    get:
+      tags: [inventories]
+      operationId: getInventoryGroup
+      x-acp-permission: inventory.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/InventoryGroup'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    put:
+      tags: [inventories]
+      operationId: updateInventoryGroup
+      x-acp-permission: inventory.write
+      security: *mutating
+      parameters: [{$ref: '#/components/parameters/IfMatch'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/InventoryGroupUpdate'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/InventoryGroup'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      tags: [inventories]
+      operationId: deleteInventoryGroup
+      x-acp-permission: inventory.write
+      security: *mutating
+      parameters: [{$ref: '#/components/parameters/IfMatch'}]
+      responses:
+        '204': {$ref: '#/components/responses/NoContent'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/inventories/{id}/groups/{gid}/hosts/{hid}:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}, {$ref: '#/components/parameters/Gid'}, {$ref: '#/components/parameters/Hid'}]
+    put:
+      tags: [inventories]
+      operationId: addInventoryGroupMember
+      x-acp-permission: inventory.write
+      security: *mutating
+      parameters: [{$ref: '#/components/parameters/IfMatch'}]
+      responses:
+        '204': {$ref: '#/components/responses/NoContent'}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      tags: [inventories]
+      operationId: removeInventoryGroupMember
+      x-acp-permission: inventory.write
+      security: *mutating
+      parameters: [{$ref: '#/components/parameters/IfMatch'}]
+      responses:
+        '204': {$ref: '#/components/responses/NoContent'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/inventories/{id}/hosts:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [inventories]
+      operationId: listInventoryHosts
+      x-acp-permission: inventory.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/InventoryHost'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      tags: [inventories]
+      operationId: createInventoryHost
+      x-acp-permission: inventory.write
+      security: *mutating
+      parameters: [{$ref: '#/components/parameters/IfMatch'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/InventoryHostInput'}}}}
+      responses:
+        '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/InventoryHost'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/inventories/{id}/hosts/{hid}:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}, {$ref: '#/components/parameters/Hid'}]
+    get:
+      tags: [inventories]
+      operationId: getInventoryHost
+      x-acp-permission: inventory.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/InventoryHost'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    put:
+      tags: [inventories]
+      operationId: updateInventoryHost
+      x-acp-permission: inventory.write
+      security: *mutating
+      parameters: [{$ref: '#/components/parameters/IfMatch'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/InventoryHostUpdate'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/InventoryHost'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      tags: [inventories]
+      operationId: deleteInventoryHost
+      x-acp-permission: inventory.write
+      security: *mutating
+      parameters: [{$ref: '#/components/parameters/IfMatch'}]
+      responses:
+        '204': {$ref: '#/components/responses/NoContent'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/v1/workspaces/{workspace}/templates:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [templates]
+      operationId: listTemplates
+      x-acp-permission: template.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Template'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      tags: [templates]
+      operationId: createTemplate
+      x-acp-permission: template.write
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/TemplateInput'}}}}
+      responses:
+        '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Template'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/templates/{id}:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [templates]
+      operationId: getTemplate
+      description: Roles without `template.write` see variable values masked as `***`.
+      x-acp-permission: template.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Template'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    put:
+      tags: [templates]
+      operationId: updateTemplate
+      summary: Partial update; omitted fields stay, null clears nullable references
+      x-acp-permission: template.write
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/TemplateInput'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Template'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      tags: [templates]
+      operationId: deleteTemplate
+      x-acp-permission: template.write
+      security: *mutating
+      responses:
+        '204': {$ref: '#/components/responses/NoContent'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/templates/{id}/runs:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [runs]
+      operationId: startRun
+      summary: Queue a run of the template
+      x-acp-permission: run.execute
+      security: *mutating
+      requestBody: {required: false, content: {application/json: {schema: {$ref: '#/components/schemas/RunOverrides'}}}}
+      responses:
+        '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Run'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/templates/{id}/runs/preview:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [runs]
+      operationId: previewRun
+      summary: Effective host set of a run, without starting it
+      x-acp-permission: run.execute
+      security: *mutating
+      requestBody: {required: false, content: {application/json: {schema: {$ref: '#/components/schemas/RunOverrides'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/RunPreview'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/templates/{id}/webhook:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [templates]
+      operationId: getTemplateWebhook
+      x-acp-permission: template.write
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/TemplateWebhook'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      tags: [templates]
+      operationId: rotateTemplateWebhook
+      summary: Enable the webhook or rotate its secret (returned once)
+      x-acp-permission: template.write
+      security: *mutating
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/TemplateWebhook'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      tags: [templates]
+      operationId: deleteTemplateWebhook
+      x-acp-permission: template.write
+      security: *mutating
+      responses:
+        '204': {$ref: '#/components/responses/NoContent'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/templates/{id}/schedules:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [schedules]
+      operationId: listTemplateSchedules
+      x-acp-permission: schedule.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Schedule'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      tags: [schedules]
+      operationId: createSchedule
+      x-acp-permission: schedule.write
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ScheduleInput'}}}}
+      responses:
+        '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Schedule'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/schedules/preview:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [schedules]
+      operationId: previewSchedule
+      summary: Next fire times of a cron expression
+      x-acp-permission: schedule.read
+      parameters:
+        - {name: cron, in: query, required: true, schema: {type: string}}
+        - {name: tz, in: query, required: false, schema: {type: string}}
+        - {name: n, in: query, required: false, schema: {type: integer, minimum: 1}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/SchedulePreview'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/schedules/{id}:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [schedules]
+      operationId: getSchedule
+      x-acp-permission: schedule.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Schedule'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    put:
+      tags: [schedules]
+      operationId: updateSchedule
+      x-acp-permission: schedule.write
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ScheduleInput'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Schedule'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      tags: [schedules]
+      operationId: deleteSchedule
+      x-acp-permission: schedule.write
+      security: *mutating
+      responses:
+        '204': {$ref: '#/components/responses/NoContent'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/v1/workspaces/{workspace}/runs:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [runs]
+      operationId: listRuns
+      summary: Run history, newest first, cursor paginated
+      x-acp-permission: run.read
+      parameters:
+        - {name: template, in: query, required: false, schema: {type: string, format: uuid}}
+        - {name: status, in: query, required: false, schema: {type: string}}
+        - {name: trigger, in: query, required: false, schema: {type: string}}
+        - {name: user, in: query, required: false, schema: {type: string, format: uuid}}
+        - {name: host, in: query, required: false, schema: {type: string}}
+        - {name: cursor, in: query, required: false, schema: {type: string}}
+        - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/RunPage'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/runs/events:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [runs]
+      operationId: streamRunEvents
+      summary: Server-sent events of the run list
+      description: Event `run` carries a Run JSON object whenever its status or failed-host count changes; comment lines are keep-alives.
+      x-acp-permission: run.read
+      responses:
+        '200': {description: SSE stream, content: {text/event-stream: {schema: {type: string}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/runs/{id}:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [runs]
+      operationId: getRun
+      x-acp-permission: run.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/RunDetail'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/runs/{id}/cancel:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [runs]
+      operationId: cancelRun
+      x-acp-permission: run.cancel
+      security: *mutating
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Run'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/runs/{id}/log:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [runs]
+      operationId: streamRunLog
+      summary: Live log as server-sent events
+      description: |
+        Events: `log` (id = chunk sequence, data = JSON string), `status`
+        (data = RunStatusEvent). Resumes after `Last-Event-ID` or `after`.
+      x-acp-permission: run.read
+      parameters:
+        - {name: after, in: query, required: false, schema: {type: integer, format: int64, minimum: 0}}
+        - {name: Last-Event-ID, in: header, required: false, schema: {type: integer, format: int64}}
+      responses:
+        '200': {description: SSE stream, content: {text/event-stream: {schema: {type: string}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/runs/{id}/log.txt:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [runs]
+      operationId: downloadRunLog
+      x-acp-permission: run.read
+      responses:
+        '200': {description: Plain-text log download, content: {text/plain: {schema: {type: string}}}}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/v1/workspaces/{workspace}/connector-types:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [connectors]
+      operationId: listConnectorTypes
+      x-acp-permission: connector.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/ConnectorType'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/connectors:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [connectors]
+      operationId: listConnectors
+      x-acp-permission: connector.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Connector'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      tags: [connectors]
+      operationId: createConnector
+      x-acp-permission: connector.write
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ConnectorInput'}}}}
+      responses:
+        '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/ConnectorCreated'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/connectors/test:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    post:
+      tags: [connectors]
+      operationId: testConnectorConfig
+      summary: Probe an unsaved configuration (read-only)
+      x-acp-permission: connector.write
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ConnectorTestInput'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/ConnectorTestResult'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/connectors/{id}:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [connectors]
+      operationId: getConnector
+      x-acp-permission: connector.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Connector'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    patch:
+      tags: [connectors]
+      operationId: updateConnector
+      summary: Omitted keys stay; secret_id null removes the credential
+      x-acp-permission: connector.write
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ConnectorUpdate'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Connector'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      tags: [connectors]
+      operationId: deleteConnector
+      x-acp-permission: connector.write
+      security: *mutating
+      responses:
+        '204': {$ref: '#/components/responses/NoContent'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/connectors/{id}/test:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [connectors]
+      operationId: testConnector
+      summary: Probe a saved connector (read-only)
+      x-acp-permission: connector.write
+      security: *mutating
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/ConnectorTestResult'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/connectors/{id}/sync:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [connectors]
+      operationId: syncConnector
+      summary: Queue a sync now
+      x-acp-permission: connector.write
+      security: *mutating
+      responses:
+        '202': {description: Queued, content: {application/json: {schema: {$ref: '#/components/schemas/StatusResponse'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/connectors/{id}/syncs:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [connectors]
+      operationId: listConnectorSyncs
+      x-acp-permission: connector.read
+      parameters:
+        - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/ConnectorSync'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/v1/workspaces/{workspace}/networks:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [fleet]
+      operationId: listFleetNetworks
+      x-acp-permission: fleet.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/FleetNetwork'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/hosts:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [fleet]
+      operationId: listFleetHosts
+      x-acp-permission: fleet.read
+      parameters:
+        - {name: network, in: query, required: false, schema: {type: string, format: uuid}}
+        - {name: q, in: query, required: false, schema: {type: string}}
+        - {name: conflicts, in: query, required: false, schema: {type: boolean}}
+        - {name: alerts, in: query, required: false, schema: {type: boolean}}
+        - {name: managed, in: query, required: false, schema: {type: boolean}, description: false lists hosts not linked to any inventory host.}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/FleetHost'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/hosts/{id}:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [fleet]
+      operationId: getFleetHost
+      x-acp-permission: fleet.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/FleetHostDetail'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/hosts/{id}/add-to-inventory:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [fleet]
+      operationId: addFleetHostToInventory
+      description: Also needs inventory.write on the target inventory (scope narrowing applies).
+      x-acp-permission: inventory.write
+      security: *mutating
+      parameters: [{$ref: '#/components/parameters/IfMatch'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/FleetAddInput'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/FleetAddResult'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/alerts:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [fleet]
+      operationId: listFleetAlerts
+      x-acp-permission: fleet.read
+      parameters:
+        - {name: state, in: query, required: false, schema: {type: string, enum: [open, resolved]}}
+        - {name: host_id, in: query, required: false, schema: {type: string, format: uuid}}
+        - {name: connector, in: query, required: false, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/FleetAlert'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/alerts/{id}/remediations:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [fleet]
+      operationId: listAlertRemediations
+      x-acp-permission: fleet.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/RemediationRef'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/alerts/{id}/remediate:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [fleet]
+      operationId: remediateAlert
+      summary: Start the fix of an alert (a check run first when the rule asks for it)
+      x-acp-permission: fleet.remediate
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RemediateInput'}}}}
+      responses:
+        '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/RemediationResult'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/conflicts:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [fleet]
+      operationId: listFleetConflicts
+      x-acp-permission: fleet.read
+      parameters:
+        - {name: state, in: query, required: false, schema: {$ref: '#/components/schemas/ConflictState'}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/FleetConflict'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/conflicts/{id}/ack:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [fleet]
+      operationId: ackFleetConflict
+      x-acp-permission: fleet.manage
+      security: *mutating
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/FleetConflict'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/fleet/bulk-run:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    post:
+      tags: [fleet]
+      operationId: bulkRun
+      summary: Run a template against selected fleet hosts
+      x-acp-permission: run.execute
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/BulkRunInput'}}}}
+      responses:
+        '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/BulkRunResult'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/group-rules:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [fleet]
+      operationId: listGroupRules
+      x-acp-permission: fleet.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/GroupRule'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      tags: [fleet]
+      operationId: createGroupRule
+      x-acp-permission: fleet.manage
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/GroupRuleInput'}}}}
+      responses:
+        '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/GroupRule'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/group-rules/{id}:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [fleet]
+      operationId: getGroupRule
+      x-acp-permission: fleet.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/GroupRule'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    put:
+      tags: [fleet]
+      operationId: updateGroupRule
+      x-acp-permission: fleet.manage
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/GroupRuleUpdate'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/GroupRule'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      tags: [fleet]
+      operationId: deleteGroupRule
+      x-acp-permission: fleet.manage
+      security: *mutating
+      responses:
+        '204': {$ref: '#/components/responses/NoContent'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/group-rules/{id}/preview:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [fleet]
+      operationId: previewGroupRule
+      summary: Dry run of an apply; nothing is written
+      x-acp-permission: fleet.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/GroupRulePreview'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      tags: [fleet]
+      operationId: previewGroupRulePost
+      summary: Same as the GET preview (a pure read), offered as POST for clients that cannot send GET bodies
+      x-acp-permission: fleet.read
+      security: *mutating
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/GroupRulePreview'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/group-rules/{id}/apply:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [fleet]
+      operationId: applyGroupRule
+      description: Git inventories get a commit on their write branch (409 `git_conflict` when the branch moved).
+      x-acp-permission: fleet.manage
+      security: *mutating
+      parameters: [{$ref: '#/components/parameters/IfMatch'}]
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/GroupRuleApplied'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/remediation-rules:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [fleet]
+      operationId: listRemediationRules
+      x-acp-permission: fleet.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/RemediationRule'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      tags: [fleet]
+      operationId: createRemediationRule
+      x-acp-permission: fleet.manage
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RemediationRuleInput'}}}}
+      responses:
+        '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/RemediationRule'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/remediation-rules/preview:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    post:
+      tags: [fleet]
+      operationId: previewRemediationRule
+      summary: Open alerts an unsaved rule would match
+      x-acp-permission: fleet.manage
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RemediationRulePreviewInput'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/FleetAlert'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/remediation-rules/applicable:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [fleet]
+      operationId: listApplicableRemediations
+      summary: Applicable rules of every open alert the caller sees, keyed by alert id
+      x-acp-permission: fleet.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: object, additionalProperties: {type: array, items: {$ref: '#/components/schemas/RemediationRef'}}}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/remediation-rules/{id}:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [fleet]
+      operationId: getRemediationRule
+      x-acp-permission: fleet.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/RemediationRule'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    put:
+      tags: [fleet]
+      operationId: updateRemediationRule
+      x-acp-permission: fleet.manage
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RemediationRuleInput'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/RemediationRule'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      tags: [fleet]
+      operationId: deleteRemediationRule
+      x-acp-permission: fleet.manage
+      security: *mutating
+      responses:
+        '204': {$ref: '#/components/responses/NoContent'}
+        default: {$ref: '#/components/responses/Error'}
+
+  /api/hooks/projects/{id}:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [hooks]
+      operationId: projectWebhook
+      summary: Git provider push webhook (signature authenticated)
+      description: Unknown project, disabled hook and bad signature are indistinguishable (404). Rate limited per source address.
+      x-acp-permission: public
+      security: []
+      requestBody: {required: false, content: {application/json: {schema: {type: object, additionalProperties: true}}}}
+      responses:
+        '202': {description: Accepted or ignored, content: {application/json: {schema: {$ref: '#/components/schemas/HookStatus'}}}}
+        '404': {description: Not found or rejected.}
+        '413': {description: Request too large.}
+        '429': {description: Rate limited.}
+  /api/hooks/templates/{id}:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [hooks]
+      operationId: templateWebhook
+      summary: Start a template run (signature authenticated)
+      x-acp-permission: public
+      security: []
+      requestBody: {required: false, content: {application/json: {schema: {type: object, additionalProperties: true}}}}
+      responses:
+        '202': {description: Accepted, content: {application/json: {schema: {$ref: '#/components/schemas/TemplateHookResult'}}}}
+        '404': {description: Not found or rejected.}
+        '413': {description: Request too large.}
+        '429': {description: Rate limited.}
+        default: {$ref: '#/components/responses/Error'}
+  /api/hooks/alerts/{id}:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [hooks]
+      operationId: alertWebhook
+      summary: Alert receiver of an alert_webhook connector (bearer token authenticated)
+      description: Accepts a generic alert list or an Alertmanager payload.
+      x-acp-permission: public
+      security: []
+      requestBody: {required: true, content: {application/json: {schema: {type: object, additionalProperties: true}}}}
+      responses:
+        '202': {description: Accepted, content: {application/json: {schema: {$ref: '#/components/schemas/AlertHookResult'}}}}
+        '404': {description: Not found or rejected.}
+        '413': {description: Request too large.}
+        '429': {description: Rate limited.}
+        default: {$ref: '#/components/responses/Error'}
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: acp_session
+      description: Session cookie (`__Host-acp_session` over HTTPS).
+    csrfHeader:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: Value of the `acp_csrf` cookie (`__Host-acp_csrf` over HTTPS); required on non-GET requests.
+  parameters:
+    Workspace: {name: workspace, in: path, required: true, schema: {type: string}, description: Workspace slug.}
+    Id: {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    Gid: {name: gid, in: path, required: true, schema: {type: string, format: uuid}}
+    Hid: {name: hid, in: path, required: true, schema: {type: string, format: uuid}}
+    IfMatch:
+      name: If-Match
+      in: header
+      required: false
+      schema: {type: string}
+      description: Quoted inventory version (`"7"`); 409 `version_conflict` when stale.
+  headers:
+    ETag: {description: Quoted inventory version., schema: {type: string}}
+  responses:
+    Error:
+      description: Error
+      content: {application/json: {schema: {$ref: '#/components/schemas/ErrorBody'}}}
+    NoContent: {description: No content}
+  schemas:
+    ErrorBody:
+      type: object
+      description: Error envelope. `code` is a stable machine-readable value (open set, e.g. not_found, conflict, invalid, bad_request, version_conflict, git_conflict).
+      required: [error]
+      properties:
+        error: {type: string}
+        code: {type: string}
+        detail: {type: string}
+        paths: {type: array, items: {type: string}, description: Conflicting paths of a git_conflict error.}
+    StatusResponse:
+      type: object
+      required: [status]
+      properties:
+        status: {type: string}
+    OkResult:
+      type: object
+      required: [ok]
+      properties:
+        ok: {type: boolean}
+    LogoutResult:
+      type: object
+      required: [redirect]
+      properties:
+        redirect: {type: string}
+    HookStatus:
+      type: object
+      required: [status]
+      properties:
+        status: {type: string, enum: [accepted, ignored]}
+    TemplateHookResult:
+      type: object
+      required: [status, run_id]
+      properties:
+        status: {type: string}
+        run_id: {type: string, format: uuid}
+    AlertHookResult:
+      type: object
+      required: [status, alerts]
+      properties:
+        status: {type: string}
+        alerts: {type: integer}
+    AuthConfig:
+      type: object
+      required: [oidc, breakglass]
+      properties:
+        oidc: {type: boolean}
+        breakglass: {type: boolean}
+    BreakGlassCredentials:
+      type: object
+      required: [username, password, totp]
+      properties:
+        username: {type: string}
+        password: {type: string}
+        totp: {type: string}
+    Membership:
+      type: object
+      required: [workspace_id, slug, name, role, scoped]
+      properties:
+        workspace_id: {type: string, format: uuid}
+        slug: {type: string}
+        name: {type: string}
+        role: {type: string}
+        scoped: {type: boolean}
+    Me:
+      type: object
+      required: [id, email, display_name, memberships]
+      properties:
+        id: {type: string, format: uuid}
+        email: {type: string}
+        display_name: {type: string}
+        memberships: {type: array, items: {$ref: '#/components/schemas/Membership'}}
+    WorkspaceSummary:
+      type: object
+      required: [slug, name, role, scoped]
+      properties:
+        slug: {type: string}
+        name: {type: string}
+        role: {type: string}
+        scoped: {type: boolean}
+    WorkspaceDetail:
+      type: object
+      required: [slug, name, description, role, scoped, permissions]
+      properties:
+        slug: {type: string}
+        name: {type: string}
+        description: {type: string}
+        role: {type: string}
+        scoped: {type: boolean}
+        permissions: {type: array, items: {type: string}}
+    WorkspaceNameInput:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+    RoleMapping:
+      type: object
+      required: [idp_role, role]
+      properties:
+        idp_role: {type: string}
+        role: {type: string}
+    SetupStatus:
+      type: object
+      required: [name, completed, completed_at, auth]
+      properties:
+        name: {type: string}
+        completed: {type: boolean}
+        completed_at: {type: [string, 'null'], format: date-time}
+        auth:
+          type: object
+          required: [oidc, issuer_host, role_mappings, breakglass]
+          properties:
+            oidc: {type: boolean}
+            issuer_host: {type: string}
+            role_mappings: {type: array, items: {$ref: '#/components/schemas/RoleMapping'}}
+            breakglass: {type: boolean}
+
+    SecretType:
+      type: string
+      enum: [ssh_key, password, token, vault_password, file, api_key_pair, api_token]
+    SecretMeta:
+      type: object
+      description: Non-secret view of a stored secret; values are write-only and never returned.
+      required: [id, name, type, description, metadata, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        type: {$ref: '#/components/schemas/SecretType'}
+        description: {type: string}
+        metadata: {type: object, additionalProperties: true, description: 'e.g. fingerprint and key_type for ssh_key.'}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    SecretCreate:
+      type: object
+      required: [name, type, value]
+      properties:
+        name: {type: string}
+        type: {$ref: '#/components/schemas/SecretType'}
+        description: {type: string}
+        value: {type: string, writeOnly: true}
+    SecretUpdate:
+      type: object
+      description: Omitted fields stay untouched; `value` replaces the stored secret.
+      properties:
+        name: {type: string}
+        description: {type: string}
+        value: {type: string, writeOnly: true}
+
+    ProjectSyncStatus: {type: string, enum: [never, ok, error]}
+    Project:
+      type: object
+      description: A Git project; credentials are referenced by secret id and never returned.
+      required: [id, name, slug, url, default_ref, credential_secret_id, https_username, ssh, host_key_pinned, host_key_fingerprints, sync_interval_seconds, last_sync_status, last_sync_error, last_sync_sha, last_sync_at, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        slug: {type: string}
+        url: {type: string}
+        default_ref: {type: string}
+        credential_secret_id: {type: [string, 'null'], format: uuid}
+        https_username: {type: string}
+        ssh: {type: boolean}
+        host_key_pinned: {type: boolean}
+        host_key_fingerprints: {type: array, items: {type: string}}
+        sync_interval_seconds: {type: [integer, 'null']}
+        last_sync_status: {$ref: '#/components/schemas/ProjectSyncStatus'}
+        last_sync_error: {type: string}
+        last_sync_sha: {type: string}
+        last_sync_at: {type: [string, 'null'], format: date-time}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    ProjectInput:
+      type: object
+      required: [name, url]
+      properties:
+        name: {type: string}
+        slug: {type: string}
+        url: {type: string}
+        default_ref: {type: string}
+        credential_secret_id: {type: [string, 'null'], format: uuid}
+        https_username: {type: string}
+        sync_interval_seconds: {type: [integer, 'null']}
+    ProjectUpdate:
+      type: object
+      description: Fields omitted from an update stay untouched; null clears nullable fields.
+      properties:
+        name: {type: string}
+        slug: {type: string}
+        url: {type: string}
+        default_ref: {type: string}
+        credential_secret_id: {type: [string, 'null'], format: uuid}
+        https_username: {type: string}
+        sync_interval_seconds: {type: [integer, 'null']}
+    HostKeyInfo:
+      type: object
+      required: [type, fingerprint]
+      properties:
+        type: {type: string}
+        fingerprint: {type: string}
+    HostKeyScan:
+      type: object
+      required: [keys]
+      properties:
+        keys: {type: array, items: {$ref: '#/components/schemas/HostKeyInfo'}}
+    HostKeyConfirmInput:
+      type: object
+      required: [fingerprint]
+      properties:
+        fingerprint: {type: string}
+    ProjectRevision:
+      type: object
+      required: [id, sha, synced_at, scan, warnings]
+      properties:
+        id: {type: string, format: uuid}
+        sha: {type: string}
+        synced_at: {type: string, format: date-time}
+        scan: {type: [object, 'null'], additionalProperties: true, description: Scan result (ADR-0013); shape defined by the scanner.}
+        warnings: {type: [array, 'null'], items: {type: string}}
+    WebhookProvider: {type: string, enum: [gitea, github, gitlab, generic]}
+    ProjectWebhook:
+      type: object
+      description: Webhook config of a project. `secret` is only present once, on enable or rotate.
+      required: [enabled, provider, has_secret, path]
+      properties:
+        enabled: {type: boolean}
+        provider: {$ref: '#/components/schemas/WebhookProvider'}
+        has_secret: {type: boolean}
+        path: {type: string}
+        url: {type: string}
+        secret: {type: string}
+    ProjectWebhookInput:
+      type: object
+      required: [enabled, provider]
+      properties:
+        enabled: {type: boolean}
+        provider: {$ref: '#/components/schemas/WebhookProvider'}
+
+    InventoryMode: {type: string, enum: [db, git]}
+    Inventory:
+      type: object
+      description: An inventory (ADR-0014). `version` is the optimistic lock, also sent as ETag.
+      required: [id, name, slug, mode, project_id, path, write_branch, source_format, base_sha, version, last_import_at, hosts, groups, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        slug: {type: string}
+        mode: {$ref: '#/components/schemas/InventoryMode'}
+        project_id: {type: [string, 'null'], format: uuid}
+        path: {type: string}
+        write_branch: {type: string}
+        source_format: {type: string, enum: [yaml, ini]}
+        base_sha: {type: string}
+        version: {type: integer}
+        last_import_at: {type: [string, 'null'], format: date-time}
+        hosts: {type: integer}
+        groups: {type: integer}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    InventoryInput:
+      type: object
+      required: [name, mode]
+      properties:
+        name: {type: string}
+        slug: {type: string}
+        mode: {$ref: '#/components/schemas/InventoryMode'}
+        project_id: {type: string, format: uuid}
+        path: {type: string}
+        write_branch: {type: string}
+    InventoryUpdate:
+      type: object
+      description: The mode cannot be changed.
+      properties:
+        name: {type: string}
+        slug: {type: string}
+        project_id: {type: string, format: uuid}
+        path: {type: string}
+        write_branch: {type: string}
+    InventoryGroup:
+      type: object
+      description: A group; `vars_yaml` keeps vault values in their encrypted `!vault` form.
+      required: [id, name, parent_ids, vars_yaml]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        parent_ids: {type: array, items: {type: string, format: uuid}}
+        vars_yaml: {type: string}
+    InventoryGroupInput:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+        parent_ids: {type: array, items: {type: string, format: uuid}}
+        vars_yaml: {type: string}
+    InventoryGroupUpdate:
+      type: object
+      properties:
+        name: {type: string}
+        parent_ids: {type: array, items: {type: string, format: uuid}, description: An empty list clears the parents.}
+        vars_yaml: {type: string}
+    InventoryHost:
+      type: object
+      required: [id, name, group_ids, vars_yaml]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        group_ids: {type: array, items: {type: string, format: uuid}}
+        vars_yaml: {type: string}
+    InventoryHostInput:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+        group_ids: {type: array, items: {type: string, format: uuid}}
+        vars_yaml: {type: string}
+    InventoryHostUpdate:
+      type: object
+      properties:
+        name: {type: string}
+        group_ids: {type: array, items: {type: string, format: uuid}}
+        vars_yaml: {type: string}
+    InventoryImportInput:
+      type: object
+      description: Source of an import; for git inventories everything defaults to the stored settings.
+      properties:
+        project_id: {type: string, format: uuid}
+        path: {type: string}
+        format: {type: string, enum: [ini, yaml]}
+    InventoryImportResult:
+      type: object
+      required: [inventory, hosts, groups, sha, warnings]
+      properties:
+        inventory: {$ref: '#/components/schemas/Inventory'}
+        hosts: {type: integer}
+        groups: {type: integer}
+        sha: {type: string}
+        warnings: {type: array, items: {type: string}}
+    InventoryRender:
+      type: object
+      description: '`ansible-inventory --list` shape; vault values are masked as "<vault>". Besides `_meta`, keys are group names.'
+      required: [_meta]
+      properties:
+        _meta:
+          type: object
+          required: [hostvars]
+          properties:
+            hostvars: {type: object, additionalProperties: {type: object, additionalProperties: true}}
+      additionalProperties: true
+    InventoryDiff:
+      type: object
+      required: [base_sha, branch, changed, paths, diff]
+      properties:
+        base_sha: {type: string}
+        branch: {type: string}
+        changed: {type: boolean}
+        paths: {type: array, items: {type: string}}
+        diff: {type: string}
+    InventoryCommitInput:
+      type: object
+      required: [message]
+      properties:
+        message: {type: string}
+    InventoryCommitResult:
+      type: object
+      required: [inventory, branch, sha, paths, branch_created, no_op]
+      properties:
+        inventory: {$ref: '#/components/schemas/Inventory'}
+        branch: {type: string}
+        sha: {type: string}
+        paths: {type: array, items: {type: string}}
+        branch_created: {type: boolean}
+        no_op: {type: boolean}
+
+    VaultProvider: {type: string, enum: [secret, script]}
+    VaultIdentity:
+      type: object
+      description: A named vault password source; the password itself is never returned.
+      required: [id, label, description, provider, secret_id, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        label: {type: string}
+        description: {type: string}
+        provider: {$ref: '#/components/schemas/VaultProvider'}
+        secret_id: {type: [string, 'null'], format: uuid}
+        script_path: {type: string}
+        script_args: {type: array, items: {type: string}}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    VaultIdentityInput:
+      type: object
+      required: [label, description, provider, secret_id, script_path, script_args]
+      properties:
+        label: {type: string}
+        description: {type: string}
+        provider: {$ref: '#/components/schemas/VaultProvider'}
+        secret_id: {type: [string, 'null'], format: uuid}
+        script_path: {type: string}
+        script_args: {type: array, items: {type: string}}
+    VaultListing:
+      type: object
+      required: [sha, vault_files, inline_vault]
+      properties:
+        sha: {type: string}
+        vault_files:
+          type: array
+          items:
+            type: object
+            required: [path, version]
+            properties:
+              path: {type: string}
+              version: {type: string}
+              vault_id: {type: string}
+        inline_vault:
+          type: array
+          items:
+            type: object
+            required: [file, paths]
+            properties:
+              file: {type: string}
+              paths: {type: array, items: {type: string}}
+    VaultDecryptInput:
+      type: object
+      required: [path]
+      properties:
+        path: {type: string}
+        key_path: {type: string, description: YAML path of an inline value; empty decrypts the whole file.}
+    VaultDecrypted:
+      type: object
+      required: [plaintext, encoding, identity]
+      properties:
+        plaintext: {type: string}
+        encoding: {type: string, enum: [utf-8, base64]}
+        identity: {type: string}
+    VaultEncryptInput:
+      type: object
+      required: [branch, message, path, key_path, plaintext, identity]
+      properties:
+        branch: {type: string, description: Empty selects the default branch (acp/vault).}
+        message: {type: string}
+        path: {type: string}
+        key_path: {type: string, description: YAML path of an inline value; empty encrypts the whole file.}
+        plaintext: {type: [string, 'null'], description: Null encrypts the existing file content in place.}
+        identity: {type: string, description: Identity label; empty selects the default identity.}
+    VaultRekeyInput:
+      type: object
+      required: [branch, message, paths, from, to]
+      properties:
+        branch: {type: string}
+        message: {type: string}
+        paths: {type: array, items: {type: string}}
+        from: {type: string}
+        to: {type: string}
+    VaultWriteResult:
+      type: object
+      required: [branch, sha, paths, branch_created, no_op]
+      properties:
+        branch: {type: string}
+        sha: {type: string}
+        paths: {type: array, items: {type: string}}
+        branch_created: {type: boolean}
+        no_op: {type: boolean}
+
+    RunStatus: {type: string, enum: [queued, running, succeeded, failed, cancelled, lost]}
+    RunTrigger: {type: string, enum: [manual, schedule, webhook, api]}
+    RunOverrides:
+      type: object
+      description: Per-run overrides; the template's allow_*_override flags decide what is accepted.
+      properties:
+        limit: {type: string}
+        tags: {type: string}
+        skip_tags: {type: string}
+        extra_vars: {type: object, additionalProperties: true}
+        check: {type: boolean}
+        diff: {type: boolean}
+        verbosity: {type: integer}
+    Template:
+      type: object
+      required: [id, project_id, inventory_id, name, slug, description, playbook, extra_vars, env_vars, ssh_secret_id, become_secret_id, vault_identity_ids, default_limit, default_tags, default_skip_tags, verbosity, check_mode, diff_mode, survey, max_concurrent, allow_limit_override, allow_tags_override, allow_vars_override, allow_check_override, allow_diff_override, allow_verbosity_override, webhook_enabled, created_by, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        project_id: {type: string, format: uuid}
+        inventory_id: {type: string, format: uuid}
+        name: {type: string}
+        slug: {type: string}
+        description: {type: string}
+        playbook: {type: string}
+        extra_vars: {type: object, additionalProperties: true}
+        env_vars: {type: object, additionalProperties: true}
+        ssh_secret_id: {type: [string, 'null'], format: uuid}
+        become_secret_id: {type: [string, 'null'], format: uuid}
+        vault_identity_ids: {type: array, items: {type: string, format: uuid}}
+        default_limit: {type: string}
+        default_tags: {type: string}
+        default_skip_tags: {type: string}
+        verbosity: {type: integer}
+        check_mode: {type: boolean}
+        diff_mode: {type: boolean}
+        survey: {description: 'Survey fields (list or {fields}); null when the template has none.'}
+        max_concurrent: {type: integer}
+        allow_limit_override: {type: boolean}
+        allow_tags_override: {type: boolean}
+        allow_vars_override: {type: boolean}
+        allow_check_override: {type: boolean}
+        allow_diff_override: {type: boolean}
+        allow_verbosity_override: {type: boolean}
+        webhook_enabled: {type: boolean}
+        created_by: {type: [string, 'null'], format: uuid}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    TemplateInput:
+      type: object
+      description: Create/update body. On update omitted fields stay; null clears nullable references.
+      properties:
+        name: {type: string}
+        slug: {type: string}
+        description: {type: string}
+        project_id: {type: string, format: uuid}
+        inventory_id: {type: string, format: uuid}
+        playbook: {type: string}
+        extra_vars: {type: object, additionalProperties: true}
+        env_vars: {type: object, additionalProperties: true}
+        ssh_secret_id: {type: [string, 'null'], format: uuid}
+        become_secret_id: {type: [string, 'null'], format: uuid}
+        vault_identity_ids: {type: array, items: {type: string, format: uuid}}
+        default_limit: {type: string}
+        default_tags: {type: string}
+        default_skip_tags: {type: string}
+        verbosity: {type: integer}
+        check_mode: {type: boolean}
+        diff_mode: {type: boolean}
+        survey: {description: Survey definition; null clears it.}
+        max_concurrent: {type: integer}
+        allow_limit_override: {type: boolean}
+        allow_tags_override: {type: boolean}
+        allow_vars_override: {type: boolean}
+        allow_check_override: {type: boolean}
+        allow_diff_override: {type: boolean}
+        allow_verbosity_override: {type: boolean}
+    RunParams:
+      type: object
+      description: Immutable snapshot of the effective run parameters. Secret survey values are masked; credentials are referenced by id.
+      required: [playbook, project_id, project_revision, inventory_id, limit, hosts, tags, skip_tags, extra_vars, env_vars, check, diff, verbosity, ssh_secret_id, become_secret_id, vault_identity_ids]
+      properties:
+        playbook: {type: string}
+        project_id: {type: string, format: uuid}
+        project_revision: {type: string}
+        inventory_id: {type: string, format: uuid}
+        limit: {type: string}
+        hosts: {type: [array, 'null'], items: {type: string}, description: Effective host set (inventory and limit).}
+        tags: {type: string}
+        skip_tags: {type: string}
+        extra_vars: {type: [object, 'null'], additionalProperties: true}
+        secret_vars: {type: array, items: {type: string}, description: Top-level extra_vars keys flagged secret by the survey.}
+        env_vars: {type: [object, 'null'], additionalProperties: true}
+        check: {type: boolean}
+        diff: {type: boolean}
+        verbosity: {type: integer}
+        ssh_secret_id: {type: [string, 'null'], format: uuid}
+        become_secret_id: {type: [string, 'null'], format: uuid}
+        vault_identity_ids: {type: [array, 'null'], items: {type: string, format: uuid}}
+    RunPreview:
+      type: object
+      required: [host_count, hosts, truncated, all_in_scope]
+      properties:
+        host_count: {type: integer}
+        hosts: {type: array, items: {type: string}, description: First 50 host names.}
+        truncated: {type: boolean}
+        all_in_scope: {type: boolean}
+    Run:
+      type: object
+      required: [id, template_id, template_name, project_id, project_revision, status, trigger, triggered_by, triggered_by_name, schedule_id, overrides, remediation, params, worker_id, created_at, started_at, finished_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable]
+      properties:
+        id: {type: string, format: uuid}
+        template_id: {type: [string, 'null'], format: uuid}
+        template_name: {type: string}
+        project_id: {type: [string, 'null'], format: uuid}
+        project_revision: {type: string}
+        status: {$ref: '#/components/schemas/RunStatus'}
+        trigger: {$ref: '#/components/schemas/RunTrigger'}
+        triggered_by: {type: [string, 'null'], format: uuid}
+        triggered_by_name: {type: [string, 'null'], description: Display name (or email) of the user; null for runs without a user.}
+        schedule_id: {type: [string, 'null'], format: uuid}
+        overrides: {type: [object, 'null'], additionalProperties: true, description: The overrides the run was started with.}
+        remediation: {type: [object, 'null'], additionalProperties: true, description: Set when the run was started by a remediation rule or a fleet bulk action.}
+        params: {$ref: '#/components/schemas/RunParams'}
+        worker_id: {type: string}
+        created_at: {type: string, format: date-time}
+        started_at: {type: [string, 'null'], format: date-time}
+        finished_at: {type: [string, 'null'], format: date-time}
+        cancel_requested_at: {type: [string, 'null'], format: date-time}
+        exit_code: {type: [integer, 'null']}
+        hosts_ok: {type: integer}
+        hosts_changed: {type: integer}
+        hosts_failed: {type: integer}
+        hosts_unreachable: {type: integer}
+    HostResult:
+      type: object
+      required: [host, ok, changed, failed, unreachable, skipped, rescued, ignored, changed_tasks]
+      properties:
+        host: {type: string}
+        ok: {type: integer}
+        changed: {type: integer}
+        failed: {type: integer}
+        unreachable: {type: integer}
+        skipped: {type: integer}
+        rescued: {type: integer}
+        ignored: {type: integer}
+        changed_tasks: {type: [array, 'null'], items: {type: string}, description: Names of changed tasks; null when none were recorded.}
+    RunDetail:
+      allOf:
+        - $ref: '#/components/schemas/Run'
+        - type: object
+          required: [host_results]
+          properties:
+            host_results: {type: [array, 'null'], items: {$ref: '#/components/schemas/HostResult'}}
+    RunStatusEvent:
+      type: object
+      description: Payload of the `status` SSE event of a run log stream.
+      required: [status, started_at, finished_at, cancel_requested_at, exit_code, hosts_ok, hosts_changed, hosts_failed, hosts_unreachable, host_results]
+      properties:
+        status: {$ref: '#/components/schemas/RunStatus'}
+        started_at: {type: [string, 'null'], format: date-time}
+        finished_at: {type: [string, 'null'], format: date-time}
+        cancel_requested_at: {type: [string, 'null'], format: date-time}
+        exit_code: {type: [integer, 'null']}
+        hosts_ok: {type: integer}
+        hosts_changed: {type: integer}
+        hosts_failed: {type: integer}
+        hosts_unreachable: {type: integer}
+        host_results: {type: [array, 'null'], items: {$ref: '#/components/schemas/HostResult'}}
+    RunPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items: {type: [array, 'null'], items: {$ref: '#/components/schemas/Run'}}
+        next_cursor: {type: string, description: Empty on the last page.}
+
+    MissedPolicy: {type: string, enum: [skip, run_once]}
+    Schedule:
+      type: object
+      required: [id, template_id, name, cron, timezone, enabled, missed_policy, overrides, next_run_at, last_run_at, created_by, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        template_id: {type: string, format: uuid}
+        name: {type: string}
+        cron: {type: string}
+        timezone: {type: string}
+        enabled: {type: boolean}
+        missed_policy: {$ref: '#/components/schemas/MissedPolicy'}
+        overrides: {$ref: '#/components/schemas/RunOverrides'}
+        next_run_at: {type: [string, 'null'], format: date-time}
+        last_run_at: {type: [string, 'null'], format: date-time}
+        created_by: {type: [string, 'null'], format: uuid}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    ScheduleInput:
+      type: object
+      properties:
+        name: {type: string}
+        cron: {type: string}
+        timezone: {type: string}
+        enabled: {type: boolean}
+        missed_policy: {$ref: '#/components/schemas/MissedPolicy'}
+        overrides: {$ref: '#/components/schemas/RunOverrides'}
+    SchedulePreview:
+      type: object
+      required: [next_runs]
+      properties:
+        next_runs: {type: array, items: {type: string, format: date-time}}
+    TemplateWebhook:
+      type: object
+      description: Template webhook; `secret` is only present once, on enable or rotate.
+      required: [enabled, has_secret, path]
+      properties:
+        enabled: {type: boolean}
+        has_secret: {type: boolean}
+        path: {type: string}
+        url: {type: string}
+        secret: {type: string}
+
+    ConnectorFieldKind: {type: string, enum: [string, bool, int]}
+    ConnectorField:
+      type: object
+      required: [key, label, kind, required]
+      properties:
+        key: {type: string}
+        label: {type: string}
+        kind: {$ref: '#/components/schemas/ConnectorFieldKind'}
+        required: {type: boolean}
+        help: {type: string}
+    ConnectorType:
+      type: object
+      description: Registered connector type with its config schema and setup help.
+      required: [type, label, secret_types, secret_required, base_url, fields]
+      properties:
+        type: {type: string}
+        label: {type: string}
+        secret_types: {type: array, items: {$ref: '#/components/schemas/SecretType'}, description: Accepted secret types; empty when the type needs no credentials.}
+        secret_required: {type: boolean}
+        base_url: {type: boolean}
+        fields: {type: array, items: {$ref: '#/components/schemas/ConnectorField'}}
+        help: {type: string}
+        generates_secret: {type: boolean, description: A secret is generated on create (and shown once) when none is selected.}
+    ConnectorSecretRef:
+      type: object
+      required: [id, name, type]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        type: {$ref: '#/components/schemas/SecretType'}
+    ConnectorCounts:
+      type: object
+      required: [networks, observations, alerts]
+      properties:
+        networks: {type: integer}
+        observations: {type: integer}
+        alerts: {type: integer}
+        warnings: {type: array, items: {type: string}}
+    ConnectorConfig:
+      type: object
+      additionalProperties: {type: [string, number, boolean]}
+    ConnectorStatus: {type: string, enum: [disabled, pending, ok, error]}
+    Connector:
+      type: object
+      description: Connector; the credential is only referenced, never returned.
+      required: [id, type, name, base_url, config, secret, interval_seconds, enabled, status, last_sync_at, last_success_at, next_sync_at, last_error, last_duration_ms, backoff_count, counts, warnings, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        type: {type: string}
+        name: {type: string}
+        base_url: {type: string}
+        config: {$ref: '#/components/schemas/ConnectorConfig'}
+        secret: {oneOf: [{$ref: '#/components/schemas/ConnectorSecretRef'}, {type: 'null'}]}
+        interval_seconds: {type: integer}
+        enabled: {type: boolean}
+        status: {$ref: '#/components/schemas/ConnectorStatus'}
+        last_sync_at: {type: [string, 'null'], format: date-time}
+        last_success_at: {type: [string, 'null'], format: date-time}
+        next_sync_at: {type: string, format: date-time}
+        last_error: {type: string}
+        last_duration_ms: {type: integer}
+        backoff_count: {type: integer}
+        counts: {$ref: '#/components/schemas/ConnectorCounts'}
+        warnings: {type: [array, 'null'], items: {type: string}}
+        webhook_path: {type: string, description: Receiver path of alert_webhook connectors.}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    ConnectorCreated:
+      description: Response of a create that may have generated a webhook secret; the secret is shown once.
+      allOf:
+        - $ref: '#/components/schemas/Connector'
+        - type: object
+          properties:
+            generated_secret: {type: string}
+            webhook_url: {type: string}
+    ConnectorInput:
+      type: object
+      required: [type, name]
+      properties:
+        type: {type: string}
+        name: {type: string}
+        base_url: {type: string}
+        config: {$ref: '#/components/schemas/ConnectorConfig'}
+        secret_id: {type: [string, 'null'], format: uuid}
+        interval_seconds: {type: integer}
+        enabled: {type: boolean}
+    ConnectorUpdate:
+      type: object
+      description: PATCH body; the type cannot be changed.
+      properties:
+        name: {type: string}
+        base_url: {type: string}
+        config: {$ref: '#/components/schemas/ConnectorConfig'}
+        secret_id: {type: [string, 'null'], format: uuid}
+        interval_seconds: {type: integer}
+        enabled: {type: boolean}
+    ConnectorTestInput:
+      type: object
+      description: Unsaved configuration to probe (setup wizard "test before save").
+      required: [type]
+      properties:
+        type: {type: string}
+        base_url: {type: string}
+        config: {$ref: '#/components/schemas/ConnectorConfig'}
+        secret_id: {type: [string, 'null'], format: uuid}
+    ConnectorTestResult:
+      type: object
+      required: [ok, error]
+      properties:
+        ok: {type: boolean}
+        error: {type: string}
+    ConnectorSync:
+      type: object
+      required: [id, trigger, status, started_at, finished_at, duration_ms, counts, error]
+      properties:
+        id: {type: string, format: uuid}
+        trigger: {type: string, enum: [schedule, manual]}
+        status: {type: string, enum: [ok, error]}
+        started_at: {type: string, format: date-time}
+        finished_at: {type: string, format: date-time}
+        duration_ms: {type: integer}
+        counts: {$ref: '#/components/schemas/ConnectorCounts'}
+        error: {type: string}
+
+    AlertSeverity: {type: string, enum: [critical, warning, unknown, info]}
+    FleetNetworkCounts:
+      type: object
+      required: [online, ansible_ok, failed, never_managed, open_alerts]
+      properties:
+        online: {type: integer}
+        ansible_ok: {type: integer}
+        failed: {type: integer}
+        never_managed: {type: integer}
+        open_alerts: {type: integer}
+    FleetNetwork:
+      type: object
+      required: [id, connector_id, connector, external_key, cidr, vlan, interface, description, source, first_seen, last_seen, host_count, counts]
+      properties:
+        id: {type: string, format: uuid}
+        connector_id: {type: string, format: uuid}
+        connector: {type: string}
+        external_key: {type: string}
+        cidr: {type: string}
+        vlan: {type: [integer, 'null']}
+        interface: {type: string}
+        description: {type: string}
+        source: {type: string}
+        first_seen: {type: string, format: date-time}
+        last_seen: {type: string, format: date-time}
+        host_count: {type: integer}
+        counts: {$ref: '#/components/schemas/FleetNetworkCounts', description: Status counters of the visible hosts in the network.}
+    FleetAnsibleLink:
+      type: object
+      description: An inventory host linked to a fleet host.
+      required: [inventory_id, inventory, host_id, host]
+      properties:
+        inventory_id: {type: string, format: uuid}
+        inventory: {type: string}
+        host_id: {type: string, format: uuid}
+        host: {type: string}
+    FleetRunRef:
+      type: object
+      required: [run_id, template, finished_at, result, check]
+      properties:
+        run_id: {type: string, format: uuid}
+        template: {type: string}
+        finished_at: {type: string, format: date-time}
+        result: {type: string, enum: [ok, changed, failed, unreachable]}
+        check: {type: boolean}
+    FleetDrift:
+      type: object
+      description: The newest check-mode run reported changes for the host.
+      required: [run_id, template, finished_at, changed]
+      properties:
+        run_id: {type: string, format: uuid}
+        template: {type: string}
+        finished_at: {type: string, format: date-time}
+        changed: {type: integer}
+    FleetHost:
+      type: object
+      required: [id, name, kind, status, hostname, fqdn, ips, macs, tags, connectors, open_conflicts, open_alerts, worst_severity, first_seen, last_seen, online, managed, ansible, last_run, reachable, drift]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        kind: {type: string}
+        status: {type: string}
+        hostname: {type: string}
+        fqdn: {type: string}
+        ips: {type: array, items: {type: string}}
+        macs: {type: array, items: {type: string}}
+        tags: {type: array, items: {type: string}}
+        attrs: {type: object, additionalProperties: {type: string}, description: Connector-specific attributes.}
+        connectors: {type: array, items: {type: string}, description: Names of the connectors that contributed.}
+        open_conflicts: {type: integer}
+        open_alerts: {type: integer, description: Open monitoring alerts linked to the host.}
+        worst_severity: {type: string, enum: [critical, warning, unknown, info, ''], description: Worst severity among the open alerts; empty when none.}
+        first_seen: {type: string, format: date-time}
+        last_seen: {type: string, format: date-time}
+        online: {type: string, enum: [online, offline, unknown], description: Host status, derived on read.}
+        managed: {type: boolean, description: True when an inventory host of the workspace is linked.}
+        ansible: {type: array, items: {$ref: '#/components/schemas/FleetAnsibleLink'}}
+        last_run: {oneOf: [{$ref: '#/components/schemas/FleetRunRef'}, {type: 'null'}]}
+        reachable: {type: string, enum: ['yes', 'no', unknown]}
+        drift: {oneOf: [{$ref: '#/components/schemas/FleetDrift'}, {type: 'null'}]}
+    FleetSource:
+      type: object
+      required: [connector_id, connector, type]
+      properties:
+        connector_id: {type: string, format: uuid}
+        connector: {type: string}
+        type: {type: string}
+    FleetHostFields:
+      type: object
+      properties:
+        kind: {type: string}
+        hostname: {type: string}
+        fqdn: {type: string}
+        macs: {type: array, items: {type: string}}
+        ips: {type: array, items: {type: string}}
+        tags: {type: array, items: {type: string}}
+        notes: {type: string}
+        status: {type: string}
+        interface: {type: string}
+        attrs: {type: object, additionalProperties: {type: string}}
+        net_seen: {type: string, format: date-time}
+        power: {type: string}
+        sources:
+          type: object
+          description: Per field, the winning connector (scalars) or all contributors (lists).
+          additionalProperties: {type: array, items: {$ref: '#/components/schemas/FleetSource'}}
+    FleetObservation:
+      type: object
+      required: [connector_id, connector, connector_type, external_key, kind, fields, first_seen, last_seen]
+      properties:
+        connector_id: {type: string, format: uuid}
+        connector: {type: string}
+        connector_type: {type: string}
+        external_key: {type: string}
+        kind: {type: string}
+        fields:
+          type: object
+          properties:
+            macs: {type: array, items: {type: string}}
+            hostname: {type: string}
+            fqdn: {type: string}
+            ips: {type: array, items: {type: string}}
+            tags: {type: array, items: {type: string}}
+            notes: {type: string}
+            status: {type: string}
+            interface: {type: string}
+            attrs: {type: object, additionalProperties: {type: string}}
+        first_seen: {type: string, format: date-time}
+        last_seen: {type: string, format: date-time}
+    ConflictState: {type: string, enum: [open, acknowledged, resolved]}
+    FleetConflict:
+      type: object
+      required: [id, type, state, fingerprint, host_ids, hosts, details, acknowledged_by, acknowledged_at, first_seen, last_seen, resolved_at]
+      properties:
+        id: {type: string, format: uuid}
+        type: {type: string}
+        state: {$ref: '#/components/schemas/ConflictState'}
+        fingerprint: {type: string}
+        host_ids: {type: array, items: {type: string, format: uuid}}
+        hosts:
+          type: array
+          description: Display names of the hosts visible to the caller.
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id: {type: string, format: uuid}
+              name: {type: string}
+        details: {type: [object, 'null'], additionalProperties: true}
+        acknowledged_by: {type: [string, 'null'], format: uuid}
+        acknowledged_at: {type: [string, 'null'], format: date-time}
+        first_seen: {type: string, format: date-time}
+        last_seen: {type: string, format: date-time}
+        resolved_at: {type: [string, 'null'], format: date-time}
+    FleetHostDetail:
+      allOf:
+        - $ref: '#/components/schemas/FleetHost'
+        - type: object
+          required: [fields, keys, observations, conflicts]
+          properties:
+            fields: {$ref: '#/components/schemas/FleetHostFields'}
+            keys:
+              type: array
+              items:
+                type: object
+                required: [kind, value]
+                properties:
+                  kind: {type: string, enum: [mac, name, ip]}
+                  value: {type: string}
+            observations: {type: array, items: {$ref: '#/components/schemas/FleetObservation'}}
+            conflicts: {type: array, items: {$ref: '#/components/schemas/FleetConflict'}}
+    FleetAddInput:
+      type: object
+      required: [inventory_id, group]
+      properties:
+        inventory_id: {type: string, format: uuid}
+        group: {type: string}
+        name: {type: string, description: Inventory host name; defaults to the fleet host name.}
+    GroupChangeResult:
+      type: object
+      required: [group_created, hosts_created, added, removed, version, commit]
+      properties:
+        group_created: {type: boolean}
+        hosts_created: {type: [array, 'null'], items: {type: string}}
+        added: {type: [array, 'null'], items: {type: string}}
+        removed: {type: [array, 'null'], items: {type: string}}
+        version: {type: integer}
+        commit: {oneOf: [{$ref: '#/components/schemas/InventoryCommitResult'}, {type: 'null'}], description: Set for git inventories when a commit was written.}
+    FleetAddResult:
+      type: object
+      required: [host, ansible_host, result]
+      properties:
+        host: {type: string}
+        ansible_host: {type: string}
+        result: {$ref: '#/components/schemas/GroupChangeResult'}
+    FleetAlert:
+      type: object
+      required: [id, connector_id, connector, connector_type, external_key, host_id, host, host_name, host_ip, service, severity, summary, labels, started_at, last_seen_at, resolved_at]
+      properties:
+        id: {type: string, format: uuid}
+        connector_id: {type: string, format: uuid}
+        connector: {type: string}
+        connector_type: {type: string}
+        external_key: {type: string}
+        host_id: {type: [string, 'null'], format: uuid}
+        host: {type: string, description: Merged host name when linked.}
+        host_name: {type: string, description: Host name as reported by the monitoring system.}
+        host_ip: {type: string, description: Address as reported by the monitoring system.}
+        service: {type: string}
+        severity: {$ref: '#/components/schemas/AlertSeverity'}
+        summary: {type: string}
+        labels: {type: object, additionalProperties: {type: string}}
+        started_at: {type: string, format: date-time}
+        last_seen_at: {type: string, format: date-time}
+        resolved_at: {type: [string, 'null'], format: date-time}
+
+    GroupRuleKind:
+      type: string
+      description: Match kind of a group rule; the set is open (e.g. subnet, proxmox_tag, netbox_role, netbox_site, netbox_tag).
+    GroupRuleMode: {type: string, enum: [add-only, sync]}
+    GroupRule:
+      type: object
+      required: [id, name, kind, params, inventory_id, group, mode, enabled, last_applied_at, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        kind: {$ref: '#/components/schemas/GroupRuleKind'}
+        params: {type: object, additionalProperties: true, description: 'Kind specific parameters: cidr for subnet, tag for proxmox_tag.'}
+        inventory_id: {type: string, format: uuid}
+        group: {type: string}
+        mode: {$ref: '#/components/schemas/GroupRuleMode'}
+        enabled: {type: boolean}
+        last_applied_at: {type: [string, 'null'], format: date-time}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    GroupRuleInput:
+      type: object
+      required: [name, kind, params, inventory_id, group]
+      properties:
+        name: {type: string}
+        kind: {$ref: '#/components/schemas/GroupRuleKind'}
+        params: {type: object, additionalProperties: true}
+        inventory_id: {type: string, format: uuid}
+        group: {type: string}
+        mode: {$ref: '#/components/schemas/GroupRuleMode'}
+        enabled: {type: boolean}
+    GroupRuleUpdate:
+      type: object
+      properties:
+        name: {type: string}
+        kind: {$ref: '#/components/schemas/GroupRuleKind'}
+        params: {type: object, additionalProperties: true}
+        inventory_id: {type: string, format: uuid}
+        group: {type: string}
+        mode: {$ref: '#/components/schemas/GroupRuleMode'}
+        enabled: {type: boolean}
+    GroupRuleAdd:
+      type: object
+      required: [name, create_host, fleet_host_id]
+      properties:
+        name: {type: string}
+        ansible_host: {type: string, description: Only set for hosts that are created.}
+        create_host: {type: boolean}
+        fleet_host_id: {type: string, format: uuid}
+    GroupRuleSkipped:
+      type: object
+      required: [fleet_host_id, name, reason]
+      properties:
+        fleet_host_id: {type: string, format: uuid}
+        name: {type: string}
+        reason: {type: string}
+    GroupRulePlan:
+      type: object
+      description: The pure diff of a rule against the current inventory state.
+      required: [group_create, matched, add, remove, keep, untrack, skipped]
+      properties:
+        group_create: {type: boolean}
+        matched: {type: integer}
+        add: {type: array, items: {$ref: '#/components/schemas/GroupRuleAdd'}}
+        remove: {type: array, items: {type: string}}
+        keep: {type: integer}
+        untrack: {type: array, items: {type: string}}
+        skipped: {type: array, items: {$ref: '#/components/schemas/GroupRuleSkipped'}}
+    GroupRulePreview:
+      type: object
+      required: [rule, inventory_mode, plan]
+      properties:
+        rule: {$ref: '#/components/schemas/GroupRule'}
+        inventory_mode: {$ref: '#/components/schemas/InventoryMode'}
+        plan: {$ref: '#/components/schemas/GroupRulePlan'}
+    GroupRuleApplied:
+      type: object
+      required: [rule, inventory_mode, plan, result]
+      properties:
+        rule: {$ref: '#/components/schemas/GroupRule'}
+        inventory_mode: {$ref: '#/components/schemas/InventoryMode'}
+        plan: {$ref: '#/components/schemas/GroupRulePlan'}
+        result: {$ref: '#/components/schemas/GroupChangeResult'}
+
+    RemediationTarget: {type: string, enum: [host, group, network]}
+    RemediationRule:
+      type: object
+      required: [id, name, enabled, connector_type, service_regex, summary_regex, min_severity, template_id, template, target, group, check_first, created_by, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        enabled: {type: boolean}
+        connector_type: {type: [string, 'null'], description: Null matches alerts of every connector type.}
+        service_regex: {type: string}
+        summary_regex: {type: string}
+        min_severity: {$ref: '#/components/schemas/AlertSeverity'}
+        template_id: {type: string, format: uuid}
+        template: {type: string}
+        target: {$ref: '#/components/schemas/RemediationTarget'}
+        group: {type: string}
+        check_first: {type: boolean}
+        created_by: {type: [string, 'null'], format: uuid}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    RemediationRuleInput:
+      type: object
+      required: [name, connector_type, service_regex, summary_regex, min_severity, template_id, target, group, check_first]
+      properties:
+        name: {type: string}
+        enabled: {type: boolean}
+        connector_type: {type: [string, 'null']}
+        service_regex: {type: string}
+        summary_regex: {type: string}
+        min_severity: {$ref: '#/components/schemas/AlertSeverity'}
+        template_id: {type: string, format: uuid}
+        target: {$ref: '#/components/schemas/RemediationTarget'}
+        group: {type: string}
+        check_first: {type: boolean}
+    RemediationRulePreviewInput:
+      type: object
+      required: [connector_type, service_regex, summary_regex, min_severity]
+      properties:
+        connector_type: {type: [string, 'null']}
+        service_regex: {type: string}
+        summary_regex: {type: string}
+        min_severity: {$ref: '#/components/schemas/AlertSeverity'}
+    RemediationRef:
+      type: object
+      description: A rule that can fix a given alert.
+      required: [rule_id, name, template, target, group, check_first]
+      properties:
+        rule_id: {type: string, format: uuid}
+        name: {type: string}
+        template: {type: string}
+        target: {$ref: '#/components/schemas/RemediationTarget'}
+        group: {type: string}
+        check_first: {type: boolean}
+    RemediateInput:
+      type: object
+      required: [rule_id]
+      properties:
+        rule_id: {type: string, format: uuid}
+        skip_check: {type: boolean}
+    RemediationResult:
+      type: object
+      required: [run, limit, hosts]
+      properties:
+        run: {$ref: '#/components/schemas/Run'}
+        phase: {type: string, enum: [check, apply]}
+        limit: {type: string}
+        hosts: {type: array, items: {type: string}}
+    BulkRunInput:
+      type: object
+      required: [host_ids, template_id]
+      properties:
+        host_ids: {type: array, items: {type: string, format: uuid}}
+        template_id: {type: string, format: uuid}
+        check_mode: {type: boolean}
+    BulkRunSkipped:
+      type: object
+      required: [host_id, name, reason]
+      properties:
+        host_id: {type: string, format: uuid}
+        name: {type: string}
+        reason: {type: string}
+    BulkRunResult:
+      type: object
+      required: [run, limit, hosts]
+      properties:
+        run: {$ref: '#/components/schemas/Run'}
+        limit: {type: string}
+        hosts: {type: array, items: {type: string}}
+        skipped: {type: array, items: {$ref: '#/components/schemas/BulkRunSkipped'}}

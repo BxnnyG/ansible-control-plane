@@ -31,3 +31,13 @@ ansible --version | head -n 1
 pip show ansible | grep -i ^version
 '
 docker image inspect "$IMG" --format 'image size: {{.Size}} bytes'
+
+# Job isolation prerequisites (ADR-0020): file capabilities only on the non-world-executable supervisor binary, job users exist.
+docker run --rm --entrypoint sh "$IMG" -c '
+set -eu
+getcap /usr/libexec/acp/acp-worker | grep -q "cap_chown,cap_kill,cap_setgid,cap_setuid=ep"
+[ -z "$(getcap /usr/local/bin/acp)" ]
+[ "$(stat -c %a /usr/libexec/acp/acp-worker)" = 750 ]
+id acpjob0 | grep -q "uid=10100" && id acpjob15 | grep -q "uid=10115"
+echo "isolation prerequisites ok"
+'

@@ -59,6 +59,9 @@ func parsePattern(p string) ([]patternToken, error) {
 		if strings.HasPrefix(s, "~") {
 			return nil, fmt.Errorf("%w: regular expression patterns are not supported in limits", ErrInvalid)
 		}
+		if strings.HasPrefix(s, "@") {
+			return nil, fmt.Errorf("%w: @file limits are not supported", ErrInvalid)
+		}
 		if subscriptRe.MatchString(s) {
 			return nil, fmt.Errorf("%w: group subscripts are not supported in limits", ErrInvalid)
 		}

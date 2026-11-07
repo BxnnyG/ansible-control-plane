@@ -100,8 +100,7 @@ func formatPlan(p grouprules.Plan) string {
 
 // runAdminGroupRule implements `acp admin group-rule`. Apply is explicit and
 // goes through the same service as the REST API (transactional, git inventories
-// via write-back). Unlike the REST API it writes no audit log entry: it is an
-// operator action on the host.
+// via write-back). Apply writes an audit entry with actor "cli".
 func runAdminGroupRule(ctx context.Context, args []string, cfg config.Config, stdout, stderr io.Writer) error {
 	a, err := parseGroupRuleArgs(args, stderr)
 	if err != nil {
@@ -153,6 +152,13 @@ func runAdminGroupRule(ctx context.Context, args []string, cfg config.Config, st
 	if err != nil {
 		return err
 	}
+	details := map[string]any{"source": "cli", "inventory_id": rule.InventoryID, "group": rule.Group, "mode": rule.Mode,
+		"group_created": out.Result.GroupCreated, "hosts_created": out.Result.HostsCreated,
+		"added": out.Result.Added, "removed": out.Result.Removed}
+	if c := out.Result.Commit; c != nil && !c.NoOp {
+		details["commit"] = map[string]any{"branch": c.Branch, "sha": c.SHA, "paths": c.Paths}
+	}
+	cliAuditTarget(ctx, q, ws, "group_rule.apply", "group_rule", rule.ID.String(), details)
 	_, _ = fmt.Fprintf(stdout, "rule: %s\ninventory_mode: %s\ngroup_created: %t\nhosts_created: %d\nadded: %d\nremoved: %d\nversion: %d\n",
 		rule.Name, out.InventoryMode, out.Result.GroupCreated, len(out.Result.HostsCreated), len(out.Result.Added), len(out.Result.Removed), out.Result.Version)
 	if c := out.Result.Commit; c != nil && !c.NoOp {

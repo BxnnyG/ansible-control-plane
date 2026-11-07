@@ -21,6 +21,7 @@ import (
 
 	"github.com/BxnnyG/ansible-control-plane/internal/auth"
 	"github.com/BxnnyG/ansible-control-plane/internal/db/dbgen"
+	"github.com/BxnnyG/ansible-control-plane/internal/metrics"
 	"github.com/BxnnyG/ansible-control-plane/internal/policy"
 	"github.com/BxnnyG/ansible-control-plane/internal/scan"
 	"github.com/BxnnyG/ansible-control-plane/internal/secrets"
@@ -424,6 +425,9 @@ func mergeParams(t dbgen.Template, ov Overrides, survey []scan.Field, strict boo
 				surveyNames[f.Name] = true
 			}
 		}
+		if err := CheckVarsAllowed(ov.ExtraVars, "run-time extra variables"); err != nil {
+			return Params{}, err
+		}
 		for k, v := range ov.ExtraVars {
 			if !t.AllowVarsOverride && !surveyNames[k] {
 				return Params{}, reject("extra variables (only survey fields may be set)")
@@ -432,6 +436,13 @@ func mergeParams(t dbgen.Template, ov Overrides, survey []scan.Field, strict boo
 		}
 	}
 	if err := ValidatePattern(p.Limit); err != nil {
+		return Params{}, err
+	}
+	surveyVars := make(map[string]any, len(survey))
+	for _, f := range survey {
+		surveyVars[f.Name] = nil
+	}
+	if err := CheckVarsAllowed(surveyVars, "the survey"); err != nil {
 		return Params{}, err
 	}
 	if err := ApplySurvey(survey, p.ExtraVars, strict); err != nil {
@@ -697,6 +708,9 @@ func (s *Service) CancelRun(ctx context.Context, ws, id uuid.UUID) (Run, error) 
 	}
 	if err != nil {
 		return Run{}, fmt.Errorf("cancel run: %w", err)
+	}
+	if r.Status == StatusCancelled { // queued run cancelled without ever running
+		metrics.RunsFinished.WithLabelValues(StatusCancelled).Inc()
 	}
 	s.notifyList(ctx, r.ID)
 	run, err := toRun(r)

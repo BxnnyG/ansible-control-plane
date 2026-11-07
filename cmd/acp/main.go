@@ -23,6 +23,7 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/gitops"
 	"github.com/BxnnyG/ansible-control-plane/internal/grouprules"
 	"github.com/BxnnyG/ansible-control-plane/internal/inventory"
+	"github.com/BxnnyG/ansible-control-plane/internal/metrics"
 	"github.com/BxnnyG/ansible-control-plane/internal/policy"
 	"github.com/BxnnyG/ansible-control-plane/internal/projects"
 	"github.com/BxnnyG/ansible-control-plane/internal/remediation"
@@ -81,6 +82,9 @@ func run(args []string) error {
 		return worker.Run(ctx, cfg, log)
 	}
 
+	if err := cfg.CheckServe(); err != nil {
+		return err
+	}
 	log.Info("starting", "version", version.Version, "commit", version.Commit)
 	// Fail fast: the master key is required even before login is configured.
 	master, err := secrets.LoadMasterKey(cfg.MasterKeyFile, "ACP_MASTER_KEY")
@@ -96,7 +100,15 @@ func run(args []string) error {
 	if err := db.Migrate(ctx, pool); err != nil {
 		return err
 	}
+	metrics.SetQueuedSource(func(ctx context.Context) (int64, error) {
+		var n int64
+		err := pool.QueryRow(ctx, `SELECT count(*) FROM runs WHERE status = 'queued'`).Scan(&n)
+		return n, err
+	})
 	var opts []server.Option
+	if cfg.MetricsToken != "" {
+		opts = append(opts, server.WithMetricsToken(cfg.MetricsToken))
+	}
 	serveCtx, cancelServe := context.WithCancelCause(ctx)
 	defer cancelServe(nil)
 	switch {

@@ -2,28 +2,19 @@
 
 A self-hosted web platform to run, organize and monitor Ansible – Semaphore's simplicity, AWX's structure, a modern UI, plus a network-aware fleet view fed by connectors (OPNsense, Proxmox VE, NetBox, monitoring).
 
-> **Status:** early development – milestones M0–M7 done (auth, workspaces, secrets, Git projects, inventories, vault, templates and runs, Semaphore migration, read-only OPNsense/Proxmox/NetBox connectors, Checkmk and webhook alerts, merged fleet view with host status, unmanaged list, group rules and manual remediation), see [`docs/migration-from-semaphore.md`](docs/migration-from-semaphore.md) and [`docs/connectors-and-fleet.md`](docs/connectors-and-fleet.md). See [`PLAN.md`](PLAN.md) for scope and roadmap.
+> **Status:** v1.0.0 - all milestones M1-M8 are done. See [`CHANGELOG.md`](CHANGELOG.md) for the release notes and [`PLAN.md`](PLAN.md) for scope, roadmap and known limitations.
 
 ## Features
 
-Available now:
-
-- OIDC login (PKCE, e.g. Zitadel) plus break-glass admin, workspaces, roles and scoped memberships
-- Write-only secrets store with envelope encryption and audit log
-- Git projects: sync on demand, on schedule or via webhook; detection of playbooks, roles, requirements, vars files, inventories and vault content; surveys from `argument_specs`
-- Inventories in the database or synced with Git (INI/YAML import, rendered preview, write-back to `acp/*` branches)
-- Ansible Vault: vault identities, audited decrypt, encrypt and rekey via Git
-
-- Templates with surveys, run dialog with host preview, unprivileged worker, live logs (SSE), run history, per-host results
-- Cron schedules and template webhooks, requirements cache (`requirements.yml`), admin CLI for templates and runs
-
-Planned for v1.0:
-
-- Network scopes for permissions (fed by connectors)
-- Fleet view per network: online, Ansible-reachable, last run, drift, open monitoring problems, unmanaged devices
-- Manual remediation: alert rules map to a template and limit (host, group or network, optional check run first), plus bulk runs on selected hosts; never automatic (see [`docs/connectors-and-fleet.md`](docs/connectors-and-fleet.md#remediation))
-- Read-only connectors (OPNsense, Proxmox VE) feeding a merged fleet view with conflict hints and group rules (see [`docs/connectors-and-fleet.md`](docs/connectors-and-fleet.md))
-- Migration tool from Semaphore UI (see [`docs/migration-from-semaphore.md`](docs/migration-from-semaphore.md))
+- OIDC login (PKCE, e.g. Zitadel) plus break-glass admin, first-run setup wizard, workspaces, roles and scoped memberships, audit log
+- Write-only secrets store with envelope encryption
+- Git projects (sync on demand, schedule or webhook; playbook, role, inventory and vault detection; surveys from `argument_specs`)
+- Inventories in the database or synced with Git, Ansible Vault (identities, audited decrypt, encrypt, rekey)
+- Templates with surveys, schedules, webhooks, unprivileged and process-isolated worker, live logs (SSE), run history with per-host results
+- Read-only connectors (OPNsense, Proxmox VE, NetBox, Checkmk and alert webhooks) feeding a merged fleet view with host status, conflicts, unmanaged devices and group rules
+- Manual remediation: alert rules map to a template and limit; never automatic
+- Migration tool from Semaphore UI
+- Operations: backup and restore, worker egress allowlist, Prometheus metrics, OpenAPI 3.1 spec
 
 ## Quickstart
 
@@ -34,7 +25,7 @@ make init              # or: cp .env.example .env and set ACP_DB_PASSWORD; creat
 docker compose up -d --build
 ```
 
-The UI is then available on `http://<host>:8080` (configurable in `.env`).
+The UI is then available on the configured port (default 8080, or HTTPS on 8443 with TLS); the setup wizard guides the first run. Full install, upgrade and security guidance: [`docs/operations.md`](docs/operations.md).
 
 ## Admin CLI
 
@@ -62,7 +53,12 @@ group/host counts (never variable values). The project must be synced first.
 
 ## Documentation
 
-- [`PLAN.md`](PLAN.md) – project plan and requirements
+- [`CHANGELOG.md`](CHANGELOG.md) – release notes
+- [`SECURITY.md`](SECURITY.md) – vulnerability reporting, supported versions
+- [`PLAN.md`](PLAN.md) – project plan, roadmap, known limitations
+- [`docs/operations.md`](docs/operations.md) – operator guide: install, upgrade, backup/restore, security model, troubleshooting
+- [`docs/templates-and-runs.md`](docs/templates-and-runs.md) – templates, runs, schedules, webhooks
+- [`docs/migration-from-semaphore.md`](docs/migration-from-semaphore.md) – migration from Semaphore UI
 - [`docs/projects-and-inventories.md`](docs/projects-and-inventories.md) – operator guide: projects, inventories, vault
 - [`docs/connectors-and-fleet.md`](docs/connectors-and-fleet.md) – operator guide: connectors, fleet, conflicts, network scopes, group rules
 - [`docs/adr/`](docs/adr/) – architecture decision records

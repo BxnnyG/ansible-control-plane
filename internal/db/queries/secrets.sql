@@ -23,11 +23,13 @@ WHERE id = $1 AND workspace_id = $2
 RETURNING id, workspace_id, name, type, description, metadata, created_by, created_at, updated_at;
 
 -- name: UpdateSecretWithEnvelope :one
+-- Optimistic concurrency: only applies when the row still has the updated_at
+-- the caller read (no rows = deleted or changed concurrently).
 UPDATE secrets
 SET name = $3, description = $4, metadata = $5,
     env_version = $6, env_key_id = $7, env_wrap_nonce = $8, env_wrapped_dek = $9,
-    env_nonce = $10, env_ciphertext = $11, updated_at = now()
-WHERE id = $1 AND workspace_id = $2
+    env_nonce = $10, env_ciphertext = $11, updated_at = clock_timestamp()
+WHERE id = $1 AND workspace_id = $2 AND updated_at = $12
 RETURNING id, workspace_id, name, type, description, metadata, created_by, created_at, updated_at;
 
 -- name: DeleteSecret :exec

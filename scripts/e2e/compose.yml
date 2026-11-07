@@ -68,6 +68,9 @@ services:
     secrets: [worker_token]
     read_only: true
     cap_drop: [ALL]
+    # Only the capabilities the supervisor needs to start, signal and clean up jobs under
+    # their own uids (file caps on the worker binary, ADR-0020); jobs get none.
+    cap_add: [SETUID, SETGID, CHOWN, KILL]
     security_opt: ["no-new-privileges:true"]
     tmpfs:
       - /tmp:size=256m,mode=1777,exec

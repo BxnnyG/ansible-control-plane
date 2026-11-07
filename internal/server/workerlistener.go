@@ -8,6 +8,8 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // WorkerAPIHandler returns the handler of the internal worker listener: only
@@ -16,6 +18,7 @@ import (
 func WorkerAPIHandler(api http.Handler, log *slog.Logger) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/api/internal/worker/", http.StripPrefix("/api/internal/worker", api))
+	mux.Handle("/metrics", promhttp.Handler()) // internal-only listener, never published
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) { http.Error(w, "not found", http.StatusNotFound) })
 	return accessLog(log)(mux)
 }
@@ -30,7 +33,7 @@ func StartWorkerAPI(ctx context.Context, addr string, api http.Handler, grace ti
 		return fmt.Errorf("worker API listen: %w", err)
 	}
 	// No write timeout: the claim endpoint long-polls and bundles may be large.
-	srv := &http.Server{Handler: WorkerAPIHandler(api, log), ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Handler: WorkerAPIHandler(api, log), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 120 * time.Second}
 	go func() {
 		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errc <- fmt.Errorf("worker API: %w", err)

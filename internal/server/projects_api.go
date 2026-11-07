@@ -64,6 +64,10 @@ func projectRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc Proj
 			policy.WriteJSON(w, http.StatusConflict, apiError{Error: err.Error(), Code: "hostkey_mismatch"})
 		case errors.Is(err, projects.ErrNotSSH):
 			policy.WriteJSON(w, http.StatusUnprocessableEntity, apiError{Error: err.Error(), Code: "not_ssh"})
+		case errors.Is(err, projects.ErrInsecureCredential):
+			policy.WriteJSON(w, http.StatusUnprocessableEntity, apiError{Error: err.Error(), Code: "insecure_credential"})
+		case errors.Is(err, projects.ErrCredentialReselect):
+			policy.WriteJSON(w, http.StatusUnprocessableEntity, apiError{Error: err.Error(), Code: "credential_reselect_required"})
 		case errors.Is(err, projects.ErrInvalid):
 			policy.WriteJSON(w, http.StatusUnprocessableEntity, apiError{Error: err.Error(), Code: "invalid"})
 		case errors.As(err, &re):

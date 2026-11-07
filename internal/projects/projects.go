@@ -26,6 +26,7 @@ import (
 
 	"github.com/BxnnyG/ansible-control-plane/internal/db/dbgen"
 	"github.com/BxnnyG/ansible-control-plane/internal/gitops"
+	"github.com/BxnnyG/ansible-control-plane/internal/metrics"
 	"github.com/BxnnyG/ansible-control-plane/internal/secrets"
 )
 
@@ -37,7 +38,11 @@ var (
 	ErrHostKeyNotPinned = errors.New("ssh host key is not pinned; scan and confirm the host key first")
 	ErrHostKeyMismatch  = errors.New("fingerprint does not match any key presented by the server")
 	ErrNotSSH           = errors.New("project url is not an ssh url")
-	ErrSyncInProgress   = errors.New("a sync of this project is already running")
+	// ErrInsecureCredential: a password/token credential must not be sent over plain http.
+	ErrInsecureCredential = errors.New("credentials require an https or ssh url; http urls cannot carry a credential")
+	// ErrCredentialReselect: the remote host or scheme changed, so the credential must be chosen again.
+	ErrCredentialReselect = errors.New("the remote host or scheme changed; select the credential again or remove it")
+	ErrSyncInProgress     = errors.New("a sync of this project is already running")
 )
 
 // RemoteError is a failed remote operation (ls-remote or sync). The message is
@@ -256,6 +261,29 @@ func SSHTarget(raw string) (host string, port int, ok bool) {
 	return "", 0, false
 }
 
+// remoteIdentity reduces a remote URL to scheme and host:port (lower case) so
+// that a credential can be tied to the system it was meant for.
+func remoteIdentity(raw string) string {
+	if h, p, ok := SSHTarget(raw); ok {
+		return fmt.Sprintf("ssh://%s:%d", strings.ToLower(h), p)
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "invalid:" + raw
+	}
+	host := strings.ToLower(u.Hostname())
+	port := u.Port()
+	if port == "" {
+		switch strings.ToLower(u.Scheme) {
+		case "https":
+			port = "443"
+		case "http":
+			port = "80"
+		}
+	}
+	return strings.ToLower(u.Scheme) + "://" + host + ":" + port
+}
+
 func isHTTP(raw string) bool {
 	l := strings.ToLower(raw)
 	return strings.HasPrefix(l, "https://") || strings.HasPrefix(l, "http://")
@@ -331,6 +359,9 @@ func (s *Service) validate(ctx context.Context, ws uuid.UUID, in spec) (spec, er
 			return in, invalid("ssh urls need a credential of type ssh_key")
 		}
 		return in, nil
+	}
+	if strings.HasPrefix(strings.ToLower(in.url), "http://") {
+		return in, ErrInsecureCredential
 	}
 	m, err := s.o.Secrets.Get(ctx, ws, *in.cred)
 	if err != nil {
@@ -426,6 +457,9 @@ func (s *Service) Update(ctx context.Context, ws, id uuid.UUID, in UpdateInput) 
 	}
 	if in.SyncIntervalSeconds.Set {
 		sp.interval = in.SyncIntervalSeconds.Value
+	}
+	if sp.cred != nil && !in.CredentialSecretID.Set && remoteIdentity(cur.Url) != remoteIdentity(sp.url) {
+		return Project{}, ErrCredentialReselect
 	}
 	if sp, err = s.validate(ctx, ws, sp); err != nil {
 		return Project{}, err
@@ -641,6 +675,7 @@ func (s *Service) syncAs(ctx context.Context, ws, id uuid.UUID, trigger string) 
 	defer cancel()
 	dir := s.cacheDir(id)
 	record := func(status, msg, sha string) {
+		metrics.ProjectSyncs.WithLabelValues(status).Inc()
 		sctx, c := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 		defer c()
 		_ = s.o.Store.SetProjectSyncResult(sctx, dbgen.SetProjectSyncResultParams{

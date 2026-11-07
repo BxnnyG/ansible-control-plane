@@ -17,6 +17,7 @@ import (
 
 	"github.com/BxnnyG/ansible-control-plane/internal/auth"
 	"github.com/BxnnyG/ansible-control-plane/internal/db/dbgen"
+	"github.com/BxnnyG/ansible-control-plane/internal/metrics"
 	"github.com/BxnnyG/ansible-control-plane/internal/policy"
 	"github.com/BxnnyG/ansible-control-plane/internal/projects"
 	"github.com/BxnnyG/ansible-control-plane/internal/runs"
@@ -262,12 +263,14 @@ func scheduleRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc Sch
 			host = req.RemoteAddr
 		}
 		if !lim.allow(host, time.Now()) {
+			metrics.WebhookRequests.WithLabelValues("template", "rate_limited").Inc()
 			w.Header().Set("Retry-After", "60")
 			http.Error(w, "too many requests", http.StatusTooManyRequests)
 			return
 		}
 		body, err := io.ReadAll(http.MaxBytesReader(w, req.Body, projects.MaxWebhookBody))
 		if err != nil {
+			metrics.WebhookRequests.WithLabelValues("template", "too_large").Inc()
 			http.Error(w, "request too large", http.StatusRequestEntityTooLarge)
 			return
 		}
@@ -277,6 +280,14 @@ func scheduleRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc Sch
 			return
 		}
 		run, err := svc.HandleWebhook(req.Context(), id, req.Header.Get, body)
+		switch {
+		case errors.Is(err, schedules.ErrRejected):
+			metrics.WebhookRequests.WithLabelValues("template", "rejected").Inc()
+		case err == nil:
+			metrics.WebhookRequests.WithLabelValues("template", "accepted").Inc()
+		default:
+			metrics.WebhookRequests.WithLabelValues("template", "error").Inc()
+		}
 		switch {
 		case err == nil:
 			policy.WriteJSON(w, http.StatusAccepted, map[string]any{"status": "accepted", "run_id": run.ID})

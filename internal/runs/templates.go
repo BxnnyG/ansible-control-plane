@@ -83,16 +83,37 @@ var envNameRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,127}$`)
 // forbiddenEnv lists variables that would let a template change how the
 // worker process itself loads code.
 var forbiddenEnv = map[string]bool{
-	"PATH": true, "HOME": true, "PYTHONPATH": true, "PYTHONHOME": true, "PYTHONSTARTUP": true,
-	"LD_PRELOAD": true, "LD_LIBRARY_PATH": true,
+	"PATH": true, "HOME": true, "USER": true, "LOGNAME": true, "SHELL": true, "IFS": true,
+	"TMPDIR": true, "TEMP": true, "TMP": true, "XDG_CONFIG_HOME": true, "XDG_DATA_HOME": true,
+	"XDG_CACHE_HOME": true, "LANG": true, "LC_ALL": true,
+	"ANSIBLE_LIBRARY": true, "ANSIBLE_CONFIG": true, "ANSIBLE_HOME": true, "ANSIBLE_COLLECTIONS_PATH": true,
+	"ANSIBLE_COLLECTIONS_PATHS": true, "ANSIBLE_ROLES_PATH": true, "ANSIBLE_MODULE_UTILS": true,
+	"ANSIBLE_REMOTE_TMP": true, "ANSIBLE_LOCAL_TEMP": true, "ANSIBLE_SSH_EXECUTABLE": true,
+	"ANSIBLE_SCP_EXECUTABLE": true, "ANSIBLE_SFTP_EXECUTABLE": true, "ANSIBLE_SSH_ARGS": true,
+	"ANSIBLE_SSH_COMMON_ARGS": true, "ANSIBLE_PRIVATE_KEY_FILE": true, "ANSIBLE_VAULT_PASSWORD_FILE": true,
+	"ANSIBLE_VAULT_IDENTITY_LIST": true, "ANSIBLE_INVENTORY": true, "ANSIBLE_INVENTORY_PLUGINS": true,
+	"ANSIBLE_PLAYBOOK_DIR": true, "ANSIBLE_PYTHON_INTERPRETER": true, "ANSIBLE_SHELL_EXECUTABLE": true,
+	"ANSIBLE_BECOME_EXE": true, "ANSIBLE_BECOME_FLAGS": true, "ANSIBLE_TRANSPORT": true,
+	"ANSIBLE_FORKS": true, "ANSIBLE_DEFAULT_REMOTE_USER": true, "ANSIBLE_REMOTE_USER": true,
+	"ANSIBLE_ENABLE_TASK_DEBUGGER": true,
+	"BASH_ENV":                     true, "ENV": true, "SSH_ASKPASS": true, "SSH_AUTH_SOCK": true, "GIT_SSH": true,
+	"GIT_SSH_COMMAND": true, "EDITOR": true, "VISUAL": true, "PAGER": true,
 }
 
 // envDenied reports whether a template may not set the variable: the exact
-// names above, the worker's own ACP_* variables and everything that selects
-// or configures Ansible callbacks (the acp event callback must stay active).
+// names above, the worker's own ACP_* variables, loader and interpreter
+// settings (LD_*, PYTHON*), every Ansible *_PLUGINS path (plugins are code),
+// ANSIBLE_*_PLUGIN* selectors, Ansible callback settings (the acp event
+// callback must stay active), and proxy or host-key related ssh variables.
 func envDenied(k string) bool {
-	return forbiddenEnv[k] || strings.HasPrefix(k, "ACP_") ||
-		strings.HasPrefix(k, "ANSIBLE_CALLBACK") || strings.HasPrefix(k, "ANSIBLE_STDOUT_CALLBACK")
+	u := strings.ToUpper(k)
+	if forbiddenEnv[u] || strings.HasPrefix(u, "ACP_") || strings.HasPrefix(u, "LD_") ||
+		strings.HasPrefix(u, "PYTHON") || strings.HasPrefix(u, "DYLD_") || strings.HasPrefix(u, "BASH_FUNC_") ||
+		strings.HasPrefix(u, "GIT_") || strings.HasPrefix(u, "ANSIBLE_CALLBACK") ||
+		strings.HasPrefix(u, "ANSIBLE_STDOUT_CALLBACK") {
+		return true
+	}
+	return strings.HasPrefix(u, "ANSIBLE_") && strings.Contains(u, "_PLUGIN")
 }
 
 func (s *Service) toTemplate(ctx context.Context, q *dbgen.Queries, t dbgen.Template) (Template, error) {

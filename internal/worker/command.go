@@ -112,7 +112,7 @@ func buildEnv(sp runproto.Spec, dir string, base []string, collections, roles st
 	m["ANSIBLE_LOCAL_TEMP"] = filepath.Join(tmp, "local")
 	m["ANSIBLE_REMOTE_TEMP"] = filepath.Join(tmp, "remote")
 	m["TMPDIR"] = tmp
-	m["PYTHONUNBUFFERED"] = "1"
+	m["HOME"] = filepath.Join(tmp, "home") // job users have no writable home	m["PYTHONUNBUFFERED"] = "1"
 	m["ANSIBLE_NOCOLOR"] = "0"
 	if collections != "" {
 		m["ANSIBLE_COLLECTIONS_PATH"] = collections

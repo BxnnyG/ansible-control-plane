@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 
 	"github.com/BxnnyG/ansible-control-plane/internal/auth"
 	"github.com/BxnnyG/ansible-control-plane/internal/config"
+	"github.com/BxnnyG/ansible-control-plane/internal/metrics"
 	"github.com/BxnnyG/ansible-control-plane/internal/policy"
 	"github.com/BxnnyG/ansible-control-plane/internal/version"
 )
@@ -54,7 +56,12 @@ type routerOpts struct {
 	remediation RemediationAPI
 	stream      *runStream
 	publicURL   string
+
+	metricsToken string
 }
+
+// WithMetricsToken exposes /metrics on the public listeners, protected by a bearer token.
+func WithMetricsToken(token string) Option { return func(o *routerOpts) { o.metricsToken = token } }
 
 // WithAuth mounts the OIDC/session endpoints (/api/auth/*, /api/v1/me).
 func WithAuth(a *auth.Service) Option { return func(o *routerOpts) { o.auth = a } }
@@ -68,7 +75,7 @@ func Router(log *slog.Logger, db Pinger, static fs.FS, opts ...Option) http.Hand
 	hookLim := newHookLimiter(60, time.Minute) // shared by all public hook endpoints
 	r := chi.NewRouter()
 	// Note: no RealIP middleware; trusted proxy handling is added explicitly later.
-	r.Use(middleware.Recoverer, accessLog(log))
+	r.Use(middleware.Recoverer, securityHeaders(static), accessLog(log), httpMetrics)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 		_, _ = w.Write([]byte("ok\n"))
@@ -83,7 +90,14 @@ func Router(log *slog.Logger, db Pinger, static fs.FS, opts ...Option) http.Hand
 		}
 		_, _ = w.Write([]byte("ok\n"))
 	})
-	r.Handle("/metrics", promhttp.Handler())
+	// /metrics is served on the internal worker API listener; the public
+	// listeners expose it only behind a bearer token.
+	if ro.metricsToken != "" {
+		r.Handle("/metrics", bearerAuth(ro.metricsToken, promhttp.Handler()))
+	} else {
+		// Without a token, answer 404 instead of falling through to the SPA.
+		r.Handle("/metrics", http.NotFoundHandler())
+	}
 	if ro.auth != nil {
 		ro.auth.Routes(r)
 	}
@@ -182,7 +196,7 @@ func accessLog(log *slog.Logger) func(http.Handler) http.Handler {
 
 // Run serves HTTP (and HTTPS when configured) until ctx is cancelled.
 // With TLS enabled, the plain HTTP port keeps serving /healthz, /readyz and
-// /metrics and redirects everything else to HTTPS.
+// /metrics (if enabled) and redirects everything else to HTTPS.
 func Run(ctx context.Context, cfg config.Config, log *slog.Logger, db Pinger, opts ...Option) error {
 	handler := Router(log, db, DefaultStatic(), opts...)
 	errc := make(chan error, 2)
@@ -207,11 +221,12 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger, db Pinger, op
 		if strings.HasPrefix(cfg.PublicURL, "https://") {
 			httpHandler = redirectExceptOps(handler, cfg.PublicURL)
 		}
-		start(&http.Server{Addr: cfg.HTTPSAddr, Handler: handler, ReadHeaderTimeout: 10 * time.Second,
-			TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12}}, true)
+		s := newHTTPServer(cfg.HTTPSAddr, handler)
+		s.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+		start(s, true)
 		log.Info("https listening", "addr", cfg.HTTPSAddr)
 	}
-	start(&http.Server{Addr: cfg.HTTPAddr, Handler: httpHandler, ReadHeaderTimeout: 10 * time.Second}, false)
+	start(newHTTPServer(cfg.HTTPAddr, httpHandler), false)
 	log.Info("http listening", "addr", cfg.HTTPAddr, "tls", cfg.TLSEnabled())
 
 	select {
@@ -225,6 +240,20 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger, db Pinger, op
 		_ = s.Shutdown(sctx)
 	}
 	return nil
+}
+
+// newHTTPServer returns a server with read, write and idle timeouts. The SSE
+// run-log streams and the log download lift the read and write deadlines per
+// response via http.ResponseController, so long-lived streams keep working.
+func newHTTPServer(addr string, h http.Handler) *http.Server {
+	return &http.Server{
+		Addr: addr, Handler: h,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		WriteTimeout:      120 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    64 << 10,
+	}
 }
 
 // redirectExceptOps keeps /healthz, /readyz, /metrics on plain HTTP and
@@ -242,5 +271,33 @@ func redirectExceptOps(next http.Handler, publicURL string) http.Handler {
 			target += "?" + r.URL.RawQuery
 		}
 		http.Redirect(w, r, target, http.StatusMovedPermanently) //nolint:gosec // host is fixed by configuration
+	})
+}
+
+// httpMetrics counts requests and latency by chi route pattern (never the raw
+// path) to keep label cardinality bounded. Unmatched requests share one label.
+func httpMetrics(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+		start := time.Now()
+		next.ServeHTTP(ww, r)
+		route := "unmatched"
+		if rc := chi.RouteContext(r.Context()); rc != nil {
+			if p := rc.RoutePattern(); p != "" {
+				route = p
+			}
+		}
+		if route == "/*" || route == "/api/*" { // SPA / unknown API catch-alls
+			route = "static"
+			if strings.HasPrefix(r.URL.Path, "/api/") {
+				route = "api_not_found"
+			}
+		}
+		status := ww.Status()
+		if status == 0 {
+			status = http.StatusOK
+		}
+		metrics.HTTPRequests.WithLabelValues(route, r.Method, strconv.Itoa(status)).Inc()
+		metrics.HTTPDuration.WithLabelValues(route).Observe(time.Since(start).Seconds())
 	})
 }

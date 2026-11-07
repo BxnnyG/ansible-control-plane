@@ -75,7 +75,7 @@
     try {
       const res = await api.groupRules.apply(session.slug, preview.rule.id);
       const r = res.result;
-      notice = `Applied "${res.rule.name}": ${r.added.length} added, ${r.removed.length} removed, ${r.hosts_created.length} host(s) created${r.commit ? ' (committed to Git)' : ''}.`;
+      notice = `Applied "${res.rule.name}": ${(r.added ?? []).length} added, ${(r.removed ?? []).length} removed, ${(r.hosts_created ?? []).length} host(s) created${r.commit ? ' (committed to Git)' : ''}.`;
       preview = null;
       confirmApply = false;
       await load(session.slug);

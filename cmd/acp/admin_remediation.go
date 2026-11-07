@@ -80,8 +80,8 @@ func parseRemediationArgs(group string, args []string, stderr io.Writer) (remedi
 
 // runAdminRemediation implements `acp admin remediation` and `acp admin alert`.
 // A fix is an explicit operator action with workspace authority (no scope
-// check, like `acp admin run start`); like all CLI commands it writes no audit
-// entry.
+// check, like `acp admin run start`); create and remediate write audit
+// entries with actor "cli".
 func runAdminRemediation(ctx context.Context, group string, args []string, cfg config.Config, stdout, stderr io.Writer) error {
 	a, err := parseRemediationArgs(group, args, stderr)
 	if err != nil {
@@ -140,6 +140,8 @@ func runAdminRemediation(ctx context.Context, group string, args []string, cfg c
 		if err != nil {
 			return err
 		}
+		cliAuditTarget(ctx, q, ws, "remediation.rule.create", "remediation_rule", r.ID.String(),
+			map[string]any{"source": "cli", "name": r.Name, "template_id": tpl, "target": a.Target, "group": a.RuleGroup, "enabled": !a.Disabled})
 		_, _ = fmt.Fprintf(stdout, "%s\t%s\n", r.ID, r.Name)
 		return nil
 	}
@@ -155,6 +157,9 @@ func runAdminRemediation(ctx context.Context, group string, args []string, cfg c
 	if err != nil {
 		return err
 	}
+	cliAuditTarget(ctx, q, ws, "remediation.run", "run", res.Run.ID.String(), map[string]any{
+		"source": "cli", "rule_id": rule.ID, "alert_id": alertID, "phase": res.Phase, "template_id": res.Run.TemplateID,
+		"limit": res.Limit, "hosts": len(res.Hosts), "check": res.Run.Params.Check, "skip_check": a.SkipCheck})
 	_, _ = fmt.Fprintf(stdout, "run: %s\nphase: %s\nlimit: %s\nhosts: %d\n", res.Run.ID, res.Phase, res.Limit, len(res.Hosts))
 	return nil
 }

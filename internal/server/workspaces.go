@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/BxnnyG/ansible-control-plane/api"
 	"github.com/BxnnyG/ansible-control-plane/internal/auth"
 	"github.com/BxnnyG/ansible-control-plane/internal/db/dbgen"
 	"github.com/BxnnyG/ansible-control-plane/internal/policy"
@@ -35,6 +36,11 @@ func WithPolicy(az *policy.Authorizer, store APIStore) Option {
 // apiRoutes registers /api/v1 routes on the root router.
 func apiRoutes(r chi.Router, az *policy.Authorizer, store APIStore, info AuthInfo, log *slog.Logger) {
 	setupRoutes(r, az, store, info, log)
+	az.HandleAuthenticated(r, http.MethodGet, "/api/v1/openapi.yaml", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		_, _ = w.Write(api.Spec)
+	})
 	az.HandleAuthenticated(r, http.MethodGet, "/api/v1/workspaces", func(w http.ResponseWriter, req *http.Request) {
 		rows, err := store.ListMembershipSummariesForUser(req.Context(), auth.FromContext(req.Context()).User.ID)
 		if err != nil {

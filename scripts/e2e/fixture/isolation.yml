@@ -1,0 +1,47 @@
+# Negative tests for job process isolation (ADR-0020): the job must run under a
+# per-slot job uid and must not reach anything of the worker supervisor.
+- name: e2e job isolation
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Job uid
+      ansible.builtin.command: id -u
+      register: uid
+      changed_when: false
+    - name: Job runs under a job uid, not the worker uid
+      ansible.builtin.assert:
+        that:
+          - uid.stdout | int >= 10100
+          - uid.stdout | int <= 10115
+    - name: Job holds no capabilities
+      ansible.builtin.shell: grep -E '^Cap(Prm|Eff|Amb):' /proc/self/status | grep -vc '0000000000000000$' || true
+      register: caps
+      changed_when: false
+      failed_when: caps.stdout | trim != '0'
+    - name: Worker token is not readable
+      ansible.builtin.shell: cat /run/secrets/worker_token >/dev/null 2>&1
+      register: token
+      changed_when: false
+      failed_when: token.rc == 0
+    - name: Supervisor environment and memory are not readable
+      ansible.builtin.shell: cat /proc/1/environ >/dev/null 2>&1 || exit 0; exit 1
+      changed_when: false
+    - name: Supervisor memory is not readable
+      ansible.builtin.shell: head -c 1 /proc/1/mem >/dev/null 2>&1 || exit 0; exit 1
+      changed_when: false
+    - name: Job cannot switch back to the worker uid
+      ansible.builtin.command: "{{ ansible_playbook_python }} -c 'import os; os.setuid(10001)'"
+      register: su
+      changed_when: false
+      failed_when: su.rc == 0
+    - name: Job cannot execute the capability-carrying worker binary
+      ansible.builtin.command: /usr/libexec/acp/acp-worker version
+      register: wb
+      changed_when: false
+      failed_when: wb.rc == 0
+    - name: Job cannot list other run directories
+      ansible.builtin.shell: ls /tmp/runs >/dev/null 2>&1 || exit 0; exit 1
+      changed_when: false
+    - name: Done
+      ansible.builtin.debug:
+        msg: "e2e isolation ok"

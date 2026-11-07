@@ -18,6 +18,7 @@ import (
 
 	"github.com/BxnnyG/ansible-control-plane/internal/auth"
 	"github.com/BxnnyG/ansible-control-plane/internal/db/dbgen"
+	"github.com/BxnnyG/ansible-control-plane/internal/metrics"
 	"github.com/BxnnyG/ansible-control-plane/internal/policy"
 	"github.com/BxnnyG/ansible-control-plane/internal/projects"
 )
@@ -65,7 +66,16 @@ func (l *hookLimiter) allow(key string, now time.Time) bool {
 			}
 		}
 		if len(l.m) >= maxHookLimiterEntries {
-			return false
+			// Still full of live windows: evict the entry that expires first so
+			// new sources are never locked out by a flood of fake ones.
+			var oldest string
+			var at time.Time
+			for k, e := range l.m {
+				if oldest == "" || e.reset.Before(at) {
+					oldest, at = k, e.reset
+				}
+			}
+			delete(l.m, oldest)
 		}
 	}
 	e := l.m[key]
@@ -77,6 +87,17 @@ func (l *hookLimiter) allow(key string, now time.Time) bool {
 	return e.n <= l.max
 }
 
+func hookResult(out projects.HookOutcome) string {
+	switch out {
+	case projects.HookRejected:
+		return "rejected"
+	case projects.HookIgnored:
+		return "ignored"
+	default:
+		return "accepted"
+	}
+}
+
 // webhookRoutes registers the public hook endpoint and the management API.
 func webhookRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc WebhooksAPI, publicURL string, lim *hookLimiter, log *slog.Logger) {
 	// Public endpoint: authenticated by signature only, no session and no CSRF.
@@ -86,12 +107,14 @@ func webhookRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc Webh
 			host = req.RemoteAddr
 		}
 		if !lim.allow(host, time.Now()) {
+			metrics.WebhookRequests.WithLabelValues("project", "rate_limited").Inc()
 			w.Header().Set("Retry-After", "60")
 			http.Error(w, "too many requests", http.StatusTooManyRequests)
 			return
 		}
 		body, err := io.ReadAll(http.MaxBytesReader(w, req.Body, projects.MaxWebhookBody))
 		if err != nil {
+			metrics.WebhookRequests.WithLabelValues("project", "too_large").Inc()
 			http.Error(w, "request too large", http.StatusRequestEntityTooLarge)
 			return
 		}
@@ -100,6 +123,7 @@ func webhookRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc Webh
 		if err == nil {
 			out = svc.HandleWebhook(req.Context(), id, req.Header.Get, body)
 		}
+		metrics.WebhookRequests.WithLabelValues("project", hookResult(out)).Inc()
 		if out == projects.HookRejected { // identical for unknown project, disabled hook and bad signature
 			http.Error(w, "not found", http.StatusNotFound)
 			return

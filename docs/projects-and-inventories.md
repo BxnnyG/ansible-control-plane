@@ -20,6 +20,15 @@ covers the whole inventory.
 
 ## 1. Credentials
 
+A credential is bound to the remote it was chosen for:
+
+- `http://` remotes cannot carry a password or token credential (422
+  `insecure_credential`); use `https://` or SSH.
+- Changing the repository URL to another host, port or scheme while keeping
+  the credential is rejected with 422 `credential_reselect_required`. Select
+  the credential again (or remove it) in the same request.
+
+
 Create a secret first (**Secrets → New secret**):
 
 - `ssh_key` for SSH remotes: an unencrypted private key (passphrase-protected

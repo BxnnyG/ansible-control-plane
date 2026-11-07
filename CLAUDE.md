@@ -62,7 +62,7 @@ Execution order: M4 → M7 → M5 → M6 → M8 (numbers unchanged, see `PLAN.md
 - Every API handler declares its permission; authorization goes through the central policy package (ADR-0007).
 - Secrets: never logged, never returned by the API; use the `secrets` package only (ADR-0005).
 - Connectors: GET-only HTTP client wrapper, sanitized fixtures only (no real IPs/hostnames/MACs/tokens).
-- Frontend: TypeScript strict, components small, API types generated from OpenAPI.
+- Frontend: TypeScript strict, components small, API types generated from OpenAPI (`api/openapi.yaml`).
 
 ## Build / test commands
 
@@ -70,7 +70,8 @@ Execution order: M4 → M7 → M5 → M6 → M8 (numbers unchanged, see `PLAN.md
 - `make init` – create `.env` (random DB password), `secrets/master.key`, `secrets/worker.token`, enable git hooks (`core.hooksPath scripts/hooks`).
 - `make test` – `go vet` + `go test` for `./cmd/... ./internal/...` (never `./...`: `web/node_modules` contains stray Go files). The Go container installs `git openssh-client-default` via apk first (gitops tests need git and ssh-keyscan); `scripts/test-db.sh` does the same, CI installs them via apt.
 - `make test-db` (`scripts/test-db.sh`) – DB-backed tests (db, auth, admin, server) against a throwaway Postgres, one database per package, cleaned up on exit.
-- `make lint` – golangci-lint; web: `docker run --rm -v $PWD/web:/app -w /app node:24-alpine sh -c 'npm ci && npm run lint && npm run check && npm test -- --run && npm run build'`.
+- `make lint` – golangci-lint; web: `docker run --rm -v $PWD:/repo -w /repo/web node:24-alpine sh -c 'npm ci && npm run check:api && npm run lint && npm run check && npm test -- --run && npm run build'` (mounts the repo root: `check:api`/`gen:api` read `../api/openapi.yaml`).
+- API spec: `api/openapi.yaml` (hand-maintained, OpenAPI 3.1, `x-acp-permission` per operation); `TestOpenAPIMatchesRoutes` in `internal/server` fails on route/permission drift; frontend types are generated with `npm run gen:api` into `web/src/lib/api/schema.d.ts` (committed). Change the spec first, then regenerate; never hand-write response types in `web/src/lib/api.ts`.
 - `scripts/test-run-e2e.sh` – run-execution smoke test on a throwaway compose project (builds `acp-e2e-*` images, ~3-5 min; never touches the live stack).
 - `make up` / `make down` – compose stack (`docker compose up -d --build`); ports from `.env` (`ACP_HTTP_PORT`, `ACP_HTTPS_PORT`).
 - Full-history secret scan: `docker run --rm -v $PWD:/repo ghcr.io/gitleaks/gitleaks:v8.21.2 git /repo --redact --config /repo/.gitleaks.toml`.

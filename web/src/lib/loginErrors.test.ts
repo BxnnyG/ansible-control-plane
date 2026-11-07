@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { loginErrorMessage } from './loginErrors';
 
 describe('loginErrorMessage', () => {
-  it.each(['login_failed', 'idp_unavailable', 'account_disabled', 'no_access'])(
+  it.each(['login_failed', 'idp_unavailable', 'account_disabled', 'no_access', 'rate_limited'])(
     'maps %s to a message',
     (code) => {
       expect(loginErrorMessage(code)).toMatch(/\S/);

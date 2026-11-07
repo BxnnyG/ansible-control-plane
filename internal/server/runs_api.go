@@ -92,6 +92,81 @@ func (b templateBody) empty() bool {
 		b.AllowCheckOverride == nil && b.AllowDiffOverride == nil && b.AllowVerbosityOverride == nil
 }
 
+// adminRole reports whether the membership may set connection and execution
+// variables on templates.
+func adminRole(role string) bool { return role == policy.RoleAdmin || role == policy.RoleOwner }
+
+// checkTemplateVars rejects connection and execution variables in template
+// extra vars and surveys unless the caller is a workspace admin.
+func checkTemplateVars(d policy.Decision, b templateBody) error {
+	if adminRole(d.Membership.Role) {
+		return nil
+	}
+	if err := runs.CheckVarsAllowed(b.ExtraVars, "template extra variables of non-admin roles"); err != nil {
+		return err
+	}
+	if b.Survey.Set && b.Survey.Value != nil {
+		return runs.CheckSurveyAllowed(*b.Survey.Value)
+	}
+	return nil
+}
+
+// maskTemplate hides variable values from roles that cannot edit templates
+// (the keys stay visible).
+func maskTemplate(d policy.Decision, t runs.Template) runs.Template {
+	if policy.Allowed(d.Membership.Role, policy.TemplateWrite) {
+		return t
+	}
+	mask := func(m map[string]any) map[string]any {
+		out := make(map[string]any, len(m))
+		for k := range m {
+			out[k] = runs.MaskedValue
+		}
+		return out
+	}
+	t.ExtraVars = mask(t.ExtraVars)
+	t.EnvVars = mask(t.EnvVars)
+	return t
+}
+
+// maskRun hides the variable values of a run (its params and overrides) from
+// roles that cannot edit templates, exactly like maskTemplate; keys stay
+// visible. The input is not modified.
+func maskRun(d policy.Decision, r runs.Run) runs.Run {
+	if policy.Allowed(d.Membership.Role, policy.TemplateWrite) {
+		return r
+	}
+	mask := func(m map[string]any) map[string]any {
+		if m == nil {
+			return nil
+		}
+		out := make(map[string]any, len(m))
+		for k := range m {
+			out[k] = runs.MaskedValue
+		}
+		return out
+	}
+	r.Params.ExtraVars = mask(r.Params.ExtraVars)
+	r.Params.EnvVars = mask(r.Params.EnvVars)
+	if len(r.Overrides) > 0 {
+		var ov map[string]json.RawMessage
+		if json.Unmarshal(r.Overrides, &ov) == nil {
+			if raw, ok := ov["extra_vars"]; ok {
+				var vars map[string]any
+				if json.Unmarshal(raw, &vars) == nil {
+					if b, err := json.Marshal(mask(vars)); err == nil {
+						ov["extra_vars"] = b
+					}
+				}
+			}
+			if b, err := json.Marshal(ov); err == nil {
+				r.Overrides = b
+			}
+		}
+	}
+	return r
+}
+
 // runRoutes registers templates and runs under /api/v1/workspaces/{workspace}.
 func runRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc RunsAPI, stream *runStream, log *slog.Logger) {
 	const tpl = "/api/v1/workspaces/{workspace}/templates"
@@ -216,6 +291,9 @@ func runRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc RunsAPI,
 			}
 			list = kept
 		}
+		for i := range list {
+			list[i] = maskTemplate(d, list[i])
+		}
 		policy.WriteJSON(w, http.StatusOK, list)
 	})
 
@@ -231,6 +309,10 @@ func runRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc RunsAPI,
 		}
 		var body templateBody
 		if !decode(w, req, &body, false) {
+			return
+		}
+		if err := checkTemplateVars(d, body); err != nil {
+			fail(w, "create template", err)
 			return
 		}
 		in := body.input()
@@ -263,7 +345,7 @@ func runRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc RunsAPI,
 			notFound(w)
 			return
 		}
-		policy.WriteJSON(w, http.StatusOK, t)
+		policy.WriteJSON(w, http.StatusOK, maskTemplate(d, t))
 	})
 
 	az.Handle(r, http.MethodPut, tpl+"/{id}", policy.TemplateWrite, func(w http.ResponseWriter, req *http.Request) {
@@ -282,6 +364,10 @@ func runRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc RunsAPI,
 		}
 		if body.empty() {
 			policy.WriteJSON(w, http.StatusUnprocessableEntity, apiError{Error: "nothing to update", Code: "invalid"})
+			return
+		}
+		if err := checkTemplateVars(d, body); err != nil {
+			fail(w, "update template", err)
 			return
 		}
 		t, err := svc.UpdateTemplate(req.Context(), d.Workspace.ID, id, body.input())
@@ -342,6 +428,7 @@ func runRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc RunsAPI,
 			"limit": run.Params.Limit, "hosts": len(run.Params.Hosts), "check": run.Params.Check,
 			"override_vars": varKeys, // names only, never values
 		})
+		run = maskRun(d, run)
 		policy.WriteJSON(w, http.StatusCreated, run)
 	})
 
@@ -396,6 +483,9 @@ func runRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc RunsAPI,
 			fail(w, "list runs", err)
 			return
 		}
+		for i := range page.Items {
+			page.Items[i] = maskRun(d, page.Items[i])
+		}
 		policy.WriteJSON(w, http.StatusOK, page)
 	})
 
@@ -413,6 +503,7 @@ func runRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc RunsAPI,
 			notFound(w)
 			return
 		}
+		run.Run = maskRun(d, run.Run)
 		policy.WriteJSON(w, http.StatusOK, run)
 	})
 
@@ -438,7 +529,7 @@ func runRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc RunsAPI,
 			return
 		}
 		audit(req, d, "run.cancel", "run", id, map[string]any{"template": run.TemplateName, "status": run.Status})
-		policy.WriteJSON(w, http.StatusOK, run)
+		policy.WriteJSON(w, http.StatusOK, maskRun(d, run))
 	})
 
 	if stream != nil {

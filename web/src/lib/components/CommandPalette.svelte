@@ -87,7 +87,14 @@
         aria-selected={i === active}
         class="cursor-pointer rounded-md px-3 py-2 {i === active ? 'bg-surface-2' : ''}"
         onmouseenter={() => (active = i)}
+        tabindex="-1"
         onclick={() => choose(item.href)}
+        onkeydown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            choose(item.href);
+          }
+        }}
       >
         {item.label}
       </li>

@@ -170,8 +170,10 @@ func streamRoutes(r chi.Router, az *policy.Authorizer, svc RunsAPI, st *runStrea
 	}
 	begin := func(w http.ResponseWriter) *sse {
 		rc := http.NewResponseController(w)
-		// Streams outlive any server write timeout; only this handler lifts it.
+		// Streams outlive the server read/write timeouts; only this handler lifts them
+		// (an expired read deadline would also cancel the request context).
 		_ = rc.SetWriteDeadline(time.Time{})
+		_ = rc.SetReadDeadline(time.Time{})
 		hd := w.Header()
 		hd.Set("Content-Type", "text/event-stream")
 		hd.Set("Cache-Control", "no-cache")
@@ -237,7 +239,7 @@ func streamRoutes(r chi.Router, az *policy.Authorizer, svc RunsAPI, st *runStrea
 					continue
 				}
 				seen[run.ID] = sig
-				b, _ := json.Marshal(run)
+				b, _ := json.Marshal(maskRun(d, run))
 				if s.send("run", "", b) != nil {
 					return
 				}
@@ -346,6 +348,7 @@ func streamRoutes(r chi.Router, az *policy.Authorizer, svc RunsAPI, st *runStrea
 		hd.Set("Cache-Control", "no-store")
 		rc := http.NewResponseController(w)
 		_ = rc.SetWriteDeadline(time.Time{})
+		_ = rc.SetReadDeadline(time.Time{})
 		after := int64(0)
 		for {
 			rows, err := st.chunks.ListRunLogChunks(req.Context(), dbgen.ListRunLogChunksParams{RunID: id, Seq: after, Limit: chunkPage})

@@ -290,8 +290,8 @@ const updateSecretWithEnvelope = `-- name: UpdateSecretWithEnvelope :one
 UPDATE secrets
 SET name = $3, description = $4, metadata = $5,
     env_version = $6, env_key_id = $7, env_wrap_nonce = $8, env_wrapped_dek = $9,
-    env_nonce = $10, env_ciphertext = $11, updated_at = now()
-WHERE id = $1 AND workspace_id = $2
+    env_nonce = $10, env_ciphertext = $11, updated_at = clock_timestamp()
+WHERE id = $1 AND workspace_id = $2 AND updated_at = $12
 RETURNING id, workspace_id, name, type, description, metadata, created_by, created_at, updated_at
 `
 
@@ -307,6 +307,7 @@ type UpdateSecretWithEnvelopeParams struct {
 	EnvWrappedDek []byte
 	EnvNonce      []byte
 	EnvCiphertext []byte
+	UpdatedAt     pgtype.Timestamptz
 }
 
 type UpdateSecretWithEnvelopeRow struct {
@@ -321,6 +322,8 @@ type UpdateSecretWithEnvelopeRow struct {
 	UpdatedAt   pgtype.Timestamptz
 }
 
+// Optimistic concurrency: only applies when the row still has the updated_at
+// the caller read (no rows = deleted or changed concurrently).
 func (q *Queries) UpdateSecretWithEnvelope(ctx context.Context, arg UpdateSecretWithEnvelopeParams) (UpdateSecretWithEnvelopeRow, error) {
 	row := q.db.QueryRow(ctx, updateSecretWithEnvelope,
 		arg.ID,
@@ -334,6 +337,7 @@ func (q *Queries) UpdateSecretWithEnvelope(ctx context.Context, arg UpdateSecret
 		arg.EnvWrappedDek,
 		arg.EnvNonce,
 		arg.EnvCiphertext,
+		arg.UpdatedAt,
 	)
 	var i UpdateSecretWithEnvelopeRow
 	err := row.Scan(

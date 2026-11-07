@@ -241,6 +241,27 @@ func (s *Service) Get(ctx context.Context, ws, id uuid.UUID) (Meta, error) {
 // Update renames a secret, changes its description and/or replaces its value.
 // The type is immutable.
 func (s *Service) Update(ctx context.Context, ws, id uuid.UUID, in UpdateInput) (Meta, error) {
+	// The write is conditional on the updated_at that was read, so a
+	// concurrent PUT can never be overwritten with stale name, description or
+	// ciphertext. On a lost race the change is re-applied to the fresh row.
+	for range maxUpdateAttempts {
+		m, err := s.updateOnce(ctx, ws, id, in)
+		if !errors.Is(err, errStale) {
+			return m, err
+		}
+	}
+	return Meta{}, fmt.Errorf("update secret: %w", ErrConflictRetry)
+}
+
+const maxUpdateAttempts = 5
+
+// errStale means the row changed between read and write.
+var errStale = errors.New("secret changed concurrently")
+
+// ErrConflictRetry is returned when an update lost the race repeatedly.
+var ErrConflictRetry = errors.New("secret is being modified concurrently, retry")
+
+func (s *Service) updateOnce(ctx context.Context, ws, id uuid.UUID, in UpdateInput) (Meta, error) {
 	cur, err := s.store.GetSecret(ctx, dbgen.GetSecretParams{ID: id, WorkspaceID: ws})
 	if err != nil {
 		return Meta{}, fmt.Errorf("get secret: %w", mapErr(err))
@@ -257,7 +278,7 @@ func (s *Service) Update(ctx context.Context, ws, id uuid.UUID, in UpdateInput) 
 		}
 	}
 	p := dbgen.UpdateSecretWithEnvelopeParams{
-		ID: id, WorkspaceID: ws, Name: name, Description: desc, Metadata: cur.Metadata,
+		ID: id, WorkspaceID: ws, Name: name, Description: desc, Metadata: cur.Metadata, UpdatedAt: cur.UpdatedAt,
 		EnvVersion: cur.EnvVersion, EnvKeyID: cur.EnvKeyID, EnvWrapNonce: cur.EnvWrapNonce,
 		EnvWrappedDek: cur.EnvWrappedDek, EnvNonce: cur.EnvNonce, EnvCiphertext: cur.EnvCiphertext,
 	}
@@ -275,6 +296,9 @@ func (s *Service) Update(ctx context.Context, ws, id uuid.UUID, in UpdateInput) 
 		p.EnvWrappedDek, p.EnvNonce, p.EnvCiphertext = env.WrappedDEK, env.Nonce, env.Ciphertext
 	}
 	r, err := s.store.UpdateSecretWithEnvelope(ctx, p)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Meta{}, errStale // deleted or changed: the next read tells which
+	}
 	if err != nil {
 		return Meta{}, fmt.Errorf("update secret: %w", mapErr(err))
 	}

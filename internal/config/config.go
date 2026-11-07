@@ -2,7 +2,9 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"net/netip"
 	"net/url"
 	"slices"
 	"strconv"
@@ -32,7 +34,10 @@ type Config struct {
 	WorkerTokenFile   string
 	WorkerConcurrency int
 	WorkerCacheDir    string
-	MasterKeyFile     string
+	// WorkerJobUIDBase is the first uid of the per-slot job users (ADR-0020);
+	// 0 runs jobs under the worker uid (development only).
+	WorkerJobUIDBase int
+	MasterKeyFile    string
 	// DataDir holds app state outside the database, e.g. Git clones in <DataDir>/projects.
 	DataDir       string
 	ShutdownGrace time.Duration
@@ -49,6 +54,33 @@ type Config struct {
 	BreakGlassEnabled bool
 	SessionIdle       time.Duration
 	SessionAbsolute   time.Duration
+	// AllowInsecureHTTP lets `serve` run with a plain http:// ACP_PUBLIC_URL
+	// on a non-loopback host (cookies then travel unencrypted).
+	AllowInsecureHTTP bool
+	// MetricsToken, when set, exposes /metrics on the public listeners behind
+	// a bearer token. /metrics is always served on the internal worker API listener.
+	MetricsToken string
+}
+
+// CheckServe validates settings that only matter for the serve subcommand.
+func (c Config) CheckServe() error {
+	if c.AllowInsecureHTTP || c.PublicURL == "" {
+		return nil
+	}
+	u, err := url.Parse(c.PublicURL)
+	if err != nil || u.Scheme != "http" {
+		return nil
+	}
+	switch h := u.Hostname(); {
+	case h == "localhost", strings.HasSuffix(h, ".localhost"):
+		return nil
+	default:
+		if ip, err := netip.ParseAddr(h); err == nil && ip.IsLoopback() {
+			return nil
+		}
+	}
+	return fmt.Errorf("ACP_PUBLIC_URL uses plain http on a non-loopback host; session cookies and credentials would travel unencrypted. " +
+		"Use https (ACP_TLS_*) or a TLS-terminating proxy, or set ACP_ALLOW_INSECURE_HTTP=true to accept the risk")
 }
 
 // OIDCEnabled reports whether OIDC login is configured.
@@ -102,11 +134,21 @@ func Load(lookup func(string) (string, bool)) (Config, error) {
 	if c.BreakGlassEnabled, err = parseBool(get("BREAKGLASS_ENABLED", "true")); err != nil {
 		return c, fmt.Errorf("ACP_BREAKGLASS_ENABLED: %w", err)
 	}
+	if c.AllowInsecureHTTP, err = parseBool(get("ALLOW_INSECURE_HTTP", "false")); err != nil {
+		return c, fmt.Errorf("ACP_ALLOW_INSECURE_HTTP: %w", err)
+	}
+	c.MetricsToken = get("METRICS_TOKEN", "")
 	if c.WorkerPoll, err = parseDur(get("WORKER_POLL_INTERVAL", "15s")); err != nil {
 		return c, fmt.Errorf("ACP_WORKER_POLL_INTERVAL: %w", err)
 	}
 	if c.WorkerConcurrency, err = parseInt(get("WORKER_CONCURRENCY", "2"), 1, 16); err != nil {
 		return c, fmt.Errorf("ACP_WORKER_CONCURRENCY: %w", err)
+	}
+	if c.WorkerJobUIDBase, err = parseInt(get("WORKER_JOB_UID_BASE", "0"), 0, 60000); err != nil {
+		return c, fmt.Errorf("ACP_WORKER_JOB_UID_BASE: %w", err)
+	}
+	if c.WorkerJobUIDBase != 0 && c.WorkerJobUIDBase < 1000 {
+		return c, errors.New("ACP_WORKER_JOB_UID_BASE must be 0 or at least 1000")
 	}
 	if c.RunLogRetentionDays, err = parseInt(get("RUN_LOG_RETENTION_DAYS", "90"), 0, 36500); err != nil {
 		return c, fmt.Errorf("ACP_RUN_LOG_RETENTION_DAYS: %w", err)

@@ -183,6 +183,7 @@
     <SchedulesPanel
       {ws}
       templateId={template.id}
+      {template}
       canRead={session.can('schedule.read')}
       canWrite={session.can('schedule.write')}
     />

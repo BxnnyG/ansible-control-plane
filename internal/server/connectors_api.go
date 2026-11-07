@@ -18,6 +18,7 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/auth"
 	"github.com/BxnnyG/ansible-control-plane/internal/connectors"
 	"github.com/BxnnyG/ansible-control-plane/internal/db/dbgen"
+	"github.com/BxnnyG/ansible-control-plane/internal/metrics"
 	"github.com/BxnnyG/ansible-control-plane/internal/policy"
 )
 
@@ -203,12 +204,14 @@ func connectorRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc Co
 			host = req.RemoteAddr
 		}
 		if !lim.allow(host, time.Now()) {
+			metrics.WebhookRequests.WithLabelValues("alert", "rate_limited").Inc()
 			w.Header().Set("Retry-After", "60")
 			http.Error(w, "too many requests", http.StatusTooManyRequests)
 			return
 		}
 		body, err := io.ReadAll(http.MaxBytesReader(w, req.Body, connectors.MaxAlertWebhookBody))
 		if err != nil {
+			metrics.WebhookRequests.WithLabelValues("alert", "too_large").Inc()
 			http.Error(w, "request too large", http.StatusRequestEntityTooLarge)
 			return
 		}
@@ -218,6 +221,16 @@ func connectorRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc Co
 			return
 		}
 		ws, n, err := svc.HandleAlertWebhook(req.Context(), id, req.Header.Get("Authorization"), body)
+		switch {
+		case err == nil:
+			metrics.WebhookRequests.WithLabelValues("alert", "accepted").Inc()
+		case errors.Is(err, connectors.ErrWebhookRejected):
+			metrics.WebhookRequests.WithLabelValues("alert", "rejected").Inc()
+		case errors.Is(err, connectors.ErrWebhookPayload):
+			metrics.WebhookRequests.WithLabelValues("alert", "bad_payload").Inc()
+		default:
+			metrics.WebhookRequests.WithLabelValues("alert", "error").Inc()
+		}
 		switch {
 		case err == nil:
 			b, _ := json.Marshal(map[string]any{"alerts": n})

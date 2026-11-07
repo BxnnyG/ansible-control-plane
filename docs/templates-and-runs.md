@@ -29,6 +29,33 @@ be set at run time. The survey is a list of fields (shape of `scan.Field`) or an
 without a template survey the `argument_specs` of the roles used by the playbook type-check supplied
 variables (required fields are not enforced there).
 
+### Restricted variables and environment
+
+Connection and execution variables decide how the worker connects to hosts or
+which local programs Ansible runs (for example `ansible_ssh_common_args` with
+a `ProxyCommand` is code execution in the worker). They are restricted:
+
+- Denied names: `ansible_connection`, `ansible_host`, `ansible_port`,
+  `ansible_ssh_host`, `ansible_ssh_port`, `ansible_ssh_private_key_file`,
+  `ansible_private_key_file`, `ansible_ssh_executable`,
+  `ansible_shell_executable`, `ansible_become_exe`, `ansible_become_flags`,
+  `ansible_become_method`, `ansible_python_interpreter`,
+  `ansible_playbook_python`, `ansible_pkcs11_provider`,
+  `ansible_ssh_transfer_method`, and every `ansible_*_args`, `*_executable`,
+  `*_interpreter`, `*_exe`, `*_flags` variable (matched case-insensitively).
+  `ansible_user` and password variables stay allowed.
+- Run-time extra vars, overrides (`allow_vars_override`) and survey fields never
+  accept them for any role: the run is rejected with 422 `invalid`.
+- Template-level `extra_vars` and survey field names may contain them only when
+  set by a workspace admin or owner. Editors get 422 `invalid`.
+- Template `env_vars` reject `PATH`, `HOME` and other process settings, `LD_*`,
+  `PYTHON*`, `GIT_*`, `ACP_*`, Ansible callback settings, `ANSIBLE_*PLUGIN*`
+  (plugins are code) and path-like Ansible settings (`ANSIBLE_CONFIG`,
+  `ANSIBLE_LIBRARY`, `ANSIBLE_ROLES_PATH`, ...).
+- `limit` patterns reject `@file` tokens, regular expressions and subscripts.
+- Roles without `template.write` (viewer, operator) receive template
+  `extra_vars` and `env_vars` with all values replaced by `***`; the keys stay visible.
+
 ## Starting a run
 
 `POST templates/{id}/runs` takes optional overrides (`limit`, `tags`, `skip_tags`, `extra_vars`, `check`,
@@ -78,11 +105,11 @@ route `/api/internal/` through a reverse proxy.
 2. The worker fetches the bundle once per lease: project tree at the pinned revision (`git archive` from
    the app's cache clone), the unmasked inventory, `extra_vars.json` (including the decrypted secret survey
    values), the SSH key, the become password and one password file per vault identity. It is unpacked to
-   `/tmp/runs/<run id>` (tmpfs, mode 0700) and deleted afterwards.
+   `/tmp/runs/<run id>` (tmpfs, 0710), handed over to the run's job user for the duration of the run (see "Job isolation") and deleted afterwards.
 3. If the project has `requirements.yml`, `collections/requirements.yml` or `roles/requirements.yml`, the
    worker runs `ansible-galaxy` into `$ACP_WORKER_CACHE_DIR/galaxy/<sha256 of the files>` and reuses the
    result for later runs with identical files (file lock; no secrets in that cache).
-4. `ansible-playbook` runs without a shell, as uid 10001, in its own process group, from the project
+4. `ansible-playbook` runs without a shell, as the slot's job user (uid 10100+slot, never the worker uid), in its own process group, from the project
    directory (so the project's `ansible.cfg` applies). The inventory is a tiny script printing the
    rendered `--list` JSON. Environment order: passthrough of `PATH`, `HOME`, `LC_*`, proxy and `ANSIBLE_*`
    image settings, then the template's `env_vars`, then worker-enforced variables last (event callback
@@ -95,6 +122,26 @@ route `/api/internal/` through a reverse proxy.
 6. Cancel sends SIGTERM to the process group and SIGKILL after 10 s; the run ends as `cancelled`. Exit code 0
    is `succeeded`, any other exit `failed`. Failures before the playbook starts (bundle, Galaxy) end as
    `failed` with the reason in the log.
+
+### Job isolation (ADR-0020)
+
+`ansible-playbook`, `ansible-galaxy` and everything they spawn run as `acpjob<slot>` (uid
+`ACP_WORKER_JOB_UID_BASE` + slot, default 10100..10115, one slot per concurrent run). The supervisor
+(`acp worker`, uid 10001) is the only process that reads `/run/secrets/worker_token`; a job cannot read the
+token, `/proc/<supervisor>/environ` or `mem`, the supervisor's other files, the run directory of another
+concurrent run, or switch back to uid 10001 (no capabilities, supervisor binary not executable for job
+users). The supervisor needs `cap_add: [SETUID, SETGID, CHOWN, KILL]` (set in compose) and file
+capabilities on `/usr/libexec/acp/acp-worker`; it refuses to start without them. `HOME` of a job is
+`<run dir>/tmp/home`. After the run the supervisor takes the tree back and deletes it. The Galaxy cache is
+installed as the job user, then taken over by the supervisor and published read-only. Setting
+`ACP_WORKER_JOB_UID_BASE=0` disables isolation (development only; logged as a warning).
+
+Symlinks in the project tree must stay inside the project: the worker rejects absolute links, links
+climbing out of `project/` and links resolving outside after extraction (and a playbook that resolves
+outside); such a run fails before ansible starts.
+
+Run details (`params`, `overrides`) show variable values only to roles with `template.write`; viewers and
+operators see the keys with `***`, like the template API.
 
 ### Liveness and cleanup
 
@@ -181,6 +228,21 @@ enqueue fails (playbook gone, project unsynced, limit matches nothing) stays ena
 as `schedule.run_failed`; if the template no longer exists it is disabled (`schedule.disabled`). Disabled
 schedules have no `next_run_at`. Audit actions: `schedule.create|update|delete` (user), `schedule.run`,
 `schedule.run_skipped`, `schedule.run_failed`, `schedule.disabled` (actor `schedule`).
+
+### Run overrides in the UI
+
+The run dialog and the schedule form share the same override inputs, limited to what the template permits
+(`allow_*_override`): limit, tags / skip tags, check and diff mode, verbosity, extra variables (JSON object)
+and the survey. The schedule form stores only values that differ from the template defaults and reloads
+stored overrides when editing. Validation errors from the API (for example the extra-vars denylist, 422)
+are shown verbatim above the buttons.
+
+The survey is rendered from the template's survey schema: text, integer / float (number input), boolean
+(checkbox), choice (select), list with choices (multi-select checkboxes), secret (password input, defaults
+never shown), list / dict / raw (JSON textarea) and nested dict groups. Required fields and type
+conversion are checked client-side; the schema carries no min / max / regex, so none are enforced in the
+form. The "Advanced: raw JSON" toggle swaps the inputs for a JSON object of survey values; switching back
+maps known keys to inputs and drops unknown ones (with a note).
 
 ## Template webhooks
 

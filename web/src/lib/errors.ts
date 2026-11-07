@@ -17,6 +17,10 @@ export function describeError(e: unknown): string {
       return 'The server host key does not match the pinned fingerprint.';
     case 'sync_in_progress':
       return 'A sync is already running for this project.';
+    case 'insecure_credential':
+      return 'Credentials can only be used with https or ssh URLs, not plain http.';
+    case 'credential_reselect_required':
+      return 'The repository host changed. Select the credential again or remove it before saving.';
     case 'project_not_synced':
       return 'The project has not been synced yet.';
   }

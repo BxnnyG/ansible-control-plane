@@ -1,138 +1,122 @@
 /**
- * Typed client for the backend API. Types are written by hand until OpenAPI
- * generation is set up (open point); keep them in sync with the Go handlers.
+ * Typed client for the backend API. The wire types are generated from
+ * api/openapi.yaml into ./api/schema.d.ts (`npm run gen:api`); the aliases below
+ * keep the short names used by the UI. Do not hand-write response types here:
+ * change the spec and regenerate.
  */
+import type { components } from './api/schema';
 
-export interface AuthConfig {
-  oidc: boolean;
-  breakglass: boolean;
-}
+type S = components['schemas'];
 
-export interface Membership {
-  workspace_id: string;
-  slug: string;
-  name: string;
-  role: string;
-  scoped: boolean;
-}
+export type AuthConfig = S['AuthConfig'];
+export type Membership = S['Membership'];
+export type Me = S['Me'];
+export type WorkspaceDetail = S['WorkspaceDetail'];
+export type RoleMapping = S['RoleMapping'];
+export type SetupStatus = S['SetupStatus'];
+export type BreakGlassCredentials = S['BreakGlassCredentials'];
+export type SecretType = S['SecretType'];
+export type SecretMeta = S['SecretMeta'];
+export type SecretCreate = S['SecretCreate'];
+export type SecretUpdate = S['SecretUpdate'];
+export type ProjectSyncStatus = S['ProjectSyncStatus'];
+export type Project = S['Project'];
+export type WebhookProvider = S['WebhookProvider'];
+export type ProjectWebhook = S['ProjectWebhook'];
+export type ProjectInput = S['ProjectInput'];
+export type ProjectUpdate = S['ProjectUpdate'];
+export type HostKeyInfo = S['HostKeyInfo'];
+export type ProjectRevision = S['ProjectRevision'];
+export type InventoryMode = S['InventoryMode'];
+export type Inventory = S['Inventory'];
+export type InventoryInput = S['InventoryInput'];
+export type InventoryUpdate = S['InventoryUpdate'];
+export type InventoryGroup = S['InventoryGroup'];
+export type InventoryGroupInput = S['InventoryGroupInput'];
+export type InventoryGroupUpdate = S['InventoryGroupUpdate'];
+export type InventoryHost = S['InventoryHost'];
+export type InventoryHostInput = S['InventoryHostInput'];
+export type InventoryHostUpdate = S['InventoryHostUpdate'];
+export type InventoryImportInput = S['InventoryImportInput'];
+export type InventoryImportResult = S['InventoryImportResult'];
+export type InventoryRender = S['InventoryRender'];
+export type InventoryDiff = S['InventoryDiff'];
+export type InventoryCommitResult = S['InventoryCommitResult'];
+export type VaultProvider = S['VaultProvider'];
+export type VaultIdentity = S['VaultIdentity'];
+export type VaultIdentityInput = S['VaultIdentityInput'];
+export type VaultListing = S['VaultListing'];
+export type VaultDecrypted = S['VaultDecrypted'];
+export type VaultEncryptInput = S['VaultEncryptInput'];
+export type VaultRekeyInput = S['VaultRekeyInput'];
+export type VaultWriteResult = S['VaultWriteResult'];
+export type RunStatus = S['RunStatus'];
+export type RunTrigger = S['RunTrigger'];
+export type RunOverrides = S['RunOverrides'];
+export type Template = S['Template'];
+export type TemplateInput = S['TemplateInput'];
+export type RunParams = S['RunParams'];
+export type RunPreview = S['RunPreview'];
+export type Run = S['Run'];
+export type HostResult = S['HostResult'];
+export type RunDetail = S['RunDetail'];
+export type RunStatusEvent = S['RunStatusEvent'];
+export type RunPage = S['RunPage'];
+export type MissedPolicy = S['MissedPolicy'];
+export type Schedule = S['Schedule'];
+export type ScheduleInput = S['ScheduleInput'];
+export type TemplateWebhook = S['TemplateWebhook'];
+export type ConnectorFieldKind = S['ConnectorFieldKind'];
+export type ConnectorField = S['ConnectorField'];
+export type ConnectorType = S['ConnectorType'];
+export type ConnectorSecretRef = S['ConnectorSecretRef'];
+export type ConnectorCounts = S['ConnectorCounts'];
+export type ConnectorStatus = S['ConnectorStatus'];
+export type Connector = S['Connector'];
+export type ConnectorCreated = S['ConnectorCreated'];
+export type ConnectorInput = S['ConnectorInput'];
+export type ConnectorUpdate = S['ConnectorUpdate'];
+export type ConnectorTestInput = S['ConnectorTestInput'];
+export type ConnectorTestResult = S['ConnectorTestResult'];
+export type ConnectorSync = S['ConnectorSync'];
+export type FleetNetwork = S['FleetNetwork'];
+export type FleetNetworkCounts = S['FleetNetworkCounts'];
+export type FleetAnsibleLink = S['FleetAnsibleLink'];
+export type FleetRunRef = S['FleetRunRef'];
+export type FleetDrift = S['FleetDrift'];
+export type FleetHost = S['FleetHost'];
+export type FleetAddInput = S['FleetAddInput'];
+export type FleetAddResult = S['FleetAddResult'];
+export type AlertSeverity = S['AlertSeverity'];
+export type FleetAlert = S['FleetAlert'];
+export type FleetSource = S['FleetSource'];
+export type FleetHostFields = S['FleetHostFields'];
+export type FleetObservation = S['FleetObservation'];
+export type ConflictState = S['ConflictState'];
+export type FleetConflict = S['FleetConflict'];
+export type FleetHostDetail = S['FleetHostDetail'];
+export type GroupRuleKind = S['GroupRuleKind'];
+export type GroupRuleMode = S['GroupRuleMode'];
+export type GroupRule = S['GroupRule'];
+export type GroupRuleInput = S['GroupRuleInput'];
+export type GroupRuleUpdate = S['GroupRuleUpdate'];
+export type GroupRuleAdd = S['GroupRuleAdd'];
+export type GroupRuleSkipped = S['GroupRuleSkipped'];
+export type GroupRulePlan = S['GroupRulePlan'];
+export type GroupRulePreview = S['GroupRulePreview'];
+export type RemediationTarget = S['RemediationTarget'];
+export type RemediationRule = S['RemediationRule'];
+export type RemediationRuleInput = S['RemediationRuleInput'];
+export type RemediationRef = S['RemediationRef'];
+export type RemediationResult = S['RemediationResult'];
+export type BulkRunSkipped = S['BulkRunSkipped'];
+export type BulkRunResult = S['BulkRunResult'];
+export type GroupRuleApplied = S['GroupRuleApplied'];
+export type FleetOnline = FleetHost['online'];
+export type FleetRunResult = FleetRunRef['result'];
+export type VaultWriteOptions = Pick<VaultEncryptInput, 'branch' | 'message'>;
 
-export interface Me {
-  id: string;
-  email: string;
-  display_name: string;
-  memberships: Membership[];
-}
-
-export interface WorkspaceDetail {
-  slug: string;
-  name: string;
-  description: string;
-  role: string;
-  scoped: boolean;
-  permissions: string[];
-}
-
-export interface RoleMapping {
-  idp_role: string;
-  role: string;
-}
-
-export interface SetupStatus {
-  name: string;
-  completed: boolean;
-  completed_at: string | null;
-  auth: {
-    oidc: boolean;
-    issuer_host: string;
-    role_mappings: RoleMapping[];
-    breakglass: boolean;
-  };
-}
-
-export interface BreakGlassCredentials {
-  username: string;
-  password: string;
-  totp: string;
-}
-
-export type SecretType =
-  'ssh_key' | 'password' | 'token' | 'vault_password' | 'file' | 'api_key_pair' | 'api_token';
-
-/** Non-secret view of a stored secret; values are write-only and never returned. */
-export interface SecretMeta {
-  id: string;
-  name: string;
-  type: SecretType;
-  description: string;
-  /** e.g. { fingerprint, key_type } for ssh_key. */
-  metadata: Record<string, unknown>;
-  created_at: string;
-  updated_at: string;
-}
-
-export type ProjectSyncStatus = 'never' | 'ok' | 'error';
-
-/** A Git project; credentials are referenced by secret id and never returned. */
-export interface Project {
-  id: string;
-  name: string;
-  slug: string;
-  url: string;
-  default_ref: string;
-  credential_secret_id: string | null;
-  https_username: string;
-  ssh: boolean;
-  host_key_pinned: boolean;
-  host_key_fingerprints: string[];
-  sync_interval_seconds: number | null;
-  last_sync_status: ProjectSyncStatus;
-  last_sync_error: string;
-  last_sync_sha: string;
-  last_sync_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export type WebhookProvider = 'gitea' | 'github' | 'gitlab' | 'generic';
-
-/** Webhook config of a project. `secret` is only present once, on enable or rotate. */
-export interface ProjectWebhook {
-  enabled: boolean;
-  provider: WebhookProvider;
-  has_secret: boolean;
-  path: string;
-  url?: string;
-  secret?: string;
-}
-
-export interface ProjectInput {
-  name: string;
-  slug?: string;
-  url: string;
-  default_ref?: string;
-  credential_secret_id?: string | null;
-  https_username?: string;
-  sync_interval_seconds?: number | null;
-}
-
-/** Fields omitted from an update stay untouched; null clears nullable fields. */
-export type ProjectUpdate = Partial<ProjectInput>;
-
-export interface HostKeyInfo {
-  type: string;
-  fingerprint: string;
-}
-
-export interface ProjectRevision {
-  id: string;
-  sha: string;
-  synced_at: string;
-  /** Scan result (ADR-0013); shape defined by the scanner. */
-  scan: Record<string, unknown>;
-  warnings: string[];
-}
-
-/** Machine-readable error codes of the projects API. */
+/** Machine-readable error codes of the projects API (`code` of the error envelope). */
 export type ProjectErrorCode =
   | 'not_found'
   | 'conflict'
@@ -144,92 +128,7 @@ export type ProjectErrorCode =
   | 'sync_in_progress'
   | 'remote_failed';
 
-export type InventoryMode = 'db' | 'git';
-
-/** An inventory (ADR-0014). `version` is the optimistic lock, also sent as ETag. */
-export interface Inventory {
-  id: string;
-  name: string;
-  slug: string;
-  mode: InventoryMode;
-  project_id: string | null;
-  path: string;
-  write_branch: string;
-  source_format: 'yaml' | 'ini';
-  base_sha: string;
-  version: number;
-  last_import_at: string | null;
-  hosts: number;
-  groups: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface InventoryInput {
-  name: string;
-  slug?: string;
-  mode: InventoryMode;
-  project_id?: string;
-  path?: string;
-  write_branch?: string;
-}
-
-/** Mode cannot be changed. */
-export type InventoryUpdate = Partial<Omit<InventoryInput, 'mode'>>;
-
-/** A group; `vars_yaml` keeps vault values in their encrypted `!vault` form. */
-export interface InventoryGroup {
-  id: string;
-  name: string;
-  parent_ids: string[];
-  vars_yaml: string;
-}
-
-export interface InventoryGroupInput {
-  name: string;
-  parent_ids?: string[];
-  vars_yaml?: string;
-}
-
-export type InventoryGroupUpdate = Partial<InventoryGroupInput>;
-
-export interface InventoryHost {
-  id: string;
-  name: string;
-  group_ids: string[];
-  vars_yaml: string;
-}
-
-export interface InventoryHostInput {
-  name: string;
-  group_ids?: string[];
-  vars_yaml?: string;
-}
-
-export type InventoryHostUpdate = Partial<InventoryHostInput>;
-
-/** Source of an import; for git inventories everything defaults to the stored settings. */
-export interface InventoryImportInput {
-  project_id?: string;
-  path?: string;
-  format?: 'ini' | 'yaml';
-}
-
-export interface InventoryImportResult {
-  inventory: Inventory;
-  hosts: number;
-  groups: number;
-  sha: string;
-  warnings: string[];
-}
-
-/** `ansible-inventory --list` shape; vault values are masked as "<vault>". */
-export interface InventoryRender {
-  _meta: { hostvars: Record<string, Record<string, unknown>> };
-  [group: string]: unknown;
-}
-
-/** Machine-readable error codes of the inventories API. */
+/** Machine-readable error codes of the inventories API (`code` of the error envelope). */
 export type InventoryErrorCode =
   | 'not_found'
   | 'conflict'
@@ -239,264 +138,6 @@ export type InventoryErrorCode =
   | 'git_conflict'
   | 'vault_requires_yaml'
   | 'project_not_synced';
-
-export interface SecretCreate {
-  name: string;
-  type: SecretType;
-  description?: string;
-  /** Write-only. */
-  value: string;
-}
-
-/** Omitted fields stay untouched; `value` replaces the stored secret. */
-export interface SecretUpdate {
-  name?: string;
-  description?: string;
-  value?: string;
-}
-
-export interface InventoryDiff {
-  base_sha: string;
-  branch: string;
-  changed: boolean;
-  paths: string[];
-  diff: string;
-}
-
-export interface InventoryCommitResult {
-  inventory: Inventory;
-  branch: string;
-  sha: string;
-  paths: string[];
-  branch_created: boolean;
-  no_op: boolean;
-}
-
-export type VaultProvider = 'secret' | 'script';
-
-/** A named vault password source; the password itself is never returned. */
-export interface VaultIdentity {
-  id: string;
-  label: string;
-  description: string;
-  provider: VaultProvider;
-  secret_id: string | null;
-  script_path?: string;
-  script_args?: string[];
-  created_at: string;
-  updated_at: string;
-}
-
-export interface VaultIdentityInput {
-  label: string;
-  description: string;
-  provider: VaultProvider;
-  secret_id: string | null;
-  script_path: string;
-  script_args: string[];
-}
-
-export interface VaultListing {
-  sha: string;
-  vault_files: { path: string; version: string; vault_id?: string }[];
-  inline_vault: { file: string; paths: string[] }[];
-}
-
-export interface VaultDecrypted {
-  plaintext: string;
-  encoding: 'utf-8' | 'base64';
-  identity: string;
-}
-
-export interface VaultWriteOptions {
-  /** Empty selects the default branch (acp/vault). */
-  branch: string;
-  message: string;
-}
-
-export interface VaultEncryptInput extends VaultWriteOptions {
-  path: string;
-  /** YAML path of an inline value; empty encrypts the whole file. */
-  key_path: string;
-  /** Null encrypts the existing file content in place. */
-  plaintext: string | null;
-  /** Identity label; empty selects the default identity. */
-  identity: string;
-}
-
-export interface VaultRekeyInput extends VaultWriteOptions {
-  paths: string[];
-  from: string;
-  to: string;
-}
-
-export interface VaultWriteResult {
-  branch: string;
-  sha: string;
-  paths: string[];
-  branch_created: boolean;
-  no_op: boolean;
-}
-
-export type RunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'lost';
-export type RunTrigger = 'manual' | 'schedule' | 'webhook' | 'api';
-
-/** Per-run overrides; the template's allow_*_override flags decide what is accepted. */
-export interface RunOverrides {
-  limit?: string;
-  tags?: string;
-  skip_tags?: string;
-  extra_vars?: Record<string, unknown>;
-  check?: boolean;
-  diff?: boolean;
-  verbosity?: number;
-}
-
-export interface Template {
-  id: string;
-  project_id: string;
-  inventory_id: string;
-  name: string;
-  slug: string;
-  description: string;
-  playbook: string;
-  extra_vars: Record<string, unknown>;
-  env_vars: Record<string, unknown>;
-  ssh_secret_id: string | null;
-  become_secret_id: string | null;
-  vault_identity_ids: string[];
-  default_limit: string;
-  default_tags: string;
-  default_skip_tags: string;
-  verbosity: number;
-  check_mode: boolean;
-  diff_mode: boolean;
-  /** Survey fields (list or `{fields}`); null when the template has none. */
-  survey: unknown;
-  max_concurrent: number;
-  allow_limit_override: boolean;
-  allow_tags_override: boolean;
-  allow_vars_override: boolean;
-  allow_check_override: boolean;
-  allow_diff_override: boolean;
-  allow_verbosity_override: boolean;
-  webhook_enabled: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-/** Create/update body. On update omitted fields stay; null clears nullable references. */
-export interface TemplateInput {
-  name?: string;
-  description?: string;
-  project_id?: string;
-  inventory_id?: string;
-  playbook?: string;
-  extra_vars?: Record<string, unknown>;
-  env_vars?: Record<string, unknown>;
-  ssh_secret_id?: string | null;
-  become_secret_id?: string | null;
-  vault_identity_ids?: string[];
-  default_limit?: string;
-  default_tags?: string;
-  default_skip_tags?: string;
-  verbosity?: number;
-  check_mode?: boolean;
-  diff_mode?: boolean;
-  survey?: unknown;
-  max_concurrent?: number;
-  allow_limit_override?: boolean;
-  allow_tags_override?: boolean;
-  allow_vars_override?: boolean;
-  allow_check_override?: boolean;
-  allow_diff_override?: boolean;
-  allow_verbosity_override?: boolean;
-}
-
-export interface RunParams {
-  playbook: string;
-  project_revision: string;
-  inventory_id: string;
-  limit: string;
-  /** Effective host set (inventory and limit). */
-  hosts: string[] | null;
-  tags: string;
-  skip_tags: string;
-  extra_vars: Record<string, unknown> | null;
-  check: boolean;
-  diff: boolean;
-  verbosity: number;
-}
-
-export interface RunPreview {
-  host_count: number;
-  /** First 50 host names. */
-  hosts: string[];
-  truncated: boolean;
-  all_in_scope: boolean;
-}
-
-export interface Run {
-  id: string;
-  template_id: string | null;
-  template_name: string;
-  project_id: string | null;
-  project_revision: string;
-  status: RunStatus;
-  trigger: RunTrigger;
-  triggered_by: string | null;
-  /** Display name (or email) of the user; null for schedule/webhook runs without a user. */
-  triggered_by_name: string | null;
-  schedule_id: string | null;
-  /** Set when the run was started by a remediation rule or a fleet bulk action. */
-  remediation?: Record<string, unknown> | null;
-  params: RunParams;
-  created_at: string;
-  started_at: string | null;
-  finished_at: string | null;
-  cancel_requested_at: string | null;
-  exit_code: number | null;
-  hosts_ok: number;
-  hosts_changed: number;
-  hosts_failed: number;
-  hosts_unreachable: number;
-}
-
-export interface HostResult {
-  host: string;
-  ok: number;
-  changed: number;
-  failed: number;
-  unreachable: number;
-  skipped: number;
-  rescued: number;
-  ignored: number;
-  /** Names of changed tasks; null when none were recorded. */
-  changed_tasks: string[] | null;
-}
-
-export interface RunDetail extends Run {
-  host_results: HostResult[] | null;
-}
-
-/** Payload of the `status` SSE event of a run log stream. */
-export interface RunStatusEvent {
-  status: RunStatus;
-  started_at: string | null;
-  finished_at: string | null;
-  cancel_requested_at: string | null;
-  exit_code: number | null;
-  hosts_ok: number;
-  hosts_changed: number;
-  hosts_failed: number;
-  hosts_unreachable: number;
-  host_results: HostResult[] | null;
-}
-
-export interface RunPage {
-  items: Run[] | null;
-  next_cursor: string;
-}
 
 export interface RunFilter {
   template?: string;
@@ -508,339 +149,10 @@ export interface RunFilter {
   limit?: number;
 }
 
-export type MissedPolicy = 'skip' | 'run_once';
-
-export interface Schedule {
-  id: string;
-  template_id: string;
-  name: string;
-  cron: string;
-  timezone: string;
-  enabled: boolean;
-  missed_policy: MissedPolicy;
-  overrides: RunOverrides;
-  next_run_at: string | null;
-  last_run_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ScheduleInput {
-  name?: string;
-  cron?: string;
-  timezone?: string;
-  enabled?: boolean;
-  missed_policy?: MissedPolicy;
-  overrides?: RunOverrides;
-}
-
-/** Template webhook; `secret` is only present once, on enable or rotate. */
-export interface TemplateWebhook {
-  enabled: boolean;
-  has_secret: boolean;
-  path: string;
-  url?: string;
-  secret?: string;
-}
-
-export type ConnectorFieldKind = 'string' | 'bool' | 'int';
-
-export interface ConnectorField {
-  key: string;
-  label: string;
-  kind: ConnectorFieldKind;
-  required: boolean;
-  help?: string;
-}
-
-/** Registered connector type with its config schema and setup help. */
-export interface ConnectorType {
-  type: string;
-  label: string;
-  /** Accepted secret types; empty when the type needs no credentials. */
-  secret_types: SecretType[];
-  secret_required: boolean;
-  base_url: boolean;
-  fields: ConnectorField[];
-  help?: string;
-  /** A secret is generated on create (and shown once) when none is selected. */
-  generates_secret?: boolean;
-}
-
-export interface ConnectorSecretRef {
-  id: string;
-  name: string;
-  type: SecretType;
-}
-
-export interface ConnectorCounts {
-  networks: number;
-  observations: number;
-  alerts: number;
-  warnings?: string[];
-}
-
-export type ConnectorStatus = 'disabled' | 'pending' | 'ok' | 'error';
-
-/** Connector; the credential is only referenced, never returned. */
-export interface Connector {
-  id: string;
-  type: string;
-  name: string;
-  base_url: string;
-  config: Record<string, string | number | boolean>;
-  secret: ConnectorSecretRef | null;
-  interval_seconds: number;
-  enabled: boolean;
-  status: ConnectorStatus;
-  last_sync_at: string | null;
-  last_success_at: string | null;
-  next_sync_at: string;
-  last_error: string;
-  last_duration_ms: number;
-  backoff_count: number;
-  counts: ConnectorCounts;
-  warnings: string[];
-  /** Receiver path of alert_webhook connectors. */
-  webhook_path?: string;
-  created_at: string;
-  updated_at: string;
-}
-
-/** Response of a create that generated a webhook secret; the secret is shown once. */
-export interface ConnectorCreated extends Connector {
-  generated_secret?: string;
-  webhook_url?: string;
-}
-
-export interface ConnectorInput {
-  type: string;
-  name: string;
-  base_url?: string;
-  config?: Record<string, string | number | boolean>;
-  secret_id?: string | null;
-  interval_seconds?: number;
-  enabled?: boolean;
-}
-
-/** PATCH body: omitted keys stay, `secret_id: null` removes the credential. */
-export type ConnectorUpdate = Partial<Omit<ConnectorInput, 'type'>>;
-
-/** Unsaved configuration to probe (setup wizard "test before save"). */
-export interface ConnectorTestInput {
-  type: string;
-  base_url?: string;
-  config?: Record<string, string | number | boolean>;
-  secret_id?: string | null;
-}
-
-export interface ConnectorTestResult {
-  ok: boolean;
-  error: string;
-}
-
-export interface ConnectorSync {
-  id: string;
-  trigger: 'schedule' | 'manual';
-  status: 'ok' | 'error';
-  started_at: string;
-  finished_at: string;
-  duration_ms: number;
-  counts: ConnectorCounts;
-  error: string;
-}
-
-export interface FleetNetwork {
-  id: string;
-  connector_id: string;
-  connector: string;
-  external_key: string;
-  cidr: string;
-  vlan: number | null;
-  interface: string;
-  description: string;
-  source: string;
-  first_seen: string;
-  last_seen: string;
-  host_count: number;
-  /** Status counters of the visible hosts in the network. */
-  counts: FleetNetworkCounts;
-}
-
-export interface FleetNetworkCounts {
-  online: number;
-  ansible_ok: number;
-  failed: number;
-  never_managed: number;
-  open_alerts: number;
-}
-
-export type FleetOnline = 'online' | 'offline' | 'unknown';
-export type FleetRunResult = 'ok' | 'changed' | 'failed' | 'unreachable';
-
-/** An inventory host linked to a fleet host. */
-export interface FleetAnsibleLink {
-  inventory_id: string;
-  inventory: string;
-  host_id: string;
-  host: string;
-}
-
-export interface FleetRunRef {
-  run_id: string;
-  template: string;
-  finished_at: string;
-  result: FleetRunResult;
-  check: boolean;
-}
-
-/** The newest check-mode run reported changes for the host. */
-export interface FleetDrift {
-  run_id: string;
-  template: string;
-  finished_at: string;
-  changed: number;
-}
-
-export interface FleetHost {
-  id: string;
-  name: string;
-  kind: string;
-  status: string;
-  hostname: string;
-  fqdn: string;
-  ips: string[];
-  macs: string[];
-  tags: string[];
-  /** Names of the connectors that contributed. */
-  connectors: string[];
-  open_conflicts: number;
-  /** Open monitoring alerts linked to the host and the worst severity among them. */
-  open_alerts: number;
-  worst_severity: AlertSeverity | '';
-  first_seen: string;
-  last_seen: string;
-  /** Host status, derived on read. */
-  online: FleetOnline;
-  /** True when an inventory host of the workspace is linked. */
-  managed: boolean;
-  ansible: FleetAnsibleLink[];
-  last_run: FleetRunRef | null;
-  reachable: 'yes' | 'no' | 'unknown';
-  drift: FleetDrift | null;
-}
-
-export interface FleetAddInput {
-  inventory_id: string;
-  group: string;
-  /** Inventory host name; defaults to the fleet host name. */
-  name?: string;
-}
-
-export interface FleetAddResult {
-  host: string;
-  ansible_host: string;
-  result: {
-    group_created: boolean;
-    hosts_created: string[];
-    added: string[];
-    version: number;
-    commit: { sha: string; branch: string; no_op?: boolean } | null;
-  };
-}
-
-export type AlertSeverity = 'critical' | 'warning' | 'unknown' | 'info';
-
-export interface FleetAlert {
-  id: string;
-  connector_id: string;
-  connector: string;
-  connector_type: string;
-  external_key: string;
-  host_id: string | null;
-  /** Merged host name when linked. */
-  host: string;
-  /** Host name and address as reported by the monitoring system. */
-  host_name: string;
-  host_ip: string;
-  service: string;
-  severity: AlertSeverity;
-  summary: string;
-  labels: Record<string, string>;
-  started_at: string;
-  last_seen_at: string;
-  resolved_at: string | null;
-}
-
 export interface FleetAlertFilter {
   state?: 'open' | 'resolved';
   host_id?: string;
   connector?: string;
-}
-
-export interface FleetSource {
-  connector_id: string;
-  connector: string;
-  type: string;
-}
-
-export interface FleetHostFields {
-  kind?: string;
-  hostname?: string;
-  fqdn?: string;
-  macs?: string[];
-  ips?: string[];
-  tags?: string[];
-  notes?: string;
-  status?: string;
-  interface?: string;
-  /** Per field: the winning connector (scalars) or all contributors (lists). */
-  sources?: Record<string, FleetSource[]>;
-}
-
-export interface FleetObservation {
-  connector_id: string;
-  connector: string;
-  connector_type: string;
-  external_key: string;
-  kind: string;
-  fields: {
-    macs?: string[];
-    hostname?: string;
-    fqdn?: string;
-    ips?: string[];
-    tags?: string[];
-    notes?: string;
-    status?: string;
-    interface?: string;
-  };
-  first_seen: string;
-  last_seen: string;
-}
-
-export type ConflictState = 'open' | 'acknowledged' | 'resolved';
-
-export interface FleetConflict {
-  id: string;
-  type: string;
-  state: ConflictState;
-  fingerprint: string;
-  host_ids: string[];
-  /** Display names of the hosts visible to the caller. */
-  hosts: { id: string; name: string }[];
-  details: Record<string, unknown>;
-  acknowledged_by: string | null;
-  acknowledged_at: string | null;
-  first_seen: string;
-  last_seen: string;
-  resolved_at: string | null;
-}
-
-export interface FleetHostDetail extends FleetHost {
-  fields: FleetHostFields;
-  keys: { kind: 'mac' | 'name' | 'ip'; value: string }[];
-  observations: FleetObservation[];
-  conflicts: FleetConflict[];
 }
 
 export interface FleetHostFilter {
@@ -850,147 +162,6 @@ export interface FleetHostFilter {
   alerts?: boolean;
   /** false lists the unmanaged hosts (not linked to any inventory host). */
   managed?: boolean;
-}
-
-/** Match kind of a group rule; the set is open (NetBox kinds follow in M6). */
-export type GroupRuleKind =
-  'subnet' | 'proxmox_tag' | 'netbox_role' | 'netbox_site' | 'netbox_tag' | (string & {});
-export type GroupRuleMode = 'add-only' | 'sync';
-
-export interface GroupRule {
-  id: string;
-  name: string;
-  kind: GroupRuleKind;
-  /** Kind specific parameters: {cidr} for subnet, {tag} for proxmox_tag. */
-  params: Record<string, unknown>;
-  inventory_id: string;
-  group: string;
-  mode: GroupRuleMode;
-  enabled: boolean;
-  last_applied_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface GroupRuleInput {
-  name: string;
-  kind: GroupRuleKind;
-  params: Record<string, unknown>;
-  inventory_id: string;
-  group: string;
-  mode?: GroupRuleMode;
-  enabled?: boolean;
-}
-
-export type GroupRuleUpdate = Partial<GroupRuleInput>;
-
-export interface GroupRuleAdd {
-  name: string;
-  /** Only set for hosts that are created. */
-  ansible_host?: string;
-  create_host: boolean;
-  fleet_host_id: string;
-}
-
-export interface GroupRuleSkipped {
-  fleet_host_id: string;
-  name: string;
-  reason: string;
-}
-
-/** The pure diff of a rule against the current inventory state. */
-export interface GroupRulePlan {
-  group_create: boolean;
-  matched: number;
-  add: GroupRuleAdd[];
-  remove: string[];
-  keep: number;
-  untrack: string[];
-  skipped: GroupRuleSkipped[];
-}
-
-export interface GroupRulePreview {
-  rule: GroupRule;
-  inventory_mode: InventoryMode;
-  plan: GroupRulePlan;
-}
-
-export interface GroupRuleApplied {
-  rule: GroupRule;
-  inventory_mode: InventoryMode;
-  plan: GroupRulePlan;
-  result: {
-    group_created: boolean;
-    hosts_created: string[];
-    added: string[];
-    removed: string[];
-    version: number;
-    /** Set for git inventories when a commit was written. */
-    commit: InventoryCommitResult | null;
-  };
-}
-
-export type RemediationTarget = 'host' | 'group' | 'network';
-
-export interface RemediationRule {
-  id: string;
-  name: string;
-  enabled: boolean;
-  /** Null matches alerts of every connector type. */
-  connector_type: string | null;
-  service_regex: string;
-  summary_regex: string;
-  min_severity: AlertSeverity;
-  template_id: string;
-  template: string;
-  target: RemediationTarget;
-  group: string;
-  check_first: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface RemediationRuleInput {
-  name: string;
-  enabled?: boolean;
-  connector_type: string | null;
-  service_regex: string;
-  summary_regex: string;
-  min_severity: AlertSeverity;
-  template_id: string;
-  target: RemediationTarget;
-  group: string;
-  check_first: boolean;
-}
-
-/** A rule that can fix a given alert. */
-export interface RemediationRef {
-  rule_id: string;
-  name: string;
-  template: string;
-  target: RemediationTarget;
-  group: string;
-  check_first: boolean;
-}
-
-export interface RemediationResult {
-  run: Run;
-  phase: 'check' | 'apply';
-  limit: string;
-  hosts: string[];
-}
-
-export interface BulkRunSkipped {
-  host_id: string;
-  name: string;
-  reason: string;
-}
-
-export interface BulkRunResult {
-  run: Run;
-  limit: string;
-  hosts: string[];
-  skipped?: BulkRunSkipped[];
 }
 
 export class ApiError extends Error {

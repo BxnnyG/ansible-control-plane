@@ -36,7 +36,7 @@ function names(src: FleetSource[] | undefined): string[] {
 export function fieldRows(detail: Pick<FleetHostDetail, 'fields'>): FieldRow[] {
   const rows: FieldRow[] = [];
   for (const { key, label } of FIELDS) {
-    const raw = detail.fields?.[key];
+    const raw = detail.fields?.[key] as string | string[] | undefined;
     const values = Array.isArray(raw) ? raw : raw ? [raw] : [];
     if (values.length === 0) continue;
     rows.push({ key, label, values, sources: names(detail.fields.sources?.[key]) });

@@ -41,6 +41,13 @@ type Runner struct {
 	KillGrace time.Duration
 	// HeartbeatEvery overrides the heartbeat period (tests).
 	HeartbeatEvery time.Duration
+
+	// JobUIDBase is the first uid of the per-slot job users (ADR-0020); 0 runs
+	// jobs under the supervisor uid.
+	JobUIDBase int
+
+	slotMu   sync.Mutex
+	slotBusy map[int]bool
 }
 
 func (r *Runner) playbookBin() string {
@@ -85,11 +92,20 @@ func (r *Runner) Execute(ctx context.Context, claim runproto.ClaimResponse) {
 	// Reporting must survive a cancelled ctx (shutdown).
 	rctx := context.WithoutCancel(ctx)
 
+	slot, releaseSlot := r.acquireSlot()
+	defer releaseSlot()
+	job := r.ident(slot)
+
 	dir := filepath.Join(r.workDir(), claim.RunID)
-	if err := os.MkdirAll(r.workDir(), 0o700); err != nil {
+	workMode := os.FileMode(0o700)
+	if job != nil {
+		workMode = 0o711 // job users must traverse to their own run directory
+	}
+	if err := os.MkdirAll(r.workDir(), workMode); err != nil {
 		log.Error("create work dir", "error", err)
 	}
-	defer func() { _ = os.RemoveAll(dir) }()
+	_ = os.Chmod(r.workDir(), workMode)
+	defer func() { removeRun(dir, job) }()
 
 	st := &streamer{api: r.API, run: claim.RunID, lease: claim.LeaseID, log: log, masker: runmask.New(nil), evPath: filepath.Join(dir, eventsFile)}
 	runCtx, stop := context.WithCancel(ctx)
@@ -150,8 +166,12 @@ func (r *Runner) Execute(ctx context.Context, claim runproto.ClaimResponse) {
 		fail("cannot prepare run directory", err)
 		return
 	}
+	if err := handOver(dir, job); err != nil {
+		fail("cannot hand over run directory", err)
+		return
+	}
 
-	exit, cancelled := r.run(runCtx, log, sp, dir, st, ctl)
+	exit, cancelled := r.run(runCtx, log, sp, dir, job, st, ctl)
 
 	lostMu.Lock()
 	lost := leaseLost
@@ -182,12 +202,18 @@ func readSpec(dir string) (runproto.Spec, error) {
 }
 
 func prepareDirs(dir string, sp runproto.Spec) error {
-	for _, d := range []string{filepath.Join(dir, tmpSubdir, "local"), filepath.Join(dir, tmpSubdir, "remote"), filepath.Join(dir, projectDir)} {
+	for _, d := range []string{filepath.Join(dir, tmpSubdir, "local"), filepath.Join(dir, tmpSubdir, "home"), filepath.Join(dir, tmpSubdir, "remote"), filepath.Join(dir, projectDir)} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			return err
 		}
 	}
 	if err := validPlaybook(sp.Playbook); err != nil {
+		return err
+	}
+	if err := insideProject(filepath.Join(dir, projectDir), sp.Playbook); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(dir, eventsFile), nil, 0o600); err != nil {
 		return err
 	}
 	return writeInventoryScript(dir)
@@ -284,11 +310,11 @@ func (r *Runner) heartbeats(hbCtx, runCtx context.Context, log *slog.Logger, cla
 
 // run installs requirements and executes the playbook; it returns the exit
 // code and whether the run was cancelled.
-func (r *Runner) run(ctx context.Context, log *slog.Logger, sp runproto.Spec, dir string, st *streamer, ctl *control) (int, bool) {
+func (r *Runner) run(ctx context.Context, log *slog.Logger, sp runproto.Spec, dir string, job *jobIdent, st *streamer, ctl *control) (int, bool) {
 	project := filepath.Join(dir, projectDir)
 	var collections, roles string
 	baseEnv := buildEnv(sp, dir, r.environ(), "", "")
-	if gc, err := r.installRequirements(ctx, project, baseEnv, st); err != nil {
+	if gc, err := r.installRequirements(ctx, project, baseEnv, job, st); err != nil {
 		if ctl.Cancelled() {
 			return -1, true
 		}
@@ -309,7 +335,7 @@ func (r *Runner) run(ctx context.Context, log *slog.Logger, sp runproto.Spec, di
 	cmd := exec.CommandContext(context.WithoutCancel(ctx), r.playbookBin(), args...) //nolint:gosec // argv built from validated spec, no shell
 	cmd.Dir = project
 	cmd.Env = buildEnv(sp, dir, r.environ(), collections, roles)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Credential: job.credential()}
 	pr, pw, err := os.Pipe()
 	if err != nil {
 		st.Println("[acp] cannot create output pipe: " + err.Error())
@@ -346,6 +372,7 @@ func (r *Runner) run(ctx context.Context, log *slog.Logger, sp runproto.Spec, di
 	})
 
 	waitErr := cmd.Wait()
+	_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) // stragglers of the process group
 	close(exited)
 	<-copied
 	cancelled := ctl.Cancelled()

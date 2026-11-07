@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/BxnnyG/ansible-control-plane/internal/metrics"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
@@ -25,10 +27,13 @@ const (
 	defaultLockDuration  = 15 * time.Minute
 	defaultIPMaxFailures = 10
 	defaultIPWindow      = 15 * time.Minute
-	maxLoginBody         = 4 << 10
-	maxLimiterEntries    = 10000
-	maxUsernameLen       = 128
-	maxTOTPInputLen      = 16
+	// OIDC login/callback: requests (not failures) per IP and window.
+	defaultOIDCRateMax    = 20
+	defaultOIDCRateWindow = time.Minute
+	maxLoginBody          = 4 << 10
+	maxLimiterEntries     = 10000
+	maxUsernameLen        = 128
+	maxTOTPInputLen       = 16
 )
 
 var errInvalidCredentials = map[string]string{"error": "invalid credentials"}
@@ -78,11 +83,17 @@ func (l *ipLimiter) fail(ip string, now time.Time) {
 				delete(l.m, k)
 			}
 		}
-		if len(l.m) >= maxLimiterEntries { // still full of live entries: drop one arbitrary entry
-			for k := range l.m {
-				delete(l.m, k)
-				break
+		if len(l.m) >= maxLimiterEntries {
+			// Still full of live windows: evict the entry that expires first so
+			// new sources are never locked out by a flood of fake ones.
+			var oldest string
+			var at time.Time
+			for k, e := range l.m {
+				if oldest == "" || e.reset.Before(at) {
+					oldest, at = k, e.reset
+				}
 			}
+			delete(l.m, oldest)
 		}
 	}
 	e := l.m[ip]
@@ -91,6 +102,22 @@ func (l *ipLimiter) fail(ip string, now time.Time) {
 		l.m[ip] = e
 	}
 	e.count++
+}
+
+// allow counts one request of ip and reports whether it is within budget.
+// Unlike blocked/fail it counts every request, not only failures; used for
+// the OIDC redirect endpoints.
+func (l *ipLimiter) allow(ip string, now time.Time) (time.Duration, bool) {
+	if wait, blocked := l.blocked(ip, now); blocked {
+		return wait, false
+	}
+	l.fail(ip, now)
+	return 0, true
+}
+
+// recordLogin counts a login attempt in the application metrics.
+func (s *Service) recordLogin(method, result string) {
+	metrics.LoginAttempts.WithLabelValues(method, result).Inc()
 }
 
 func clientIP(r *http.Request) string {
@@ -123,6 +150,7 @@ func (s *Service) handleBreakGlassLogin(w http.ResponseWriter, r *http.Request) 
 	ip := clientIP(r)
 	now := s.o.Now()
 	if wait, blocked := s.limiter.blocked(ip, now); blocked {
+		s.recordLogin("breakglass", "rate_limited")
 		s.audit(r.Context(), nil, "auth.breakglass_failed", map[string]any{"reason": "ip_rate_limited"})
 		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
 		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "too many attempts"})
@@ -147,6 +175,7 @@ func (s *Service) handleBreakGlassLogin(w http.ResponseWriter, r *http.Request) 
 	}
 	if reason != "" {
 		s.limiter.fail(ip, now)
+		s.recordLogin("breakglass", "failed")
 		var u *dbgen.User
 		if user.ID != uuid.Nil {
 			u = &user
@@ -160,6 +189,7 @@ func (s *Service) handleBreakGlassLogin(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
+	s.recordLogin("breakglass", "success")
 	s.audit(r.Context(), &user, "auth.breakglass_login", map[string]any{"method": "breakglass"})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

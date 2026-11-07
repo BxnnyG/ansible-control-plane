@@ -42,6 +42,8 @@ func secretRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc Secre
 			policy.WriteJSON(w, http.StatusNotFound, map[string]string{"error": "secret not found"})
 		case errors.Is(err, secrets.ErrConflict):
 			policy.WriteJSON(w, http.StatusConflict, map[string]string{"error": "a secret with this name already exists"})
+		case errors.Is(err, secrets.ErrConflictRetry):
+			policy.WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 		case errors.Is(err, secrets.ErrInvalid):
 			policy.WriteJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 		default:

@@ -17,12 +17,22 @@ FROM ${PYTHON_IMAGE}
 ARG ANSIBLE_VERSION=14.6.0
 # ansible 14.6.0 bundles ansible-core 2.21.6
 RUN apt-get update \
- && apt-get install -y --no-install-recommends git openssh-client ca-certificates \
+ && apt-get install -y --no-install-recommends git openssh-client ca-certificates libcap2-bin \
  && rm -rf /var/lib/apt/lists/* \
  && pip install --no-cache-dir "ansible==${ANSIBLE_VERSION}" \
  && mkdir -p /var/cache/acp && chown 10001:10001 /var/cache/acp \
- && useradd --uid 10001 --create-home --home-dir /home/acp --shell /usr/sbin/nologin acp
+ && useradd --uid 10001 --create-home --home-dir /home/acp --shell /usr/sbin/nologin acp \
+ # Per-slot job users (ADR-0020): ansible runs as acpjob<N>, never as acp. They
+ # need passwd entries because ssh refuses unknown uids. 16 = max concurrency.
+ && for i in $(seq 0 15); do useradd --uid $((10100 + i)) --no-create-home --shell /usr/sbin/nologin "acpjob$i"; done
 COPY --from=build /out/acp /usr/local/bin/acp
+# The supervisor binary carries the file capabilities and is not executable for
+# job users (0750 root:acp); /usr/local/bin/acp is the capability-free copy.
+RUN mkdir -m 0750 /usr/libexec/acp \
+ && cp /usr/local/bin/acp /usr/libexec/acp/acp-worker \
+ && chown -R root:acp /usr/libexec/acp \
+ && chmod 0750 /usr/libexec/acp/acp-worker \
+ && setcap cap_chown,cap_kill,cap_setgid,cap_setuid+ep /usr/libexec/acp/acp-worker
 COPY worker/ansible/callback_plugins /usr/share/acp/ansible/callback_plugins
 USER acp
 ENV HOME=/home/acp \
@@ -30,7 +40,8 @@ ENV HOME=/home/acp \
     ANSIBLE_REMOTE_TEMP=/tmp/ansible-remote \
     ANSIBLE_CALLBACK_PLUGINS=/usr/share/acp/ansible/callback_plugins \
     ANSIBLE_CALLBACKS_ENABLED=acp \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    ACP_WORKER_JOB_UID_BASE=10100
 EXPOSE 8081
-ENTRYPOINT ["acp"]
+ENTRYPOINT ["/usr/libexec/acp/acp-worker"]
 CMD ["worker"]

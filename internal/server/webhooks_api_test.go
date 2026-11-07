@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -189,5 +190,19 @@ func TestHookLimiterWindow(t *testing.T) {
 	}
 	if !l.allow("a", now.Add(2*time.Minute)) {
 		t.Error("window should reset")
+	}
+}
+
+func TestHookLimiterFullDoesNotLockOut(t *testing.T) {
+	l := newHookLimiter(2, time.Hour)
+	now := time.Now()
+	for i := 0; i < maxHookLimiterEntries; i++ {
+		l.allow(fmt.Sprintf("src-%d", i), now.Add(time.Duration(i)*time.Millisecond))
+	}
+	if !l.allow("new-source", now.Add(time.Second)) {
+		t.Fatal("a new source must be admitted when the table is full")
+	}
+	if len(l.m) > maxHookLimiterEntries {
+		t.Errorf("limiter grew to %d entries", len(l.m))
 	}
 }

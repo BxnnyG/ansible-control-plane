@@ -28,6 +28,7 @@ import (
 
 	"github.com/BxnnyG/ansible-control-plane/internal/db"
 	"github.com/BxnnyG/ansible-control-plane/internal/db/dbgen"
+	"github.com/BxnnyG/ansible-control-plane/internal/metrics"
 	"github.com/BxnnyG/ansible-control-plane/internal/runmask"
 	"github.com/BxnnyG/ansible-control-plane/internal/runproto"
 	"github.com/BxnnyG/ansible-control-plane/internal/runs"
@@ -128,6 +129,8 @@ func (h *Handler) claim(w http.ResponseWriter, req *http.Request) {
 		run, err := db.ClaimRun(ctx, h.o.Pool, in.WorkerID)
 		switch {
 		case err == nil:
+			metrics.RunsStarted.Inc()
+			metrics.WorkerClaims.WithLabelValues("claimed").Inc()
 			h.o.Log.Info("run claimed", "run", run.ID, "worker", in.WorkerID)
 			h.notify(ctx, run.ID, "status:running")
 			writeJSON(w, http.StatusOK, runproto.ClaimResponse{
@@ -136,14 +139,17 @@ func (h *Handler) claim(w http.ResponseWriter, req *http.Request) {
 			return
 		case errors.Is(err, db.ErrNoRun):
 		case ctx.Err() != nil:
+			metrics.WorkerClaims.WithLabelValues("empty").Inc()
 			w.WriteHeader(http.StatusNoContent)
 			return
 		default:
+			metrics.WorkerClaims.WithLabelValues("error").Inc()
 			h.internalErr(w, "claim", err)
 			return
 		}
 		select {
 		case <-ctx.Done():
+			metrics.WorkerClaims.WithLabelValues("empty").Inc()
 			w.WriteHeader(http.StatusNoContent)
 			return
 		case <-time.After(pollInterval):
@@ -347,13 +353,16 @@ func (h *Handler) heartbeat(w http.ResponseWriter, req *http.Request) {
 	}
 	cancelAt, err := h.q.HeartbeatRun(req.Context(), dbgen.HeartbeatRunParams{ID: run.ID, LeaseID: run.LeaseID})
 	if errors.Is(err, pgx.ErrNoRows) {
+		metrics.WorkerHeartbeats.WithLabelValues("lease_lost").Inc()
 		writeJSON(w, http.StatusConflict, map[string]string{"error": "lease lost", "code": "lease_lost"})
 		return
 	}
 	if err != nil {
+		metrics.WorkerHeartbeats.WithLabelValues("error").Inc()
 		h.internalErr(w, "heartbeat", err)
 		return
 	}
+	metrics.WorkerHeartbeats.WithLabelValues("ok").Inc()
 	writeJSON(w, http.StatusOK, runproto.HeartbeatResponse{Cancel: cancelAt.Valid})
 }
 
@@ -386,6 +395,10 @@ func (h *Handler) finish(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	h.forget(run.ID)
+	metrics.RunsFinished.WithLabelValues(r.Status).Inc()
+	if r.StartedAt.Valid && r.FinishedAt.Valid {
+		metrics.RunDuration.WithLabelValues(r.Status).Observe(r.FinishedAt.Time.Sub(r.StartedAt.Time).Seconds())
+	}
 	h.notify(req.Context(), run.ID, "status:"+r.Status)
 	h.o.Log.Info("run finished", "run", run.ID, "status", r.Status, "exit_code", in.ExitCode)
 	writeJSON(w, http.StatusOK, map[string]string{"status": r.Status})
@@ -400,6 +413,7 @@ func (h *Handler) Maintain(ctx context.Context) error {
 	}
 	for _, r := range lost {
 		h.forget(r.ID)
+		metrics.RunsFinished.WithLabelValues("lost").Inc()
 		h.notify(ctx, r.ID, "status:lost")
 		h.o.Log.Warn("run lost: no heartbeat", "run", r.ID, "worker", r.WorkerID)
 	}

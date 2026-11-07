@@ -8,6 +8,7 @@
   import { surveyToFormFields } from '$lib/survey';
   import { surveyFields } from '$lib/templates';
   import { btn, btnPrimary, input, label } from '$lib/ui';
+  import OverrideFields from './OverrideFields.svelte';
   import FormError from '$lib/components/FormError.svelte';
 
   let { ws, template, onclose }: { ws: string; template: Template; onclose: () => void } = $props();
@@ -112,99 +113,7 @@
           <p class="text-red-600 dark:text-red-400">{preview.message}</p>
         {/if}
       </div>
-      {#if template.allow_tags_override}
-        <div class="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label class={label} for="r-tags">Tags</label>
-            <input id="r-tags" class={input} bind:value={form.tags} />
-          </div>
-          <div>
-            <label class={label} for="r-skip">Skip tags</label>
-            <input id="r-skip" class={input} bind:value={form.skipTags} />
-          </div>
-        </div>
-      {/if}
-      {#if template.allow_check_override || template.allow_diff_override || template.allow_verbosity_override}
-        <div class="flex flex-wrap items-end gap-4">
-          {#if template.allow_check_override}
-            <label class="flex items-center gap-2 text-sm">
-              <input type="checkbox" bind:checked={form.check} /> Check mode
-            </label>
-          {/if}
-          {#if template.allow_diff_override}
-            <label class="flex items-center gap-2 text-sm">
-              <input type="checkbox" bind:checked={form.diff} /> Diff mode
-            </label>
-          {/if}
-          {#if template.allow_verbosity_override}
-            <div class="w-32">
-              <label class={label} for="r-verb">Verbosity</label>
-              <input
-                id="r-verb"
-                type="number"
-                min="0"
-                max="5"
-                class={input}
-                bind:value={form.verbosity}
-              />
-            </div>
-          {/if}
-        </div>
-      {/if}
-
-      {#if fields.length > 0}
-        <fieldset class="space-y-2 rounded-md border border-border p-3">
-          <legend class="px-1 text-sm font-medium">Survey</legend>
-          {#each fields as f (f.key)}
-            <div style="margin-left: {f.depth}rem">
-              {#if f.group}
-                <p class="text-sm font-medium">{f.label}</p>
-              {:else if f.kind === 'checkbox'}
-                <label class="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={form.survey[f.key] === 'true'}
-                    onchange={(e) => (form.survey[f.key] = String(e.currentTarget.checked))}
-                  />
-                  {f.label}
-                </label>
-              {:else}
-                <label class={label} for="sv-{f.key}">{f.label}{f.required ? ' *' : ''}</label>
-                {#if f.kind === 'select'}
-                  <select id="sv-{f.key}" class={input} bind:value={form.survey[f.key]}>
-                    {#if !f.required}<option value="">(not set)</option>{/if}
-                    {#each f.choices as c (c)}<option value={c}>{c}</option>{/each}
-                  </select>
-                {:else if f.kind === 'textarea'}
-                  <textarea
-                    id="sv-{f.key}"
-                    class="{input} font-mono"
-                    rows="2"
-                    bind:value={form.survey[f.key]}
-                  ></textarea>
-                {:else}
-                  <input
-                    id="sv-{f.key}"
-                    class={input}
-                    type={f.kind}
-                    autocomplete="off"
-                    bind:value={form.survey[f.key]}
-                  />
-                {/if}
-              {/if}
-              {#if f.description}<p class="text-xs text-muted">{f.description}</p>{/if}
-            </div>
-          {/each}
-        </fieldset>
-      {/if}
-
-      {#if template.allow_vars_override}
-        <div>
-          <label class={label} for="r-vars">Extra variables (JSON object)</label>
-          <textarea id="r-vars" class="{input} font-mono" rows="3" bind:value={form.extraVarsJson}
-          ></textarea>
-        </div>
-      {/if}
+      <OverrideFields {template} {fields} bind:form />
 
       {#if !hasOverrides && fields.length === 0}
         <p class="text-sm text-muted">This template runs with its stored settings.</p>

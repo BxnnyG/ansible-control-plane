@@ -217,6 +217,20 @@ func TestCRUDAndValidation(t *testing.T) {
 	if err != nil || up.Name != "ssh2" || up.SyncIntervalSeconds != nil || up.CredentialSecretID == nil {
 		t.Fatalf("update: %+v %v", up, err)
 	}
+	// credential is bound to the remote host: moving the url requires re-selecting it
+	if _, err := e.svc.Update(ctx, e.ws, ok.ID, UpdateInput{URL: ptr("git@attacker.example.net:o/r.git")}); !errors.Is(err, ErrCredentialReselect) {
+		t.Errorf("host change keeping credential: %v", err)
+	}
+	if _, err := e.svc.Update(ctx, e.ws, ok.ID, UpdateInput{URL: ptr("git@git.example.org:o/other.git")}); err != nil {
+		t.Errorf("same host path change: %v", err)
+	}
+	if moved, err := e.svc.Update(ctx, e.ws, ok.ID, UpdateInput{URL: ptr("https://attacker.example.net/o/r.git"), CredentialSecretID: Field[uuid.UUID]{Set: true}}); err != nil || moved.CredentialSecretID != nil {
+		t.Errorf("host change dropping credential: %+v %v", moved, err)
+	}
+	// plain http remotes cannot carry a password/token
+	if _, err := e.svc.Create(ctx, e.ws, CreateInput{Name: "plain", URL: "http://git.example.org/o/r.git", CredentialSecretID: &tok}); !errors.Is(err, ErrInsecureCredential) {
+		t.Errorf("http with credential: %v", err)
+	}
 	if _, err := e.svc.Get(ctx, uuid.New(), ok.ID); !errors.Is(err, ErrNotFound) {
 		t.Errorf("foreign workspace: %v", err)
 	}
@@ -337,7 +351,7 @@ func TestHostKeyPinning(t *testing.T) {
 	if err != nil || !same.HostKeyPinned {
 		t.Fatalf("same host: %+v %v", same, err)
 	}
-	moved, err := e.svc.Update(ctx, e.ws, p.ID, UpdateInput{URL: ptr("ssh://git@git.example.net:2222/o/other.git")})
+	moved, err := e.svc.Update(ctx, e.ws, p.ID, UpdateInput{URL: ptr("ssh://git@git.example.net:2222/o/other.git"), CredentialSecretID: Field[uuid.UUID]{Set: true, Value: &sshKey}})
 	if err != nil || moved.HostKeyPinned {
 		t.Fatalf("moved host: %+v %v", moved, err)
 	}

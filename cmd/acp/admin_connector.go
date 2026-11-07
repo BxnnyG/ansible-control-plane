@@ -322,6 +322,7 @@ func runAdminConnector(ctx context.Context, args []string, cfg config.Config, in
 		if err != nil {
 			return err
 		}
+		cliAudit(ctx, q, ws, "connector.create", c.ID.String(), map[string]any{"name": c.Name, "type": c.Type, "enabled": c.Enabled, "has_secret": c.SecretID.Valid})
 		_, _ = fmt.Fprintf(stdout, "connector: %s\nid: %s\ntype: %s\n", c.Name, c.ID, c.Type)
 		if generated != "" { // shown once, never stored in plaintext
 			_, _ = fmt.Fprintf(stdout, "webhook path: /api/hooks/alerts/%s\nsecret (shown once): %s\n", c.ID, generated)
@@ -460,9 +461,15 @@ func btoi(b bool) int {
 
 // cliAudit records a CLI action; failures are reported on stderr only.
 func cliAudit(ctx context.Context, q *dbgen.Queries, ws uuid.UUID, action, id string, details map[string]any) {
+	cliAuditTarget(ctx, q, ws, action, "connector", id, details)
+}
+
+// cliAuditTarget records a CLI action (actor label "cli") against any target
+// type; failures are reported on stderr only.
+func cliAuditTarget(ctx context.Context, q *dbgen.Queries, ws uuid.UUID, action, targetType, id string, details map[string]any) {
 	b, _ := json.Marshal(details)
 	if _, err := q.InsertAudit(ctx, dbgen.InsertAuditParams{
-		ActorLabel: "cli", Action: action, TargetType: "connector", TargetID: id,
+		ActorLabel: "cli", Action: action, TargetType: targetType, TargetID: id,
 		WorkspaceID: pgtype.UUID{Bytes: ws, Valid: true}, Details: b,
 	}); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "warning: audit write failed: %v\n", err)

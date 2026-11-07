@@ -34,6 +34,15 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 		return errors.New("worker token is shorter than 16 characters")
 	}
 
+	if cfg.WorkerJobUIDBase != 0 {
+		if err := checkCapabilities(); err != nil {
+			return err
+		}
+		log.Info("job isolation enabled", "uid_base", cfg.WorkerJobUIDBase)
+	} else {
+		log.Warn("job isolation disabled: ansible runs under the worker uid and can read the worker token")
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok\n"))
@@ -52,7 +61,7 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger) error {
 	var id [3]byte
 	_, _ = rand.Read(id[:])
 	workerID := host + "-" + hex.EncodeToString(id[:])
-	runner := &Runner{API: client, Log: log, CacheDir: cfg.WorkerCacheDir}
+	runner := &Runner{API: client, Log: log, CacheDir: cfg.WorkerCacheDir, JobUIDBase: cfg.WorkerJobUIDBase}
 
 	var wg sync.WaitGroup
 	for i := 0; i < cfg.WorkerConcurrency; i++ {

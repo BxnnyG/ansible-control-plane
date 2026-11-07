@@ -46,6 +46,12 @@ func TestLoad(t *testing.T) {
 		}},
 		{"retention negative", map[string]string{"ACP_RUN_LOG_RETENTION_DAYS": "-1"}, true, nil},
 		{"worker api addr invalid", map[string]string{"ACP_WORKER_API_ADDR": "nope"}, true, nil},
+		{"job uid base", map[string]string{"ACP_WORKER_JOB_UID_BASE": "10100"}, false, func(t *testing.T, c Config) {
+			if c.WorkerJobUIDBase != 10100 {
+				t.Errorf("base = %d", c.WorkerJobUIDBase)
+			}
+		}},
+		{"job uid base too low", map[string]string{"ACP_WORKER_JOB_UID_BASE": "500"}, true, nil},
 		{"worker concurrency zero", map[string]string{"ACP_WORKER_CONCURRENCY": "0"}, true, nil},
 		{"worker concurrency junk", map[string]string{"ACP_WORKER_CONCURRENCY": "x"}, true, nil},
 		{"master key file default", nil, false, func(t *testing.T, c Config) {

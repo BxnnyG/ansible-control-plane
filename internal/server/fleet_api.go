@@ -290,9 +290,9 @@ func fleetRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc FleetA
 	if adder == nil {
 		return
 	}
-	// Adding a host to an inventory needs fleet.read (the route) plus
-	// inventory.write on the target inventory, checked with scope narrowing.
-	az.Handle(r, http.MethodPost, base+"/hosts/{id}/add-to-inventory", policy.FleetRead, func(w http.ResponseWriter, req *http.Request) {
+	// Adding a host to an inventory needs inventory.write on the route and
+	// on the target inventory, checked with scope narrowing.
+	az.Handle(r, http.MethodPost, base+"/hosts/{id}/add-to-inventory", policy.InventoryWrite, func(w http.ResponseWriter, req *http.Request) {
 		d, vis, ok := access(w, req)
 		if !ok {
 			return

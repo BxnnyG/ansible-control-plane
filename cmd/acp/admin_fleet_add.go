@@ -68,6 +68,12 @@ func runAdminFleetAdd(ctx context.Context, a fleetArgs, ws uuid.UUID, pool *pgxp
 	if err != nil {
 		return err
 	}
+	details := map[string]any{"source": "cli", "inventory_id": target.ID, "group": a.Group, "host": res.Host,
+		"group_created": res.Result.GroupCreated, "version": res.Result.Version}
+	if c := res.Result.Commit; c != nil && !c.NoOp {
+		details["commit"] = map[string]any{"branch": c.Branch, "sha": c.SHA}
+	}
+	cliAuditTarget(ctx, q, ws, "fleet.host.add_to_inventory", "host", host.ID.String(), details)
 	_, _ = fmt.Fprintf(stdout, "host: %s\nansible_host: %s\ngroup_created: %t\nversion: %d\n", res.Host, dash(res.AnsibleHost), res.Result.GroupCreated, res.Result.Version)
 	if c := res.Result.Commit; c != nil && !c.NoOp {
 		_, _ = fmt.Fprintf(stdout, "commit: %s\nbranch: %s\n", c.SHA, c.Branch)
