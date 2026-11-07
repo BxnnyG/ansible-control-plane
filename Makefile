@@ -4,7 +4,7 @@ RUN_GO = docker run --rm -v $(CURDIR):/src -w /src -e GOFLAGS=-buildvcs=false -v
 GO_TEST_DEPS = apk add --no-cache git openssh-client-default >/dev/null
 
 # Build metadata baked into `acp version` (compose build args VERSION/COMMIT).
-export ACP_VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+export ACP_VERSION ?= $(shell git describe --tags --match 'v*' --dirty 2>/dev/null || git describe --tags --always --dirty 2>/dev/null || echo dev)
 export ACP_COMMIT ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
 
 .PHONY: init lint test test-db build up down sqlc
