@@ -31,6 +31,10 @@ type fakeNotify struct {
 	delivStatus string
 	deleted     int
 	testCalls   int
+	draftCalls  int
+	draftIn     notify.DraftInput
+	draftSecret string
+	draftErr    error
 }
 
 func (f *fakeNotify) CreateChannel(_ context.Context, _ uuid.UUID, in notify.ChannelInput, _ uuid.UUID) (notify.ChannelView, error) {
@@ -82,6 +86,12 @@ func (f *fakeNotify) ListWorkspaceDeliveries(_ context.Context, _ uuid.UUID, ch 
 func (f *fakeNotify) SendTest(context.Context, uuid.UUID, uuid.UUID) error {
 	f.testCalls++
 	return f.testErr
+}
+func (f *fakeNotify) TestDraft(_ context.Context, _ uuid.UUID, in notify.DraftInput) error {
+	f.draftCalls++
+	f.draftIn = in
+	f.draftSecret = string(in.SecretValue)
+	return f.draftErr
 }
 
 type notifyEnv struct {
@@ -139,6 +149,8 @@ func TestNotificationsAuthorization(t *testing.T) {
 		{"admin creates channel", policy.RoleAdmin, "POST", "/channels", chBody, 201},
 		{"admin patches channel", policy.RoleAdmin, "PATCH", "/channels/{ch}", `{"enabled":false}`, 200},
 		{"admin deletes channel", policy.RoleAdmin, "DELETE", "/channels/{ch}", "", 204},
+		{"editor cannot test draft", policy.RoleEditor, "POST", "/channels/test", `{"type":"ntfy","config":{}}`, 403},
+		{"admin tests draft", policy.RoleAdmin, "POST", "/channels/test", `{"type":"ntfy","config":{}}`, 200},
 		{"admin tests channel", policy.RoleAdmin, "POST", "/channels/{ch}/test", "", 200},
 		{"owner creates rule", policy.RoleOwner, "POST", "/rules", `{"channel_id":"` + uuid.NewString() + `","events":["run.failed"]}`, 201},
 		{"admin patches rule", policy.RoleAdmin, "PATCH", "/rules/{rule}", `{"enabled":false}`, 200},
@@ -220,4 +232,59 @@ func TestNotificationsBehaviour(t *testing.T) {
 	if !slices.Equal(*e.audits, want) {
 		t.Errorf("audits %v, want %v", *e.audits, want)
 	}
+}
+
+func TestNotificationDraftTest(t *testing.T) {
+	const cred = "super-secret-credential"
+	body := `{"type":"ntfy","config":{"url":"https://ntfy.example.test","topic":"t"},"secret_value":"` + cred + `"}`
+	tests := []struct {
+		name     string
+		err      error
+		wantCode int
+		wantOK   string
+		wantErr  string
+	}{
+		{"success", nil, 200, `"ok":true`, ""},
+		{"send failure is a result", errors.New("connection refused"), 200, `"ok":false`, "connection refused"},
+		{"invalid config", errors.Join(notify.ErrInvalid, errors.New("bad url")), 422, "", ""},
+		{"unknown channel", notify.ErrNotFound, 404, "", ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newNotifyEnv(t, policy.RoleAdmin)
+			e.svc.draftErr = tc.err
+			rec := e.do("POST", "/channels/test", body)
+			if rec.Code != tc.wantCode || !strings.Contains(rec.Body.String(), tc.wantOK) || !strings.Contains(rec.Body.String(), tc.wantErr) {
+				t.Fatalf("%d %s", rec.Code, rec.Body.String())
+			}
+			if strings.Contains(rec.Body.String(), cred) {
+				t.Fatal("credential leaked into the response")
+			}
+			if e.svc.draftSecret != cred || e.svc.draftIn.Type != "ntfy" {
+				t.Fatalf("input not passed through: %+v", e.svc.draftIn)
+			}
+			wantAudit := []string{"notification.channel.test_draft"}
+			if tc.wantCode != 200 {
+				wantAudit = []string{}
+			}
+			if !slices.Equal(*e.audits, wantAudit) {
+				t.Fatalf("audits %v, want %v", *e.audits, wantAudit)
+			}
+		})
+	}
+
+	t.Run("rate limited", func(t *testing.T) {
+		e := newNotifyEnv(t, policy.RoleAdmin)
+		for i := 0; i < draftTestsPerMinute; i++ {
+			if rec := e.do("POST", "/channels/test", body); rec.Code != 200 {
+				t.Fatalf("request %d: %d", i, rec.Code)
+			}
+		}
+		if rec := e.do("POST", "/channels/test", body); rec.Code != 429 {
+			t.Fatalf("expected 429, got %d", rec.Code)
+		}
+		if e.svc.draftCalls != draftTestsPerMinute {
+			t.Fatalf("service called %d times", e.svc.draftCalls)
+		}
+	})
 }

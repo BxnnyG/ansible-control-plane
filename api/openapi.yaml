@@ -1295,6 +1295,23 @@ paths:
       responses:
         '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/NotificationChannel'}}}}
         default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/notifications/channels/test:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    post:
+      tags: [notifications]
+      operationId: testNotificationChannelDraft
+      summary: Send a test message through an unsaved channel definition.
+      description: >-
+        The config is validated like on create. `secret_value` is used only in memory and is never
+        stored, logged, audited or returned. Without any secret and with `channel_id`, the stored
+        secret of that channel is used. Rate limited per user.
+      x-acp-permission: notification.manage
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/NotificationChannelDraft'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/NotificationTestResult'}}}}
+        '429': {description: Rate limited.}
+        default: {$ref: '#/components/responses/Error'}
   /api/v1/workspaces/{workspace}/notifications/channels/{id}:
     parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
     get:
@@ -2638,6 +2655,17 @@ components:
         tls_ca_pem: {type: string}
         tls_skip_verify: {type: boolean}
         enabled: {type: boolean}
+    NotificationChannelDraft:
+      type: object
+      required: [type, config]
+      properties:
+        type: {type: string, enum: [webhook, matrix, smtp, gotify, ntfy]}
+        config: {type: object, additionalProperties: true}
+        secret_id: {type: [string, 'null'], format: uuid}
+        secret_value: {type: string, writeOnly: true, description: Unsaved credential; used in memory only.}
+        tls_ca_pem: {type: string}
+        tls_skip_verify: {type: boolean}
+        channel_id: {type: [string, 'null'], format: uuid, description: Existing channel whose stored secret is used when no secret is given.}
     NotificationTestResult:
       type: object
       required: [ok, error]

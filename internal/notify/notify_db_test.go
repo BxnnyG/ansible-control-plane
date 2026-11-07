@@ -2,6 +2,7 @@ package notify
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -507,3 +508,70 @@ func TestServiceCRUDAndSendTest(t *testing.T) {
 		t.Fatalf("second delete: %v", err)
 	}
 }
+
+func TestServiceTestDraft(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	const stored = "stored-credential-xyz"
+	const typed = "typed-credential-abc"
+	meta, err := e.sec.Create(ctx, e.ws.ID, secrets.CreateInput{Name: "tok", Type: secrets.TypeToken, Value: []byte(stored)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch := e.channel(t, "c", &meta.ID)
+	cfg := json.RawMessage(`{"url":"http://ntfy.example.test","topic":"draft"}`)
+
+	cases := []struct {
+		name     string
+		in       DraftInput
+		wantCred string
+		wantErr  error
+		sendFail error
+	}{
+		{name: "no credential", in: DraftInput{Type: TypeNtfy, Config: cfg}},
+		{name: "typed value", in: DraftInput{Type: TypeNtfy, Config: cfg, SecretValue: []byte(typed)}, wantCred: typed},
+		{name: "existing secret id", in: DraftInput{Type: TypeNtfy, Config: cfg, SecretID: &meta.ID}, wantCred: stored},
+		{name: "stored secret of channel", in: DraftInput{Type: TypeNtfy, Config: cfg, ChannelID: &ch.ID}, wantCred: stored},
+		{name: "typed value wins over channel", in: DraftInput{Type: TypeNtfy, Config: cfg, ChannelID: &ch.ID, SecretValue: []byte(typed)}, wantCred: typed},
+		{name: "invalid config", in: DraftInput{Type: TypeNtfy, Config: json.RawMessage(`{"url":"x"}`)}, wantErr: ErrInvalid},
+		{name: "matrix needs credential", in: DraftInput{Type: TypeMatrix, Config: json.RawMessage(`{"homeserver":"https://m.example.test","room_id":"!r:m.example.test"}`)}, wantErr: ErrInvalid},
+		{name: "unknown channel", in: DraftInput{Type: TypeNtfy, Config: cfg, ChannelID: ptrUUID(uuid.New())}, wantErr: ErrNotFound},
+		{name: "foreign secret", in: DraftInput{Type: TypeNtfy, Config: cfg, SecretID: ptrUUID(uuid.New())}, wantErr: ErrInvalid},
+		{name: "send error hides typed credential", in: DraftInput{Type: TypeNtfy, Config: cfg, SecretValue: []byte(typed)}, sendFail: errors.New("boom " + typed)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			e.snd.take()
+			e.snd.fail = tc.sendFail
+			err := e.svc.TestDraft(ctx, e.ws.ID, tc.in)
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("err = %v, want %v", err, tc.wantErr)
+				}
+				if got := e.snd.take(); len(got) != 0 {
+					t.Fatal("nothing must be sent")
+				}
+				return
+			}
+			if tc.sendFail != nil {
+				if err == nil || strings.Contains(err.Error(), typed) || !strings.Contains(err.Error(), "boom") {
+					t.Fatalf("sanitized error expected, got %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := e.snd.take()
+			if len(got) != 1 || got[0].cred != tc.wantCred || !got[0].msg.Test {
+				t.Fatalf("sent: %+v", got)
+			}
+		})
+	}
+	e.snd.fail = nil
+	if n, _ := e.svc.ListChannels(ctx, e.ws.ID); len(n) != 1 {
+		t.Fatalf("draft test must not persist channels, have %d", len(n))
+	}
+}
+
+func ptrUUID(u uuid.UUID) *uuid.UUID { return &u }
