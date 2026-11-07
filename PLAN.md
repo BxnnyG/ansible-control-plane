@@ -247,6 +247,7 @@ Execution order (decided 2026-11-05): M4 → M7 → M5 → M6 → M8. Migration 
 - Concurrent mutations: scope check and write are separate steps (ADR-0007); clients should send `If-Match`.
 - Session login behind a reverse proxy shares one rate limit budget (no trusted-proxy setting).
 - Notifications (ADR-0021): one template filter per rule, no test-before-save, no per-user subscriptions or quiet hours, imported already-finished runs emit no events.
+- Deleting a secret through the API silently clears references (FK `ON DELETE SET NULL`); `acp admin secret delete` refuses referenced secrets instead.
 
 ## 12. Risks
 
