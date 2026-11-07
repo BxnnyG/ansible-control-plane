@@ -1,0 +1,131 @@
+<script lang="ts">
+  import { api, type NotificationChannel, type SecretMeta } from '$lib/api';
+  import { describeError } from '$lib/errors';
+  import { typeLabel } from '$lib/notifications';
+  import { btn, btnDanger, btnPrimary, card, td, th } from '$lib/ui';
+  import FormError from '$lib/components/FormError.svelte';
+  import ChannelForm from './ChannelForm.svelte';
+
+  let {
+    ws,
+    channels,
+    secrets,
+    canManage,
+    reload,
+  }: {
+    ws: string;
+    channels: NotificationChannel[];
+    secrets: SecretMeta[];
+    canManage: boolean;
+    reload: () => Promise<void>;
+  } = $props();
+
+  let editing = $state<NotificationChannel | 'new' | null>(null);
+  let deleting = $state<NotificationChannel | null>(null);
+  let busyId = $state<string | null>(null);
+  let error = $state<string | null>(null);
+  let notice = $state<string | null>(null);
+
+  async function test(c: NotificationChannel) {
+    busyId = c.id;
+    notice = null;
+    error = null;
+    try {
+      const r = await api.notifications.channels.test(ws, c.id);
+      notice = r.ok ? `${c.name}: test message sent.` : `${c.name}: test failed: ${r.error}`;
+    } catch (e) {
+      error = describeError(e);
+    } finally {
+      busyId = null;
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleting) return;
+    try {
+      await api.notifications.channels.remove(ws, deleting.id);
+      deleting = null;
+      await reload();
+    } catch (e) {
+      error = describeError(e);
+      deleting = null;
+    }
+  }
+
+  async function done() {
+    editing = null;
+    await reload();
+  }
+
+  function secretName(id: string | null): string {
+    return id ? (secrets.find((s) => s.id === id)?.name ?? 'unknown secret') : '-';
+  }
+</script>
+
+{#if canManage && editing === null}
+  <div class="mb-4">
+    <button class={btnPrimary} onclick={() => (editing = 'new')}>New channel</button>
+  </div>
+{/if}
+<FormError id="channels-error" message={error} />
+{#if notice}<p role="status" class="mb-3 text-sm">{notice}</p>{/if}
+
+{#if editing !== null}
+  <div class="{card} mb-6 max-w-xl">
+    {#key editing === 'new' ? 'new' : editing.id}
+      <ChannelForm
+        {ws}
+        {secrets}
+        channel={editing === 'new' ? null : editing}
+        ondone={done}
+        oncancel={() => (editing = null)}
+      />
+    {/key}
+  </div>
+{/if}
+
+{#if deleting}
+  <div role="alertdialog" aria-label="Confirm delete" class="{card} mb-6 max-w-xl">
+    <p>
+      Delete channel <strong>{deleting.name}</strong>? Its rules and delivery history are removed.
+    </p>
+    <div class="mt-3 flex gap-2">
+      <button class={btnDanger} onclick={confirmDelete}>Delete</button>
+      <button class={btn} onclick={() => (deleting = null)}>Cancel</button>
+    </div>
+  </div>
+{/if}
+
+{#if channels.length === 0}
+  <div class="rounded-lg border border-dashed border-border p-8 text-center text-muted">
+    No channels yet.
+  </div>
+{:else}
+  <div class="overflow-x-auto rounded-lg border border-border">
+    <table class="w-full">
+      <thead class="bg-surface-2">
+        <tr>
+          <th class={th}>Name</th><th class={th}>Type</th><th class={th}>Credential</th>
+          <th class={th}>Status</th><th class={th}><span class="sr-only">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-border">
+        {#each channels as c (c.id)}
+          <tr>
+            <td class={td}>{c.name}</td>
+            <td class={td}>{typeLabel(c.type)}</td>
+            <td class={td}>{secretName(c.secret_id)}</td>
+            <td class={td}>{c.enabled ? 'Enabled' : 'Disabled'}</td>
+            <td class="{td} text-right whitespace-nowrap">
+              {#if canManage}
+                <button class={btn} disabled={busyId === c.id} onclick={() => test(c)}>Test</button>
+                <button class={btn} onclick={() => (editing = c)}>Edit</button>
+                <button class={btnDanger} onclick={() => (deleting = c)}>Delete</button>
+              {/if}
+            </td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
+{/if}

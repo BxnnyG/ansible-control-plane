@@ -1643,6 +1643,123 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace}/notifications/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        get: operations["listNotificationChannels"];
+        put?: never;
+        post: operations["createNotificationChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace}/notifications/channels/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get: operations["getNotificationChannel"];
+        put?: never;
+        post?: never;
+        delete: operations["deleteNotificationChannel"];
+        options?: never;
+        head?: never;
+        patch: operations["updateNotificationChannel"];
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace}/notifications/channels/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["testNotificationChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace}/notifications/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        get: operations["listNotificationRules"];
+        put?: never;
+        post: operations["createNotificationRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace}/notifications/rules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteNotificationRule"];
+        options?: never;
+        head?: never;
+        patch: operations["updateNotificationRule"];
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace}/notifications/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        get: operations["listNotificationDeliveries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2833,6 +2950,111 @@ export interface components {
             limit: string;
             hosts: string[];
             skipped?: components["schemas"]["BulkRunSkipped"][];
+        };
+        /** @description Notification channel. Credentials are never returned, only the id of the referenced secret. */
+        NotificationChannel: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @enum {string} */
+            type: "webhook" | "matrix" | "smtp" | "gotify" | "ntfy";
+            /** @description Type specific */
+            config: {
+                [key: string]: unknown;
+            };
+            /** Format: uuid */
+            secret_id: string | null;
+            tls_ca_pem: string;
+            tls_skip_verify: boolean;
+            enabled: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        NotificationChannelInput: {
+            name: string;
+            /** @enum {string} */
+            type: "webhook" | "matrix" | "smtp" | "gotify" | "ntfy";
+            config?: {
+                [key: string]: unknown;
+            };
+            /** Format: uuid */
+            secret_id?: string | null;
+            tls_ca_pem?: string;
+            tls_skip_verify?: boolean;
+            /** @default true */
+            enabled: boolean;
+        };
+        /** @description Partial update; `config` replaces the whole config, `secret_id` null removes the credential. The type is immutable. */
+        NotificationChannelPatch: {
+            name?: string;
+            config?: {
+                [key: string]: unknown;
+            };
+            /** Format: uuid */
+            secret_id?: string | null;
+            tls_ca_pem?: string;
+            tls_skip_verify?: boolean;
+            enabled?: boolean;
+        };
+        NotificationTestResult: {
+            ok: boolean;
+            /** @description Sanitized error text of a failed send. */
+            error: string;
+        };
+        NotificationRule: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            channel_id: string;
+            events: ("run.failed" | "run.recovered" | "run.drift" | "run.finished")[];
+            /**
+             * Format: uuid
+             * @description Restrict the rule to one template; null matches all.
+             */
+            template_id: string | null;
+            enabled: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        NotificationRuleInput: {
+            /** Format: uuid */
+            channel_id: string;
+            events: ("run.failed" | "run.recovered" | "run.drift" | "run.finished")[];
+            /** Format: uuid */
+            template_id?: string | null;
+            /** @default true */
+            enabled: boolean;
+        };
+        NotificationRulePatch: {
+            /** Format: uuid */
+            channel_id?: string;
+            events?: ("run.failed" | "run.recovered" | "run.drift" | "run.finished")[];
+            /** Format: uuid */
+            template_id?: string | null;
+            enabled?: boolean;
+        };
+        NotificationDelivery: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            channel_id: string;
+            /** Format: uuid */
+            run_id: string;
+            kind: string;
+            /** @enum {string} */
+            status: "pending" | "sent" | "failed";
+            attempts: number;
+            /** Format: date-time */
+            next_attempt_at: string;
+            last_error: string;
+            /** Format: date-time */
+            sent_at: string | null;
+            /** Format: date-time */
+            created_at: string;
         };
     };
     responses: {
@@ -6047,6 +6269,280 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listNotificationChannels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationChannel"][];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createNotificationChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationChannelInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationChannel"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getNotificationChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationChannel"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteNotificationChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["NoContent"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updateNotificationChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationChannelPatch"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationChannel"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    testNotificationChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTestResult"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listNotificationRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationRule"][];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createNotificationRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationRuleInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationRule"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteNotificationRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["NoContent"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updateNotificationRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationRulePatch"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationRule"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listNotificationDeliveries: {
+        parameters: {
+            query?: {
+                channel_id?: string;
+                status?: "pending" | "sent" | "failed";
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationDelivery"][];
+                };
             };
             default: components["responses"]["Error"];
         };

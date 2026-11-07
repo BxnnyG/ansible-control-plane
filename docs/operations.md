@@ -224,7 +224,7 @@ stuck worker.
 `cli` (and `"source": "cli"` in the details), using the same action names as the
 REST API: `group_rule.apply`, `remediation.rule.create`, `remediation.run`
 (`alert remediate`), `fleet.host.add_to_inventory`, `connector.create`,
-`connector.update`, `connector.delete`. Audit write failures are reported on
+`connector.update`, `connector.delete`, `secret.delete`. Audit write failures are reported on
 stderr and do not undo the action.
 
 ## Worker egress allowlist
@@ -295,6 +295,10 @@ Hardening checklist:
 
 Vulnerabilities: see [`../SECURITY.md`](../SECURITY.md).
 
+## Notifications
+
+Run notifications (webhook, Matrix, SMTP, Gotify, ntfy) are configured per workspace; the app container needs outbound access to the targets. See [`notifications.md`](notifications.md). Delivery rows and events are pruned with `ACP_RUN_LOG_RETENTION_DAYS`.
+
 ## Troubleshooting
 
 | Symptom | Cause and fix |
@@ -312,3 +316,16 @@ Vulnerabilities: see [`../SECURITY.md`](../SECURITY.md).
 | Project sync fails with host key error | Confirm the host key (trust on first use with confirmation) in the project settings |
 | Postgres log: "relation goose_db_version does not exist" on first start | Expected before the first migration |
 | `/readyz` fails | Database unreachable or migrations failing: `docker compose logs app postgres` |
+
+## Secrets CLI
+
+```
+docker compose exec app acp admin secret list --workspace default
+docker compose exec app acp admin secret delete --workspace default --secret NAME|ID
+```
+
+`list` prints id, name, type and creation time, never values. `delete` refuses
+to remove a secret that is still referenced by a connector, project, template,
+vault identity, notification channel or webhook setting (reference check reads
+the foreign keys from the database catalog) and writes a `secret.delete` audit
+entry with actor label `cli`.

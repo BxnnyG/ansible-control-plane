@@ -15,6 +15,12 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: 'M9 7V3M15 7V3M7 7h10v5a5 5 0 0 1-10 0zM12 17v4',
     permission: 'connector.read',
   },
+  {
+    label: 'Notifications',
+    href: '/notifications',
+    icon: 'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21a2 2 0 0 0 4 0',
+    permission: 'notification.read',
+  },
   { label: 'Runs', href: '/runs', icon: 'M8 5v14l11-7z' },
   { label: 'Templates', href: '/templates', icon: 'M5 4h14v6H5zM5 14h6v6H5zM15 14h4v6h-4z' },
   { label: 'Inventories', href: '/inventories', icon: 'M4 7h16M4 12h16M4 17h10' },

@@ -24,6 +24,7 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/grouprules"
 	"github.com/BxnnyG/ansible-control-plane/internal/inventory"
 	"github.com/BxnnyG/ansible-control-plane/internal/metrics"
+	"github.com/BxnnyG/ansible-control-plane/internal/notify"
 	"github.com/BxnnyG/ansible-control-plane/internal/policy"
 	"github.com/BxnnyG/ansible-control-plane/internal/projects"
 	"github.com/BxnnyG/ansible-control-plane/internal/remediation"
@@ -160,9 +161,12 @@ func run(args []string) error {
 		go runs.RunLogRetention(ctx, q, cfg.RunLogRetentionDays, runs.RetentionInterval, log)
 		opts = append(opts, server.WithAuth(svc), server.WithPolicy(az, q),
 			server.WithSecrets(sec), server.WithProjects(prj), server.WithPublicURL(cfg.PublicURL),
-			server.WithInventories(invSvc), server.WithVault(vids, vops), server.WithRuns(runSvc), server.WithSchedules(schedSvc))
+			server.WithInventories(invSvc), server.WithVault(vids, vops), server.WithRuns(runSvc), server.WithSchedules(schedSvc),
+			server.WithNotifications(notify.NewService(notify.ServiceOptions{DB: pool, Secrets: sec, PublicURL: cfg.PublicURL})))
 		go auth.RunSessionCleanup(ctx, q, auth.DefaultCleanupInterval, log)
 		go schedSvc.Run(ctx, schedules.DefaultTick, log)
+		notifyDisp := notify.New(notify.DispatcherOptions{DB: pool, Secrets: sec, PublicURL: cfg.PublicURL, RetentionDays: cfg.RunLogRetentionDays})
+		go notifyDisp.Run(ctx, notify.DefaultTick, log)
 		go prj.RunScheduler(ctx, projects.DefaultScheduleTick, projects.DefaultScheduleConcurrency, log)
 		fleetStore := fleet.NewStore(pool, nil)
 		conSvc := connectors.New(connectors.Options{DB: pool, Registry: newConnectorRegistry(), Secrets: sec, SecretWriter: sec, PostSync: fleetStore, Alerts: fleetStore})

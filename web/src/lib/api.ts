@@ -79,6 +79,14 @@ export type ConnectorUpdate = S['ConnectorUpdate'];
 export type ConnectorTestInput = S['ConnectorTestInput'];
 export type ConnectorTestResult = S['ConnectorTestResult'];
 export type ConnectorSync = S['ConnectorSync'];
+export type NotificationChannel = S['NotificationChannel'];
+export type NotificationChannelInput = S['NotificationChannelInput'];
+export type NotificationChannelPatch = S['NotificationChannelPatch'];
+export type NotificationTestResult = S['NotificationTestResult'];
+export type NotificationRule = S['NotificationRule'];
+export type NotificationRuleInput = S['NotificationRuleInput'];
+export type NotificationRulePatch = S['NotificationRulePatch'];
+export type NotificationDelivery = S['NotificationDelivery'];
 export type FleetNetwork = S['FleetNetwork'];
 export type FleetNetworkCounts = S['FleetNetworkCounts'];
 export type FleetAnsibleLink = S['FleetAnsibleLink'];
@@ -393,6 +401,55 @@ export const api = {
         version,
       ),
   },
+  notifications: {
+    channels: {
+      list: (ws: string) =>
+        request<NotificationChannel[]>('GET', notificationsPath(ws, 'channels')),
+      create: (ws: string, c: NotificationChannelInput) =>
+        request<NotificationChannel>('POST', notificationsPath(ws, 'channels'), c),
+      update: (ws: string, id: string, c: NotificationChannelPatch) =>
+        request<NotificationChannel>(
+          'PATCH',
+          notificationsPath(ws, `channels/${encodeURIComponent(id)}`),
+          c,
+        ),
+      remove: (ws: string, id: string) =>
+        request<void>('DELETE', notificationsPath(ws, `channels/${encodeURIComponent(id)}`)),
+      /** Sends a sample message; failures come back as ok=false with a sanitized error. */
+      test: (ws: string, id: string) =>
+        request<NotificationTestResult>(
+          'POST',
+          notificationsPath(ws, `channels/${encodeURIComponent(id)}/test`),
+        ),
+    },
+    rules: {
+      list: (ws: string) => request<NotificationRule[]>('GET', notificationsPath(ws, 'rules')),
+      create: (ws: string, r: NotificationRuleInput) =>
+        request<NotificationRule>('POST', notificationsPath(ws, 'rules'), r),
+      update: (ws: string, id: string, r: NotificationRulePatch) =>
+        request<NotificationRule>(
+          'PATCH',
+          notificationsPath(ws, `rules/${encodeURIComponent(id)}`),
+          r,
+        ),
+      remove: (ws: string, id: string) =>
+        request<void>('DELETE', notificationsPath(ws, `rules/${encodeURIComponent(id)}`)),
+    },
+    deliveries: (
+      ws: string,
+      f: { channel_id?: string; status?: NotificationDelivery['status']; limit?: number } = {},
+    ) => {
+      const q = new URLSearchParams();
+      if (f.channel_id) q.set('channel_id', f.channel_id);
+      if (f.status) q.set('status', f.status);
+      if (f.limit) q.set('limit', String(f.limit));
+      const qs = q.toString();
+      return request<NotificationDelivery[]>(
+        'GET',
+        notificationsPath(ws, 'deliveries') + (qs ? `?${qs}` : ''),
+      );
+    },
+  },
   connectorTypes: (ws: string) => request<ConnectorType[]>('GET', fleetPath(ws, 'connector-types')),
   connectors: {
     list: (ws: string) => request<Connector[]>('GET', connectorsPath(ws)),
@@ -559,6 +616,10 @@ function connectorsPath(ws: string, sub?: string): string {
   let p = `/api/v1/workspaces/${encodeURIComponent(ws)}/connectors`;
   if (sub) p += `/${sub}`;
   return p;
+}
+
+function notificationsPath(ws: string, sub: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(ws)}/notifications/${sub}`;
 }
 
 function fleetPath(ws: string, sub: string): string {

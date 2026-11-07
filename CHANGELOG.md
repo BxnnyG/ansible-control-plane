@@ -4,6 +4,15 @@ All notable changes are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-11-07
+
+### Added
+
+- **Run notifications (ADR-0021):** channels for webhook (versioned JSON schema, HMAC signature or bearer), Matrix, SMTP, Gotify and ntfy; rules for `run.failed`, `run.recovered`, `run.drift` and `run.finished` with optional template filter.
+- Outbox fed by a database trigger on terminal run status, dispatcher in `serve` with at-least-once delivery, exponential backoff (max 5 attempts) and pruning with the run log retention.
+- `notification.read` and `notification.manage` permissions, audited changes and test sends.
+- `acp admin notification` CLI, OpenAPI operations, notifications page in the UI and operator guide `docs/notifications.md`.
+
 ## [1.0.0] - 2026-11-07
 
 First stable release. Milestones M1 to M8 (execution order M4, M7, M5, M6, M8).

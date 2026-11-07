@@ -246,7 +246,8 @@ Execution order (decided 2026-11-05): M4 → M7 → M5 → M6 → M8. Migration 
 - No secret rotation for alert webhook connectors; group rules are not auto-applied after a sync; resolved conflicts are never pruned.
 - Concurrent mutations: scope check and write are separate steps (ADR-0007); clients should send `If-Match`.
 - Session login behind a reverse proxy shares one rate limit budget (no trusted-proxy setting).
-- Notification channels for failed runs (see open question 3).
+- Notifications (ADR-0021): one template filter per rule, no test-before-save, no per-user subscriptions or quiet hours, imported already-finished runs emit no events.
+- Deleting a secret through the API silently clears references (FK `ON DELETE SET NULL`); `acp admin secret delete` refuses referenced secrets instead.
 
 ## 12. Risks
 
@@ -265,4 +266,4 @@ Execution order (decided 2026-11-05): M4 → M7 → M5 → M6 → M8. Migration 
 
 1. Ansible version for the worker image: answered, full community `ansible` package 14.6.0 (ansible-core 2.21.6), pinned via build arg.
 2. Is the second Semaphore repository (local path) still needed, or is the Git repository the only source?
-3. Notification channels for failed runs (email, webhook, chat).
+3. Notification channels for failed runs: answered, implemented in v1.1 (webhook, Matrix, SMTP, Gotify, ntfy; [ADR-0021](docs/adr/0021-run-notifications.md), [guide](docs/notifications.md)).

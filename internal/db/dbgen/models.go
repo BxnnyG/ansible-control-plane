@@ -225,6 +225,56 @@ type Network struct {
 	LastSeen    pgtype.Timestamptz
 }
 
+type NotificationChannel struct {
+	ID            uuid.UUID
+	WorkspaceID   uuid.UUID
+	Name          string
+	Type          string
+	Config        []byte
+	SecretID      pgtype.UUID
+	TlsCaPem      string
+	TlsSkipVerify bool
+	Enabled       bool
+	CreatedBy     pgtype.UUID
+	UpdatedBy     pgtype.UUID
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+}
+
+type NotificationDelivery struct {
+	ID            uuid.UUID
+	EventID       int64
+	RunID         uuid.UUID
+	ChannelID     uuid.UUID
+	Kind          string
+	Status        string
+	Attempts      int32
+	NextAttemptAt pgtype.Timestamptz
+	LastError     string
+	SentAt        pgtype.Timestamptz
+	CreatedAt     pgtype.Timestamptz
+}
+
+type NotificationEvent struct {
+	ID          int64
+	RunID       uuid.UUID
+	Status      string
+	CreatedAt   pgtype.Timestamptz
+	ProcessedAt pgtype.Timestamptz
+}
+
+type NotificationRule struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	ChannelID   uuid.UUID
+	Events      []string
+	TemplateID  pgtype.UUID
+	Enabled     bool
+	CreatedBy   pgtype.UUID
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type Project struct {
 	ID                  uuid.UUID
 	WorkspaceID         uuid.UUID
