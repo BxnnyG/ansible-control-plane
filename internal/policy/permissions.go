@@ -12,34 +12,36 @@ type Permission string
 
 // Permissions known to the platform.
 const (
-	WorkspaceRead   Permission = "workspace.read"
-	WorkspaceManage Permission = "workspace.manage"
-	WorkspaceDelete Permission = "workspace.delete"
-	MembersRead     Permission = "members.read"
-	MembersManage   Permission = "members.manage"
-	AuditRead       Permission = "audit.read"
-	SecretsMetaRead Permission = "secrets.meta.read"
-	SecretsWrite    Permission = "secrets.write"
-	ProjectRead     Permission = "project.read"
-	ProjectWrite    Permission = "project.write"
-	ProjectSync     Permission = "project.sync"
-	InventoryRead   Permission = "inventory.read"
-	InventoryWrite  Permission = "inventory.write"
-	TemplateRead    Permission = "template.read"
-	TemplateWrite   Permission = "template.write"
-	RunRead         Permission = "run.read"
-	RunExecute      Permission = "run.execute"
-	RunCancel       Permission = "run.cancel"
-	ScheduleRead    Permission = "schedule.read"
-	ScheduleWrite   Permission = "schedule.write"
-	ConnectorRead   Permission = "connector.read"
-	ConnectorWrite  Permission = "connector.write"
-	FleetRead       Permission = "fleet.read"
-	FleetManage     Permission = "fleet.manage"
-	FleetRemediate  Permission = "fleet.remediate"
-	VaultRead       Permission = "vault.read"
-	VaultManage     Permission = "vault.manage"
-	VaultDecrypt    Permission = "vault.decrypt"
+	WorkspaceRead      Permission = "workspace.read"
+	WorkspaceManage    Permission = "workspace.manage"
+	WorkspaceDelete    Permission = "workspace.delete"
+	MembersRead        Permission = "members.read"
+	MembersManage      Permission = "members.manage"
+	AuditRead          Permission = "audit.read"
+	SecretsMetaRead    Permission = "secrets.meta.read"
+	SecretsWrite       Permission = "secrets.write"
+	ProjectRead        Permission = "project.read"
+	ProjectWrite       Permission = "project.write"
+	ProjectSync        Permission = "project.sync"
+	InventoryRead      Permission = "inventory.read"
+	InventoryWrite     Permission = "inventory.write"
+	TemplateRead       Permission = "template.read"
+	TemplateWrite      Permission = "template.write"
+	RunRead            Permission = "run.read"
+	RunExecute         Permission = "run.execute"
+	RunCancel          Permission = "run.cancel"
+	ScheduleRead       Permission = "schedule.read"
+	ScheduleWrite      Permission = "schedule.write"
+	ConnectorRead      Permission = "connector.read"
+	ConnectorWrite     Permission = "connector.write"
+	FleetRead          Permission = "fleet.read"
+	FleetManage        Permission = "fleet.manage"
+	FleetRemediate     Permission = "fleet.remediate"
+	VaultRead          Permission = "vault.read"
+	VaultManage        Permission = "vault.manage"
+	VaultDecrypt       Permission = "vault.decrypt"
+	NotificationRead   Permission = "notification.read"
+	NotificationManage Permission = "notification.manage"
 )
 
 // Roles in ascending order of privilege.
@@ -59,6 +61,7 @@ var workspaceWide = map[Permission]bool{
 	MembersRead: true, MembersManage: true,
 	AuditRead: true, ConnectorRead: true, ConnectorWrite: true, SecretsWrite: true, SecretsMetaRead: true,
 	VaultRead: true, VaultManage: true, VaultDecrypt: true,
+	NotificationRead: true, NotificationManage: true,
 }
 
 // IsWorkspaceWide reports whether the permission requires an unscoped membership.
@@ -85,8 +88,8 @@ func buildMatrix() map[string]map[Permission]bool {
 	}
 	viewer := grant(nil, viewerPerms...)
 	operator := grant(viewer, RunExecute, RunCancel, ProjectSync, FleetRemediate)
-	editor := grant(operator, SecretsMetaRead, ProjectWrite, InventoryWrite, TemplateWrite, ScheduleWrite, VaultRead, FleetManage)
-	admin := grant(editor, SecretsWrite, WorkspaceManage, MembersRead, MembersManage, AuditRead, ConnectorRead, ConnectorWrite, VaultManage, VaultDecrypt)
+	editor := grant(operator, SecretsMetaRead, ProjectWrite, InventoryWrite, TemplateWrite, ScheduleWrite, VaultRead, FleetManage, NotificationRead)
+	admin := grant(editor, SecretsWrite, WorkspaceManage, MembersRead, MembersManage, AuditRead, ConnectorRead, ConnectorWrite, VaultManage, VaultDecrypt, NotificationManage)
 	owner := grant(admin, WorkspaceDelete)
 	return map[string]map[Permission]bool{
 		RoleViewer: viewer, RoleOperator: operator, RoleEditor: editor, RoleAdmin: admin, RoleOwner: owner,
