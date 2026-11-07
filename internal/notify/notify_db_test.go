@@ -378,6 +378,23 @@ func TestRetriesThenFailsAndSucceeds(t *testing.T) {
 	if len(dl) != 1 || dl[0].Status != "sent" || dl[0].SentAt == nil || dl[0].LastError != "" {
 		t.Fatalf("recovered delivery: %+v", dl)
 	}
+
+	// workspace-wide listing with SQL filters
+	all, err := e.svc.ListWorkspaceDeliveries(ctx, e.ws.ID, nil, "", 10)
+	if err != nil || len(all) != 3 {
+		t.Fatalf("workspace deliveries: %v %+v", err, all)
+	}
+	failed, _ := e.svc.ListWorkspaceDeliveries(ctx, e.ws.ID, nil, "failed", 10)
+	if len(failed) != 1 || failed[0].ChannelID != ch.ID {
+		t.Fatalf("failed filter: %+v", failed)
+	}
+	one, _ := e.svc.ListWorkspaceDeliveries(ctx, e.ws.ID, &ch2.ID, "", 10)
+	if len(one) != 1 || one[0].Status != "sent" {
+		t.Fatalf("channel filter: %+v", one)
+	}
+	if other, _ := e.svc.ListWorkspaceDeliveries(ctx, uuid.New(), nil, "", 10); len(other) != 0 {
+		t.Fatalf("other workspace sees deliveries: %+v", other)
+	}
 }
 
 func TestDisabledChannelFailsPending(t *testing.T) {

@@ -555,6 +555,60 @@ func (q *Queries) ListNotificationRules(ctx context.Context, workspaceID uuid.UU
 	return items, nil
 }
 
+const listWorkspaceNotificationDeliveries = `-- name: ListWorkspaceNotificationDeliveries :many
+SELECT d.id, d.event_id, d.run_id, d.channel_id, d.kind, d.status, d.attempts, d.next_attempt_at, d.last_error, d.sent_at, d.created_at FROM notification_deliveries d
+JOIN notification_channels c ON c.id = d.channel_id
+WHERE c.workspace_id = $1
+  AND ($2::uuid IS NULL OR d.channel_id = $2)
+  AND ($3::text IS NULL OR d.status = $3)
+ORDER BY d.created_at DESC, d.id DESC
+LIMIT $4
+`
+
+type ListWorkspaceNotificationDeliveriesParams struct {
+	WorkspaceID uuid.UUID
+	ChannelID   pgtype.UUID
+	Status      pgtype.Text
+	RowLimit    int32
+}
+
+func (q *Queries) ListWorkspaceNotificationDeliveries(ctx context.Context, arg ListWorkspaceNotificationDeliveriesParams) ([]NotificationDelivery, error) {
+	rows, err := q.db.Query(ctx, listWorkspaceNotificationDeliveries,
+		arg.WorkspaceID,
+		arg.ChannelID,
+		arg.Status,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []NotificationDelivery
+	for rows.Next() {
+		var i NotificationDelivery
+		if err := rows.Scan(
+			&i.ID,
+			&i.EventID,
+			&i.RunID,
+			&i.ChannelID,
+			&i.Kind,
+			&i.Status,
+			&i.Attempts,
+			&i.NextAttemptAt,
+			&i.LastError,
+			&i.SentAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markNotificationDeliveryFailed = `-- name: MarkNotificationDeliveryFailed :exec
 UPDATE notification_deliveries SET status = 'failed', last_error = $2 WHERE id = $1
 `

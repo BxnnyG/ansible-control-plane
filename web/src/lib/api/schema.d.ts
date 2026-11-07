@@ -3041,6 +3041,8 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** Format: uuid */
+            channel_id: string;
+            /** Format: uuid */
             run_id: string;
             kind: string;
             /** @enum {string} */
@@ -6519,8 +6521,8 @@ export interface operations {
     };
     listNotificationDeliveries: {
         parameters: {
-            query: {
-                channel_id: string;
+            query?: {
+                channel_id?: string;
                 status?: "pending" | "sent" | "failed";
                 limit?: number;
             };

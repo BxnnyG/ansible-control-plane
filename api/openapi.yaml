@@ -1375,7 +1375,7 @@ paths:
       operationId: listNotificationDeliveries
       x-acp-permission: notification.read
       parameters:
-        - {name: channel_id, in: query, required: true, schema: {type: string, format: uuid}}
+        - {name: channel_id, in: query, required: false, schema: {type: string, format: uuid}}
         - {name: status, in: query, required: false, schema: {type: string, enum: [pending, sent, failed]}}
         - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 200, default: 50}}
       responses:
@@ -2672,9 +2672,10 @@ components:
         enabled: {type: boolean}
     NotificationDelivery:
       type: object
-      required: [id, run_id, kind, status, attempts, next_attempt_at, last_error, sent_at, created_at]
+      required: [id, channel_id, run_id, kind, status, attempts, next_attempt_at, last_error, sent_at, created_at]
       properties:
         id: {type: string, format: uuid}
+        channel_id: {type: string, format: uuid}
         run_id: {type: string, format: uuid}
         kind: {type: string}
         status: {type: string, enum: [pending, sent, failed]}

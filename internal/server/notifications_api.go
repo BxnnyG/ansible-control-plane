@@ -33,7 +33,7 @@ type NotificationsAPI interface {
 	ListRules(ctx context.Context, ws uuid.UUID) ([]notify.RuleView, error)
 	UpdateRule(ctx context.Context, ws, id uuid.UUID, in notify.RuleInput) (notify.RuleView, error)
 	DeleteRule(ctx context.Context, ws, id uuid.UUID) error
-	ListDeliveries(ctx context.Context, ws, channelID uuid.UUID, limit int) ([]notify.DeliveryView, error)
+	ListWorkspaceDeliveries(ctx context.Context, ws uuid.UUID, channelID *uuid.UUID, status string, limit int) ([]notify.DeliveryView, error)
 	SendTest(ctx context.Context, ws, id uuid.UUID) error
 }
 
@@ -350,17 +350,21 @@ func notificationRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	// Deliveries: listed per channel (channel_id is required), newest first.
+	// Deliveries: workspace-wide, optionally filtered by channel and status, newest first.
 	az.Handle(r, http.MethodGet, base+"/deliveries", policy.NotificationRead, func(w http.ResponseWriter, req *http.Request) {
 		d, _, ok := target(w, req)
 		if !ok {
 			return
 		}
 		q := req.URL.Query()
-		ch, err := uuid.Parse(q.Get("channel_id"))
-		if err != nil {
-			invalid(w, "channel_id is required")
-			return
+		var ch *uuid.UUID
+		if raw := q.Get("channel_id"); raw != "" {
+			id, err := uuid.Parse(raw)
+			if err != nil {
+				invalid(w, "channel_id must be a UUID")
+				return
+			}
+			ch = &id
 		}
 		status := q.Get("status")
 		switch status {
@@ -378,23 +382,10 @@ func notificationRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc
 			}
 			limit = n
 		}
-		fetch := limit
-		if status != "" {
-			fetch = 200 // filter after fetching the newest page
-		}
-		list, err := svc.ListDeliveries(req.Context(), d.Workspace.ID, ch, fetch)
+		list, err := svc.ListWorkspaceDeliveries(req.Context(), d.Workspace.ID, ch, status, limit)
 		if err != nil {
 			fail(w, "list notification deliveries", err)
 			return
-		}
-		if status != "" {
-			kept := list[:0]
-			for _, v := range list {
-				if v.Status == status && len(kept) < limit {
-					kept = append(kept, v)
-				}
-			}
-			list = kept
 		}
 		policy.WriteJSON(w, http.StatusOK, list)
 	})

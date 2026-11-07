@@ -108,3 +108,12 @@ LIMIT $2;
 DELETE FROM notification_events e
 WHERE e.processed_at IS NOT NULL AND e.processed_at < $1
   AND NOT EXISTS (SELECT 1 FROM notification_deliveries d WHERE d.event_id = e.id AND d.status = 'pending');
+
+-- name: ListWorkspaceNotificationDeliveries :many
+SELECT d.* FROM notification_deliveries d
+JOIN notification_channels c ON c.id = d.channel_id
+WHERE c.workspace_id = @workspace_id
+  AND (sqlc.narg('channel_id')::uuid IS NULL OR d.channel_id = sqlc.narg('channel_id'))
+  AND (sqlc.narg('status')::text IS NULL OR d.status = sqlc.narg('status'))
+ORDER BY d.created_at DESC, d.id DESC
+LIMIT @row_limit;

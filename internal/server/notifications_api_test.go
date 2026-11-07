@@ -19,16 +19,18 @@ import (
 )
 
 type fakeNotify struct {
-	ch        notify.ChannelView
-	rule      notify.RuleView
-	err       error
-	testErr   error
-	gotChan   []notify.ChannelInput
-	gotRule   []notify.RuleInput
-	delivs    []notify.DeliveryView
-	delivLim  int
-	deleted   int
-	testCalls int
+	ch          notify.ChannelView
+	rule        notify.RuleView
+	err         error
+	testErr     error
+	gotChan     []notify.ChannelInput
+	gotRule     []notify.RuleInput
+	delivs      []notify.DeliveryView
+	delivLim    int
+	delivCh     *uuid.UUID
+	delivStatus string
+	deleted     int
+	testCalls   int
 }
 
 func (f *fakeNotify) CreateChannel(_ context.Context, _ uuid.UUID, in notify.ChannelInput, _ uuid.UUID) (notify.ChannelView, error) {
@@ -73,8 +75,8 @@ func (f *fakeNotify) DeleteRule(context.Context, uuid.UUID, uuid.UUID) error {
 	f.deleted++
 	return f.err
 }
-func (f *fakeNotify) ListDeliveries(_ context.Context, _, _ uuid.UUID, limit int) ([]notify.DeliveryView, error) {
-	f.delivLim = limit
+func (f *fakeNotify) ListWorkspaceDeliveries(_ context.Context, _ uuid.UUID, ch *uuid.UUID, status string, limit int) ([]notify.DeliveryView, error) {
+	f.delivLim, f.delivCh, f.delivStatus = limit, ch, status
 	return f.delivs, f.err
 }
 func (f *fakeNotify) SendTest(context.Context, uuid.UUID, uuid.UUID) error {
@@ -145,7 +147,8 @@ func TestNotificationsAuthorization(t *testing.T) {
 		{"bad id", policy.RoleAdmin, "GET", "/channels/nope", "", 404},
 		{"empty patch", policy.RoleAdmin, "PATCH", "/channels/{ch}", `{}`, 422},
 		{"unknown field", policy.RoleAdmin, "POST", "/channels", `{"name":"x","bogus":1}`, 400},
-		{"deliveries need channel", policy.RoleEditor, "GET", "/deliveries", "", 422},
+		{"deliveries workspace-wide", policy.RoleEditor, "GET", "/deliveries", "", 200},
+		{"deliveries bad channel", policy.RoleEditor, "GET", "/deliveries?channel_id=x", "", 422},
 		{"deliveries bad status", policy.RoleEditor, "GET", "/deliveries?channel_id={ch}&status=x", "", 422},
 		{"deliveries bad limit", policy.RoleEditor, "GET", "/deliveries?channel_id={ch}&limit=0", "", 422},
 	}
@@ -190,12 +193,17 @@ func TestNotificationsBehaviour(t *testing.T) {
 		t.Errorf("test send: %d %s", rec.Code, rec.Body.String())
 	}
 
-	// Deliveries filter by status and honour the limit.
-	e.svc.delivs = []notify.DeliveryView{{Status: "failed"}, {Status: "sent"}, {Status: "failed"}, {Status: "failed"}}
+	// Deliveries pass the filters and the limit to the service.
+	e.svc.delivs = []notify.DeliveryView{{Status: "failed"}}
 	rec = e.do("GET", "/deliveries?channel_id="+e.svc.ch.ID.String()+"&status=failed&limit=2", "")
 	var out []notify.DeliveryView
-	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil || len(out) != 2 || e.svc.delivLim != 200 {
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil || len(out) != 1 || e.svc.delivLim != 2 ||
+		e.svc.delivStatus != "failed" || e.svc.delivCh == nil || *e.svc.delivCh != e.svc.ch.ID {
 		t.Errorf("deliveries: %v %d %+v", err, e.svc.delivLim, out)
+	}
+	e.do("GET", "/deliveries", "")
+	if e.svc.delivCh != nil || e.svc.delivLim != 50 {
+		t.Errorf("unfiltered deliveries: %v %d", e.svc.delivCh, e.svc.delivLim)
 	}
 
 	// Validation errors map to 422, conflicts to 409.

@@ -69,6 +69,7 @@ type RuleView struct {
 // DeliveryView is one delivery attempt record.
 type DeliveryView struct {
 	ID            uuid.UUID  `json:"id"`
+	ChannelID     uuid.UUID  `json:"channel_id"`
 	RunID         uuid.UUID  `json:"run_id"`
 	Kind          string     `json:"kind"`
 	Status        string     `json:"status"`
@@ -350,7 +351,7 @@ func (s *Service) ListDeliveries(ctx context.Context, ws, channelID uuid.UUID, l
 	}
 	out := make([]DeliveryView, 0, len(rows))
 	for _, r := range rows {
-		v := DeliveryView{ID: r.ID, RunID: r.RunID, Kind: r.Kind, Status: r.Status, Attempts: int(r.Attempts),
+		v := DeliveryView{ID: r.ID, ChannelID: r.ChannelID, RunID: r.RunID, Kind: r.Kind, Status: r.Status, Attempts: int(r.Attempts),
 			NextAttemptAt: r.NextAttemptAt.Time, LastError: r.LastError, CreatedAt: r.CreatedAt.Time}
 		if r.SentAt.Valid {
 			t := r.SentAt.Time
@@ -375,4 +376,31 @@ func (s *Service) SendTest(ctx context.Context, ws, id uuid.UUID) error {
 	msg := SampleMessage(name, s.publicURL)
 	msg.URL = s.publicURL
 	return sendVia(ctx, s.secrets, s.senders, row, msg)
+}
+
+// ListWorkspaceDeliveries returns the most recent deliveries of the workspace,
+// optionally filtered by channel and status (applied in SQL).
+func (s *Service) ListWorkspaceDeliveries(ctx context.Context, ws uuid.UUID, channelID *uuid.UUID, status string, limit int) ([]DeliveryView, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	p := dbgen.ListWorkspaceNotificationDeliveriesParams{WorkspaceID: ws, ChannelID: pgUUID(channelID), RowLimit: int32(limit)} //nolint:gosec // bounded above
+	if status != "" {
+		p.Status = pgtype.Text{String: status, Valid: true}
+	}
+	rows, err := s.q.ListWorkspaceNotificationDeliveries(ctx, p)
+	if err != nil {
+		return nil, fmt.Errorf("list deliveries: %w", err)
+	}
+	out := make([]DeliveryView, 0, len(rows))
+	for _, r := range rows {
+		v := DeliveryView{ID: r.ID, ChannelID: r.ChannelID, RunID: r.RunID, Kind: r.Kind, Status: r.Status, Attempts: int(r.Attempts),
+			NextAttemptAt: r.NextAttemptAt.Time, LastError: r.LastError, CreatedAt: r.CreatedAt.Time}
+		if r.SentAt.Valid {
+			t := r.SentAt.Time
+			v.SentAt = &t
+		}
+		out = append(out, v)
+	}
+	return out, nil
 }
