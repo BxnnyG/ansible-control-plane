@@ -9,6 +9,7 @@ import (
 	"mime"
 	"net"
 	"net/smtp"
+	"net/textproto"
 	"strconv"
 	"strings"
 	"time"
@@ -29,6 +30,61 @@ func (a plainAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
 		return "", nil, errors.New("refusing to send credentials over an unencrypted connection")
 	}
 	return "PLAIN", []byte("\x00" + a.user + "\x00" + a.pass), nil
+}
+
+// loginAuth implements the legacy LOGIN mechanism for servers that do not
+// advertise PLAIN.
+type loginAuth struct {
+	user, pass string
+	allowPlain bool
+}
+
+func (a loginAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
+	if !server.TLS && !a.allowPlain {
+		return "", nil, errors.New("refusing to send credentials over an unencrypted connection")
+	}
+	return "LOGIN", nil, nil
+}
+
+func (a loginAuth) Next(challenge []byte, more bool) ([]byte, error) {
+	if !more {
+		return nil, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(string(challenge))) {
+	case "username:", "user name:", "username":
+		return []byte(a.user), nil
+	case "password:", "password":
+		return []byte(a.pass), nil
+	}
+	return nil, errors.New("unexpected server challenge")
+}
+
+// smtpAuthFor picks PLAIN when advertised (or when no AUTH list is
+// available), otherwise LOGIN if the server offers it.
+func smtpAuthFor(advertised string, user, pass string, allowPlain bool) smtp.Auth {
+	mechs := strings.Fields(strings.ToUpper(advertised))
+	has := func(m string) bool {
+		for _, x := range mechs {
+			if x == m {
+				return true
+			}
+		}
+		return false
+	}
+	if !has("PLAIN") && has("LOGIN") {
+		return loginAuth{user: user, pass: pass, allowPlain: allowPlain}
+	}
+	return plainAuth{user: user, pass: pass, allowPlain: allowPlain}
+}
+
+// smtpAuthError describes a failed AUTH with the server reply but never the
+// credential.
+func smtpAuthError(err error) error {
+	var te *textproto.Error
+	if errors.As(err, &te) {
+		return fmt.Errorf("smtp authentication failed: %d %s", te.Code, te.Msg)
+	}
+	return fmt.Errorf("smtp authentication failed: %v", err)
 }
 
 func (plainAuth) Next(_ []byte, more bool) ([]byte, error) {
@@ -91,8 +147,9 @@ func (smtpSender) Send(ctx context.Context, ch Channel, cred []byte, msg Message
 		}
 	}
 	if len(cred) > 0 {
-		if err := cl.Auth(plainAuth{user: c.Username, pass: string(cred), allowPlain: sec == SecNone}); err != nil {
-			return errors.New("smtp authentication failed")
+		_, advertised := cl.Extension("AUTH")
+		if err := cl.Auth(smtpAuthFor(advertised, c.Username, string(cred), sec == SecNone)); err != nil {
+			return smtpAuthError(err)
 		}
 	}
 	if err := cl.Mail(c.From); err != nil {

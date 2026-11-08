@@ -2,6 +2,7 @@ package notify
 
 import (
 	"bufio"
+	"encoding/base64"
 	"context"
 	"crypto/tls"
 	"encoding/pem"
@@ -191,6 +192,10 @@ type fakeSMTP struct {
 	to   []string
 	data string
 	done chan struct{}
+	// mechs is the AUTH list advertised in EHLO (default "PLAIN").
+	mechs string
+	// rejectAuth makes every AUTH attempt fail with 535.
+	rejectAuth bool
 }
 
 func startSMTP(t *testing.T, cfg *tls.Config) *fakeSMTP {
@@ -229,9 +234,22 @@ func (f *fakeSMTP) serve(conn net.Conn) {
 		f.mu.Lock()
 		switch {
 		case strings.HasPrefix(line, "EHLO"):
-			w("250-fake\r\n250 AUTH PLAIN")
+			mechs := f.mechs
+			if mechs == "" {
+				mechs = "PLAIN"
+			}
+			w("250-fake\r\n250 AUTH " + mechs)
+		case strings.HasPrefix(line, "AUTH") && f.rejectAuth:
+			w("535 5.7.8 Error: authentication failed")
 		case strings.HasPrefix(line, "AUTH PLAIN"):
 			f.auth = line
+			w("235 ok")
+		case line == "AUTH LOGIN":
+			w("334 VXNlcm5hbWU6")
+			u, _ := r.ReadString('\n')
+			w("334 UGFzc3dvcmQ6")
+			p, _ := r.ReadString('\n')
+			f.auth = "LOGIN " + strings.TrimSpace(u) + " " + strings.TrimSpace(p)
 			w("235 ok")
 		case strings.HasPrefix(line, "MAIL FROM:"):
 			f.from = line
@@ -282,6 +300,57 @@ func TestSMTPPlainInsecure(t *testing.T) {
 	}
 	if !strings.Contains(f.data, "Subject: [ACP] Run failed: site") || !strings.Contains(f.data, "https://acp.example.test/runs/r1") {
 		t.Fatalf("data: %s", f.data)
+	}
+}
+
+func TestSMTPAuthMechanisms(t *testing.T) {
+	b64 := base64.StdEncoding.EncodeToString
+	tests := []struct {
+		name       string
+		mechs      string
+		reject     bool
+		wantAuth   string
+		wantErrSub string
+	}{
+		{"plain only", "PLAIN", false, "AUTH PLAIN " + b64([]byte("\x00user\x00"+dummyCred)), ""},
+		{"plain preferred over login", "LOGIN PLAIN", false, "AUTH PLAIN " + b64([]byte("\x00user\x00"+dummyCred)), ""},
+		{"login fallback", "LOGIN", false, "LOGIN " + b64([]byte("user")) + " " + b64([]byte(dummyCred)), ""},
+		{"rejected shows reply", "PLAIN LOGIN", true, "", "535 5.7.8 Error: authentication failed"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := startSMTP(t, nil)
+			f.mechs, f.rejectAuth = tt.mechs, tt.reject
+			cfg := smtpCfg(f.ln.Addr().String(), "none", `"insecure":true,"username":"user",`)
+			err := (smtpSender{}).Send(context.Background(), chFor(TypeSMTP, cfg), []byte(dummyCred), testMsg())
+			if tt.wantErrSub != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErrSub) || strings.Contains(err.Error(), dummyCred) {
+					t.Fatalf("err = %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			<-f.done
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			if f.auth != tt.wantAuth {
+				t.Fatalf("auth = %q, want %q", f.auth, tt.wantAuth)
+			}
+		})
+	}
+}
+
+func TestNtfyBasicAuth(t *testing.T) {
+	srv, c := capture(t, 200)
+	cfg := `{"url":"` + srv.URL + `","topic":"acp","auth":"basic","username":"user"}`
+	if err := (ntfySender{}).Send(context.Background(), chFor(TypeNtfy, cfg), []byte(dummyCred), testMsg()); err != nil {
+		t.Fatal(err)
+	}
+	want := "Basic " + base64.StdEncoding.EncodeToString([]byte("user:"+dummyCred))
+	if got := c.header.Get("Authorization"); got != want {
+		t.Fatalf("authorization = %q", got)
 	}
 }
 
