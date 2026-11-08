@@ -2,9 +2,9 @@ package notify
 
 import (
 	"bufio"
-	"encoding/base64"
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/pem"
 	"fmt"
 	"io"

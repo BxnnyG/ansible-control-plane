@@ -84,7 +84,7 @@ func smtpAuthError(err error) error {
 	if errors.As(err, &te) {
 		return fmt.Errorf("smtp authentication failed: %d %s", te.Code, te.Msg)
 	}
-	return fmt.Errorf("smtp authentication failed: %v", err)
+	return fmt.Errorf("smtp authentication failed: %w", err)
 }
 
 func (plainAuth) Next(_ []byte, more bool) ([]byte, error) {
