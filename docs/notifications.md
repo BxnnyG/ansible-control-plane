@@ -35,7 +35,7 @@ A run can match several kinds, but a channel gets at most one message per run. P
 | `matrix` | `homeserver`, `room_id` | Access token (required) |
 | `smtp` | `host`, `port`, `security` (`starttls` default, `tls`, `none`), `insecure` (must be true for `none`), `username`, `from`, `to` (list) | Password |
 | `gotify` | `url`, `priority` | App token (required) |
-| `ntfy` | `url`, `topic`, `priority` | Access token |
+| `ntfy` | `url`, `topic`, `priority`, `auth` (`token` default, or `basic`), `username` (basic only) | Access token, or password with `auth: basic` |
 
 Secrets live only in the secrets store and are resolved per send. Any secret type holding a single value works; the CLI creates `api_token` secrets by default (`--secret-type password` for SMTP is fine). Redirects and environment proxies are not followed; the timeout is 10 s; TLS 1.2+ is enforced.
 
@@ -113,11 +113,15 @@ Open **Notifications** in the workspace navigation. The page has three sections:
 
 The app container sends every message itself, so it must be allowed to reach the target (firewall and egress allowlist). The same guides are available in the UI.
 
-- **ntfy:** use `https://ntfy.sh` or your own server; choose an unguessable topic (on public servers the topic is the only protection); an access token (`tk_...`) is optional and only needed for servers with access control; subscribe to the topic in the ntfy app; priority 1-5 is optional.
+- **ntfy:** use `https://ntfy.sh` or your own server; choose an unguessable topic (on public servers the topic is the only protection); authentication is optional and only needed for servers with access control: either an access token (`tk_...`, sent as Bearer) or username and password (`auth: basic`, HTTP basic authentication); subscribe to the topic in the ntfy app; priority 1-5 is optional.
 - **Matrix:** create a dedicated bot user; get its access token (Element: Settings, Help & About, Advanced, or the login API); invite the bot to the room and accept the invite; use the internal room ID (`!abc:server`, Room settings, Advanced), not the alias. **Encrypted rooms are not supported:** the sender posts plain `m.room.message` events without end-to-end encryption, so use an unencrypted room.
-- **SMTP:** port 587 with STARTTLS, 465 with TLS, 25 without encryption (requires the explicit insecure confirmation). Providers with two-factor authentication need an app password. The From address must be allowed by the server. Empty port means the default of the chosen mode.
+- **SMTP:** port 587 with STARTTLS, 465 with TLS, 25 without encryption (requires the explicit insecure confirmation). Providers with two-factor authentication need an app password. The From address must be allowed by the server. Empty port means the default of the chosen mode. PLAIN authentication is preferred; LOGIN is used when the server does not advertise PLAIN. Use the mailbox or app password of the SMTP account, not your ACP login password (the form disables browser autofill for the credential). A failed login reports the server reply (for example `535 5.7.8 ...`), never the credential.
 - **Gotify:** create an application in Gotify and use its application token (not a client token); URL is the base URL without `/message`.
 - **Webhook:** HMAC (default): header `X-ACP-Signature: sha256=<hex>`, the HMAC-SHA256 of the raw body keyed with the credential (no header without a credential); bearer: `Authorization: Bearer <credential>`. Every request has `X-ACP-Event`. Verify on the raw bytes, for example `printf "sha256=%s" "$(openssl dgst -sha256 -hmac "$KEY" -hex < body.json | sed 's/^.* //')"`, and compare in constant time.
+
+### Legacy Semaphore links
+
+Old Semaphore bookmarks are redirected in the SPA to relative ACP paths: `/auth/login*` to `/login`, `/project/<n>/templates*` and `/project/<n>/views/*/templates*` to `/templates`, `history`/`tasks` to `/runs`, `inventory` to `/inventories`, `keys` to `/secrets`, any other `/project/*` to `/`.
 
 ## CLI
 

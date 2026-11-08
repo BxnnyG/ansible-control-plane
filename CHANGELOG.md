@@ -11,6 +11,15 @@ All notable changes are documented here. The format follows
 - **Notification channels in the UI:** per-type setup guides, field help and defaults, inline credential entry (creates the encrypted secret for you) and replacing a linked secret's value, and a hint for channels without rules.
 - **Draft test:** `POST /api/v1/workspaces/{workspace}/notifications/channels/test` sends a test message through an unsaved channel definition (also for edits of existing channels); the credential is used in memory only, audited as `notification.channel.test_draft`, rate limited to 10 per minute and user.
 
+### Changed
+
+- **ntfy:** channels can authenticate with username and password (`auth: basic`) in addition to access tokens; existing channels keep using tokens.
+- **SMTP:** LOGIN mechanism as fallback when PLAIN is not advertised; failed logins now include the server reply; the credential inputs disable browser autofill and the form reminds to use the mailbox password instead of the ACP login.
+
+### Fixed
+
+- Old Semaphore URLs (`/auth/login`, `/project/<n>/...`) redirect to the matching ACP page instead of showing a 404.
+
 ## [1.1.0] - 2026-11-07
 
 ### Added
