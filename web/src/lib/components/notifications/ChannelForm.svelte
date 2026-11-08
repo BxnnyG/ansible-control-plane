@@ -73,7 +73,7 @@
   const usesTls = $derived(type !== 'smtp' || f.security !== 'none');
   const guide = $derived(GUIDES[type]);
   const help = $derived(FIELD_HELP[type]);
-  const credLabel = $derived(credentialLabel(type, f.auth));
+  const credLabel = $derived(credentialLabel(type, type === 'ntfy' ? f.ntfyAuth : f.auth));
   const hasCred = $derived(
     credMode === 'new' ? newCred !== '' : credMode === 'existing' && secretId !== null,
   );
@@ -261,7 +261,14 @@
     {/if}
     <div>
       <label class={label} for="nc-user">Username (optional)</label>
-      <input id="nc-user" class={input} bind:value={f.username} autocomplete="off" />
+      <input
+        id="nc-user"
+        class={input}
+        bind:value={f.username}
+        autocomplete="off"
+        data-1p-ignore
+        data-lpignore="true"
+      />
       <p class="mt-1 text-xs text-muted">{help.username}</p>
     </div>
     <div>
@@ -297,6 +304,28 @@
       <input id="nc-url" class={input} bind:value={f.url} placeholder={NTFY_DEFAULT_URL} />
       <p class="mt-1 text-xs text-muted">{help.url}</p>
     </div>
+    <div>
+      <label class={label} for="nc-nauth">Authentication</label>
+      <select id="nc-nauth" class={input} bind:value={f.ntfyAuth}>
+        <option value="token">Access token</option>
+        <option value="basic">Username and password</option>
+      </select>
+      <p class="mt-1 text-xs text-muted">{help.auth}</p>
+    </div>
+    {#if f.ntfyAuth === 'basic'}
+      <div>
+        <label class={label} for="nc-nuser">Username</label>
+        <input
+          id="nc-nuser"
+          class={input}
+          bind:value={f.username}
+          autocomplete="off"
+          data-1p-ignore
+          data-lpignore="true"
+        />
+        <p class="mt-1 text-xs text-muted">{help.username}</p>
+      </div>
+    {/if}
     <div>
       <label class={label} for="nc-topic">Topic</label>
       <input id="nc-topic" class={input} bind:value={f.topic} placeholder="acp-7f3k9x2m1q8d4v6z" />
@@ -340,6 +369,8 @@
           class={input}
           type="password"
           autocomplete="new-password"
+          data-1p-ignore
+          data-lpignore="true"
           bind:value={replaceCred}
           placeholder="Leave empty to keep the stored value"
         />
@@ -355,7 +386,12 @@
         type="password"
         autocomplete="new-password"
         bind:value={newCred}
+        data-1p-ignore
+        data-lpignore="true"
       />
+      {#if type === 'smtp'}
+        <p class="text-xs text-muted">{help.credential}</p>
+      {/if}
       <p class="text-xs text-muted">
         Stored encrypted as secret "{credentialSecretName(name)}" ({credentialSecretType(type)});
         the value is never shown again.

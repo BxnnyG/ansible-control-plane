@@ -20,7 +20,7 @@ export const GUIDES: Record<ChannelType, Guide> = {
     steps: [
       'Choose a server: the public https://ntfy.sh needs no account, or enter the URL of your self-hosted ntfy server.',
       'Pick an unguessable topic name (for example a random string of 16+ characters). On a public server anyone who knows the topic can read and post to it.',
-      'Optional: if the server requires authentication (self-hosted with access control, or a reserved topic), create an access token (it starts with tk_) in the ntfy web app under Account, and enter it as the credential.',
+      'Optional: if the server requires authentication (self-hosted with access control, or a reserved topic), choose how to log in. Access token: create a token (it starts with tk_) in the ntfy web app under Account and enter it as the credential. Username and password: choose basic authentication, enter the ntfy username and use the account password as credential.',
       'Install the ntfy app (or open the web app) and subscribe to the same topic on the same server.',
       'Optional priority 1-5 (1 min, 3 default, 5 max/urgent). Leave empty for the default.',
       'Use "Send test" to verify. The message should arrive in your subscription within seconds.',
@@ -105,6 +105,8 @@ export const FIELD_HELP: Record<ChannelType, Record<string, string>> = {
     port: 'Leave empty for the default of the selected security mode.',
     security: 'STARTTLS upgrades a plain connection (587); TLS is encrypted from the start (465).',
     username: 'Required when a password is set. Often the full e-mail address.',
+    credential:
+      'Use the mailbox or app password of this SMTP account, not your ACP login password.',
     from: 'Sender address. The server must allow it.',
     to: 'One or more recipients separated by commas.',
   },
@@ -114,6 +116,8 @@ export const FIELD_HELP: Record<ChannelType, Record<string, string>> = {
   },
   ntfy: {
     url: 'ntfy server. Use https://ntfy.sh for the public service.',
+    auth: 'Access token (tk_...) is sent as a Bearer token; username and password use HTTP basic authentication.',
+    username: 'ntfy account name. Only used with username and password.',
     topic:
       'Single word without slashes. Choose an unguessable value; on public servers the topic is the only protection.',
     priority: '1 (min) to 5 (max); empty uses the default 3.',
@@ -133,7 +137,10 @@ export function smtpPortHint(security: 'starttls' | 'tls' | 'none'): string {
 export const NTFY_DEFAULT_URL = 'https://ntfy.sh';
 
 /** Label for the credential input, depending on type (and webhook auth mode). */
-export function credentialLabel(type: ChannelType, auth: 'hmac' | 'bearer' = 'hmac'): string {
+export function credentialLabel(
+  type: ChannelType,
+  auth: 'hmac' | 'bearer' | 'token' | 'basic' = 'hmac',
+): string {
   switch (type) {
     case 'smtp':
       return 'SMTP password';
@@ -142,7 +149,7 @@ export function credentialLabel(type: ChannelType, auth: 'hmac' | 'bearer' = 'hm
     case 'matrix':
       return 'Access token';
     case 'ntfy':
-      return 'Access token (tk_...)';
+      return auth === 'basic' ? 'ntfy password' : 'Access token (tk_...)';
     case 'webhook':
       return auth === 'bearer' ? 'Bearer token' : 'HMAC signing key';
   }

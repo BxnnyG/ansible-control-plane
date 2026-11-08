@@ -38,6 +38,7 @@ export function eventLabel(k: string): string {
 export interface ChannelFields {
   url: string;
   auth: 'hmac' | 'bearer';
+  ntfyAuth: 'token' | 'basic';
   homeserver: string;
   roomId: string;
   host: string;
@@ -55,6 +56,7 @@ export function emptyFields(): ChannelFields {
   return {
     url: '',
     auth: 'hmac',
+    ntfyAuth: 'token',
     homeserver: '',
     roomId: '',
     host: '',
@@ -81,6 +83,7 @@ export function fieldsFromConfig(
   const c = config ?? {};
   f.url = str(c.url);
   if (type === 'webhook' && c.auth === 'bearer') f.auth = 'bearer';
+  if (type === 'ntfy' && c.auth === 'basic') f.ntfyAuth = 'basic';
   f.homeserver = str(c.homeserver);
   f.roomId = str(c.room_id);
   f.host = str(c.host);
@@ -141,6 +144,10 @@ export function buildChannelConfig(type: ChannelType, f: ChannelFields): Record<
     case 'ntfy':
       set('url', f.url.trim());
       set('topic', f.topic.trim());
+      if (f.ntfyAuth === 'basic') {
+        out.auth = 'basic';
+        set('username', f.username.trim());
+      }
       set('priority', intOrUndef(f.priority));
       break;
   }
@@ -204,6 +211,8 @@ export function validateChannel(
       if (!isHttpUrl(f.url)) return 'URL must be an http(s) URL.';
       if (!f.topic.trim() || /[/?# ]/.test(f.topic.trim()))
         return 'Topic must be a single path segment.';
+      if (f.ntfyAuth === 'basic' && hasSecret && !f.username.trim())
+        return 'Username is required for basic authentication.';
       return null;
   }
 }
