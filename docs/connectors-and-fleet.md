@@ -285,6 +285,38 @@ get a commit on their write branch (same path as applying a group rule). A name 
 already exists in the inventory is refused (409), as is a host that is meanwhile linked.
 Every add is written to the audit log.
 
+## Tracked networks
+
+Not every discovered network belongs in the fleet (Wi-Fi, phones, guests). Each network has a
+`tracked` flag (default: true), and the workspace has a default for newly discovered networks
+(`fleet_new_networks_tracked`, default true). Networks are identified by connector and external
+key, so the flag survives every sync; a network that disappears from its connector is pruned and,
+if it comes back, starts with the workspace default.
+
+A host is **hidden by default** when it has an address in at least one known network and every
+such network is untracked. A host in at least one tracked network stays visible; a host with no
+address in any known network also stays visible, because nothing marks it as opted out.
+
+Hidden by default (add `include_untracked=true` to see everything):
+
+- `GET /hosts` (this includes `managed=false`, the Unmanaged tab) and the dashboard hosts tile
+- `GET /alerts` (alerts linked to hidden hosts; unlinked alerts stay visible)
+
+Not affected: `GET /networks` always lists every network (with `tracked`) and per-network host
+counts, conflicts, group rules and remediation targeting (they keep using all hosts, so a
+group rule with a CIDR still matches hosts of untracked networks; tracking only changes the
+views). Merge and connector syncs also keep collecting untracked networks.
+
+- `PATCH /networks/{id}` with `{"tracked": bool}`, and `PATCH /networks` with either
+  `{"ids": [...], "tracked": bool}` or `{"track_only": [...]}` (tracks exactly those, untracks
+  all others). `GET`/`PUT /fleet/settings` read and set `new_networks_tracked`.
+  Changing needs `fleet.manage`; network-scoped memberships may not change it. Changes are audited.
+- UI: the **Fleet** page has a Tracked toggle per network, "Track only selected..." and
+  "Show hidden networks" (hidden networks are dimmed, hosts of hidden networks appear then);
+  the setup wizard has a **Networks** step and **Settings** shows the same panel.
+- CLI: `acp admin fleet network list|track|untrack --workspace SLUG [--network NAME|ID]`;
+  `--network` takes the id, or a unique external key, description or CIDR.
+
 ## Network scopes
 
 A membership can be limited to `network` scopes (ADR-0007). A scope names a
@@ -391,12 +423,14 @@ Run inside the app container, for example
   object still references it. Deleting an `alert_webhook` connector (also via the API) removes
   its generated secret.
 - `acp admin fleet merge|hosts|unmanaged|conflicts` – re-run the merge, list hosts, list
-  unmanaged hosts, list conflicts (`--state open|resolved|all`). All take `--workspace SLUG`.
+  unmanaged hosts (`--include-untracked` also shows hosts of untracked networks), list conflicts (`--state open|resolved|all`). All take `--workspace SLUG`.
 - `acp admin remediation list|create` – list rules, or create one with `--name`, `--template NAME|ID`,
   `--target host|group|network` (`--group NAME`), `--connector-type`, `--service-regex`,
   `--summary-regex`, `--min-severity`, `--check-first`, `--disabled`.
 - `acp admin alert remediate --alert ID --rule NAME|ID [--skip-check]` – start the fix of an
   alert with workspace authority (no scope check, no audit entry, like `acp admin run start`).
+- `acp admin fleet network list|track|untrack --network NAME|ID` – choose which networks the
+  fleet tracks (audited as `cli`).
 - `acp admin fleet add --host NAME|ID --inventory SLUG --group GROUP` – add an unmanaged
   host to an inventory group (`--name` overrides the host name; `--author-name` and
   `--author-email` are used for Git inventories).

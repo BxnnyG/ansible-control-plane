@@ -8,6 +8,7 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- **Tracked networks:** choose which discovered networks the fleet follows (migration 00020). Untracked networks are hidden from host lists, unmanaged hosts, alerts and the dashboard unless `include_untracked=true`; per-network and bulk (`track_only`) API, workspace default for new networks, a Tracked toggle on the Fleet page, a setup wizard step, a Settings panel and `acp admin fleet network list|track|untrack`.
 - **Web UI redesign:** light/dark design tokens with an indigo to violet accent, semantic status pills, a sidebar grouped into Operate / Configure / Security with an off-canvas drawer on phones, a new Dashboard home page (runs of the last 24 hours, running now, hosts online, open alerts, drift, recent runs, failing templates, connector health) and responsive pages: tables become stacked cards below 1024 px, row actions collapse into a menu, dialogs become bottom sheets, long connector warnings collapse into an expandable badge.
 - **Notification channels in the UI:** per-type setup guides, field help and defaults, inline credential entry (creates the encrypted secret for you) and replacing a linked secret's value, and a hint for channels without rules.
 - **Draft test:** `POST /api/v1/workspaces/{workspace}/notifications/channels/test` sends a test message through an unsaved channel definition (also for edits of existing channels); the credential is used in memory only, audited as `notification.channel.test_draft`, rate limited to 10 per minute and user.
