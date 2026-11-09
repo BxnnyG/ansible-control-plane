@@ -30,6 +30,10 @@ type FleetAPI interface {
 	Conflicts(ctx context.Context, ws uuid.UUID, state string, visible fleet.Visible) ([]fleet.ConflictView, error)
 	Alerts(ctx context.Context, ws uuid.UUID, f fleet.AlertFilter, visible fleet.Visible) ([]fleet.AlertView, error)
 	Acknowledge(ctx context.Context, ws, id, user uuid.UUID, visible fleet.Visible) (fleet.ConflictView, error)
+	SetTracked(ctx context.Context, ws uuid.UUID, ids []uuid.UUID, tracked bool) (int, error)
+	TrackOnly(ctx context.Context, ws uuid.UUID, ids []uuid.UUID) (int, error)
+	NewNetworksTracked(ctx context.Context, ws uuid.UUID) (bool, error)
+	SetNewNetworksTracked(ctx context.Context, ws uuid.UUID, tracked bool) error
 }
 
 // FleetAdder adds unmanaged fleet hosts to inventories; fleet.Adder implements
@@ -42,6 +46,22 @@ type FleetAdder interface {
 func WithFleetAdd(a FleetAdder) Option { return func(o *routerOpts) { o.fleetAdd = a } }
 
 const maxFleetAddBody = 4 << 10
+
+// maxFleetTrackBody bounds the network tracking bodies (a few hundred UUIDs).
+const maxFleetTrackBody = 64 << 10
+
+// includeUntracked parses the include_untracked query parameter. It reports
+// false and answers 400 on a malformed value.
+func includeUntracked(w http.ResponseWriter, req *http.Request) (include, ok bool) {
+	switch req.URL.Query().Get("include_untracked") {
+	case "", "false", "0":
+		return false, true
+	case "true", "1":
+		return true, true
+	}
+	policy.WriteJSON(w, http.StatusBadRequest, apiError{Error: "include_untracked must be true or false", Code: "bad_request"})
+	return false, false
+}
 
 // WithFleet mounts the fleet API. It requires WithPolicy.
 func WithFleet(f FleetAPI) Option { return func(o *routerOpts) { o.fleet = f } }
@@ -118,13 +138,143 @@ func fleetRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc FleetA
 		policy.WriteJSON(w, http.StatusOK, list)
 	})
 
+	// Tracking changes are workspace-wide, so scoped memberships may not make them.
+	unrestricted := func(w http.ResponseWriter, req *http.Request) (policy.Decision, bool) {
+		d, vis, ok := access(w, req)
+		if !ok {
+			return d, false
+		}
+		if vis != nil {
+			policy.WriteJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
+			return d, false
+		}
+		return d, true
+	}
+	decode := func(w http.ResponseWriter, req *http.Request, dst any) bool {
+		dec := json.NewDecoder(http.MaxBytesReader(w, req.Body, maxFleetTrackBody))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(dst); err != nil {
+			policy.WriteJSON(w, http.StatusBadRequest, apiError{Error: "malformed request", Code: "bad_request"})
+			return false
+		}
+		return true
+	}
+	az.Handle(r, http.MethodPatch, base+"/networks", policy.FleetManage, func(w http.ResponseWriter, req *http.Request) {
+		d, ok := unrestricted(w, req)
+		if !ok {
+			return
+		}
+		var body struct {
+			IDs       []uuid.UUID  `json:"ids"`
+			Tracked   *bool        `json:"tracked"`
+			TrackOnly *[]uuid.UUID `json:"track_only"`
+		}
+		if !decode(w, req, &body) {
+			return
+		}
+		if (body.TrackOnly != nil) == (body.Tracked != nil) || (body.TrackOnly != nil && len(body.IDs) > 0) {
+			policy.WriteJSON(w, http.StatusBadRequest, apiError{Error: "give either ids with tracked, or track_only", Code: "bad_request"})
+			return
+		}
+		var n int
+		var err error
+		details := map[string]any{}
+		if body.TrackOnly != nil {
+			n, err = svc.TrackOnly(req.Context(), d.Workspace.ID, *body.TrackOnly)
+			details["track_only"] = len(*body.TrackOnly)
+		} else {
+			n, err = svc.SetTracked(req.Context(), d.Workspace.ID, body.IDs, *body.Tracked)
+			details["tracked"], details["networks"] = *body.Tracked, len(body.IDs)
+		}
+		if err != nil {
+			fail(w, "track networks", err)
+			return
+		}
+		details["updated"] = n
+		audit(req, d, "fleet.networks.track", "workspace", d.Workspace.ID.String(), details)
+		policy.WriteJSON(w, http.StatusOK, map[string]int{"updated": n})
+	})
+
+	az.Handle(r, http.MethodPatch, base+"/networks/{id}", policy.FleetManage, func(w http.ResponseWriter, req *http.Request) {
+		d, ok := unrestricted(w, req)
+		if !ok {
+			return
+		}
+		id, err := uuid.Parse(chi.URLParam(req, "id"))
+		if err != nil {
+			notFound(w, "network")
+			return
+		}
+		var body struct {
+			Tracked *bool `json:"tracked"`
+		}
+		if !decode(w, req, &body) {
+			return
+		}
+		if body.Tracked == nil {
+			policy.WriteJSON(w, http.StatusBadRequest, apiError{Error: "tracked is required", Code: "bad_request"})
+			return
+		}
+		n, err := svc.SetTracked(req.Context(), d.Workspace.ID, []uuid.UUID{id}, *body.Tracked)
+		if err != nil {
+			fail(w, "track network", err)
+			return
+		}
+		if n == 0 {
+			notFound(w, "network")
+			return
+		}
+		audit(req, d, "fleet.network.track", "network", id.String(), map[string]any{"tracked": *body.Tracked})
+		policy.WriteJSON(w, http.StatusOK, map[string]int{"updated": n})
+	})
+
+	az.Handle(r, http.MethodGet, base+"/fleet/settings", policy.FleetRead, func(w http.ResponseWriter, req *http.Request) {
+		d, _, ok := access(w, req)
+		if !ok {
+			return
+		}
+		v, err := svc.NewNetworksTracked(req.Context(), d.Workspace.ID)
+		if err != nil {
+			fail(w, "get fleet settings", err)
+			return
+		}
+		policy.WriteJSON(w, http.StatusOK, map[string]bool{"new_networks_tracked": v})
+	})
+
+	az.Handle(r, http.MethodPut, base+"/fleet/settings", policy.FleetManage, func(w http.ResponseWriter, req *http.Request) {
+		d, ok := unrestricted(w, req)
+		if !ok {
+			return
+		}
+		var body struct {
+			NewNetworksTracked *bool `json:"new_networks_tracked"`
+		}
+		if !decode(w, req, &body) {
+			return
+		}
+		if body.NewNetworksTracked == nil {
+			policy.WriteJSON(w, http.StatusBadRequest, apiError{Error: "new_networks_tracked is required", Code: "bad_request"})
+			return
+		}
+		if err := svc.SetNewNetworksTracked(req.Context(), d.Workspace.ID, *body.NewNetworksTracked); err != nil {
+			fail(w, "set fleet settings", err)
+			return
+		}
+		audit(req, d, "fleet.settings.update", "workspace", d.Workspace.ID.String(), map[string]any{"new_networks_tracked": *body.NewNetworksTracked})
+		policy.WriteJSON(w, http.StatusOK, map[string]bool{"new_networks_tracked": *body.NewNetworksTracked})
+	})
+
 	az.Handle(r, http.MethodGet, base+"/hosts", policy.FleetRead, func(w http.ResponseWriter, req *http.Request) {
 		d, vis, ok := access(w, req)
 		if !ok {
 			return
 		}
 		q := req.URL.Query()
-		f := fleet.HostFilter{Q: q.Get("q")}
+		inc, ok := includeUntracked(w, req)
+		if !ok {
+			return
+		}
+		f := fleet.HostFilter{Q: q.Get("q"), ExcludeUntracked: !inc}
 		if s := q.Get("network"); s != "" {
 			id, err := uuid.Parse(s)
 			if err != nil {
@@ -216,7 +366,11 @@ func fleetRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc FleetA
 			return
 		}
 		q := req.URL.Query()
-		f := fleet.AlertFilter{State: q.Get("state")}
+		inc, ok := includeUntracked(w, req)
+		if !ok {
+			return
+		}
+		f := fleet.AlertFilter{State: q.Get("state"), ExcludeUntracked: !inc}
 		switch f.State {
 		case "", fleet.AlertOpen, fleet.AlertResolved:
 		default:

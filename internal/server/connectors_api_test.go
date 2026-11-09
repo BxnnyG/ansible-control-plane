@@ -108,6 +108,40 @@ type fakeFleet struct {
 	acked     []uuid.UUID
 	alerts    []fleet.AlertView
 	lastAlert fleet.AlertFilter
+	lastHosts fleet.HostFilter
+	tracking  trackingCalls
+}
+
+// trackingCalls records the network tracking calls of the fleet fake.
+type trackingCalls struct {
+	setIDs     []uuid.UUID
+	setTracked bool
+	only       []uuid.UUID
+	onlyCalled bool
+	newDefault bool
+	unknown    bool // SetTracked finds no network
+}
+
+func (f *fakeFleet) SetTracked(_ context.Context, _ uuid.UUID, ids []uuid.UUID, tracked bool) (int, error) {
+	f.tracking.setIDs, f.tracking.setTracked = ids, tracked
+	if f.tracking.unknown {
+		return 0, nil
+	}
+	return len(ids), nil
+}
+
+func (f *fakeFleet) TrackOnly(_ context.Context, _ uuid.UUID, ids []uuid.UUID) (int, error) {
+	f.tracking.only, f.tracking.onlyCalled = ids, true
+	return 2, nil
+}
+
+func (f *fakeFleet) NewNetworksTracked(context.Context, uuid.UUID) (bool, error) {
+	return f.tracking.newDefault, nil
+}
+
+func (f *fakeFleet) SetNewNetworksTracked(_ context.Context, _ uuid.UUID, v bool) error {
+	f.tracking.newDefault = v
+	return nil
 }
 
 func (f *fakeFleet) Alerts(_ context.Context, _ uuid.UUID, fl fleet.AlertFilter, v fleet.Visible) ([]fleet.AlertView, error) {
@@ -150,6 +184,7 @@ func (f *fakeFleet) Networks(_ context.Context, _ uuid.UUID, allow func(uuid.UUI
 }
 
 func (f *fakeFleet) Hosts(_ context.Context, _ uuid.UUID, fl fleet.HostFilter, v fleet.Visible) ([]fleet.HostView, error) {
+	f.lastHosts = fl
 	out := []fleet.HostView{}
 	for _, h := range f.hosts {
 		if (v == nil || v(h.IPs)) && (!fl.Conflicts || h.OpenConflicts > 0) && (fl.Q == "" || strings.Contains(h.Name, fl.Q)) {

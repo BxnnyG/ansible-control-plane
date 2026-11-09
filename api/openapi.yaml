@@ -984,6 +984,47 @@ paths:
       responses:
         '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/FleetNetwork'}}}}}
         default: {$ref: '#/components/responses/Error'}
+    patch:
+      tags: [fleet]
+      operationId: trackFleetNetworks
+      summary: Bulk-change which networks the fleet tracks
+      description: Either set `tracked` on `ids`, or give `track_only` to track exactly those networks and untrack all others.
+      x-acp-permission: fleet.manage
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/FleetNetworksTrackInput'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/FleetTrackResult'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/networks/{id}:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    patch:
+      tags: [fleet]
+      operationId: trackFleetNetwork
+      summary: Track or untrack one network
+      x-acp-permission: fleet.manage
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/FleetNetworkTrackInput'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/FleetTrackResult'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/fleet/settings:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [fleet]
+      operationId: getFleetSettings
+      x-acp-permission: fleet.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/FleetSettings'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    put:
+      tags: [fleet]
+      operationId: setFleetSettings
+      x-acp-permission: fleet.manage
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/FleetSettings'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/FleetSettings'}}}}
+        default: {$ref: '#/components/responses/Error'}
   /api/v1/workspaces/{workspace}/hosts:
     parameters: [{$ref: '#/components/parameters/Workspace'}]
     get:
@@ -996,6 +1037,7 @@ paths:
         - {name: conflicts, in: query, required: false, schema: {type: boolean}}
         - {name: alerts, in: query, required: false, schema: {type: boolean}}
         - {name: managed, in: query, required: false, schema: {type: boolean}, description: false lists hosts not linked to any inventory host.}
+        - {name: include_untracked, in: query, required: false, schema: {type: boolean}, description: true also returns hosts whose only networks are untracked.}
       responses:
         '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/FleetHost'}}}}}
         default: {$ref: '#/components/responses/Error'}
@@ -1031,6 +1073,7 @@ paths:
         - {name: state, in: query, required: false, schema: {type: string, enum: [open, resolved]}}
         - {name: host_id, in: query, required: false, schema: {type: string, format: uuid}}
         - {name: connector, in: query, required: false, schema: {type: string, format: uuid}}
+        - {name: include_untracked, in: query, required: false, schema: {type: boolean}, description: true also returns hosts whose only networks are untracked.}
       responses:
         '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/FleetAlert'}}}}}
         default: {$ref: '#/components/responses/Error'}
@@ -2243,7 +2286,7 @@ components:
         open_alerts: {type: integer}
     FleetNetwork:
       type: object
-      required: [id, connector_id, connector, external_key, cidr, vlan, interface, description, source, first_seen, last_seen, host_count, counts]
+      required: [id, connector_id, connector, external_key, cidr, vlan, interface, description, source, tracked, first_seen, last_seen, host_count, counts]
       properties:
         id: {type: string, format: uuid}
         connector_id: {type: string, format: uuid}
@@ -2254,10 +2297,32 @@ components:
         interface: {type: string}
         description: {type: string}
         source: {type: string}
+        tracked: {type: boolean, description: Untracked networks are hidden from host lists, counts and alerts unless include_untracked=true.}
         first_seen: {type: string, format: date-time}
         last_seen: {type: string, format: date-time}
         host_count: {type: integer}
         counts: {$ref: '#/components/schemas/FleetNetworkCounts', description: Status counters of the visible hosts in the network.}
+    FleetNetworkTrackInput:
+      type: object
+      required: [tracked]
+      properties:
+        tracked: {type: boolean}
+    FleetNetworksTrackInput:
+      type: object
+      properties:
+        ids: {type: array, items: {type: string, format: uuid}}
+        tracked: {type: boolean}
+        track_only: {type: array, items: {type: string, format: uuid}, description: Track exactly these networks, untrack the rest.}
+    FleetTrackResult:
+      type: object
+      required: [updated]
+      properties:
+        updated: {type: integer}
+    FleetSettings:
+      type: object
+      required: [new_networks_tracked]
+      properties:
+        new_networks_tracked: {type: boolean, description: Whether newly discovered networks start tracked.}
     FleetAnsibleLink:
       type: object
       description: An inventory host linked to a fleet host.
