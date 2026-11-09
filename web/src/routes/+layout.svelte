@@ -36,7 +36,13 @@
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => labelTables(document));
     };
-    const observer = new MutationObserver(relabel);
+    // Only table-related insertions matter; ignore everything else (e.g. streaming log lines).
+    const tableNode = (n: Node) =>
+      n instanceof Element &&
+      (n.matches('table, thead, tbody, tr, td, th') || !!n.querySelector('table'));
+    const observer = new MutationObserver((records) => {
+      if (records.some((r) => [...r.addedNodes].some(tableNode))) relabel();
+    });
     observer.observe(document.body, { childList: true, subtree: true });
     relabel();
     return () => {

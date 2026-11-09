@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { goto } from '$app/navigation';
   import { api, type Project, type SecretMeta } from '$lib/api';
@@ -32,7 +33,8 @@
   }
 
   $effect(() => {
-    if (session.slug && canRead) void load(session.slug);
+    const ws = session.slug;
+    if (ws && canRead) untrack(() => void load(ws));
     else loading = false;
   });
 </script>

@@ -15,6 +15,7 @@
   const canCancel = $derived(session.can('run.cancel'));
 
   let run = $state<RunDetail | null>(null);
+  const runId = $derived(run?.id ?? '');
   let error = $state<string | null>(null);
   let now = $state(Date.now());
   let busy = $state(false);
@@ -142,7 +143,7 @@
 
   <section class="mb-6" aria-labelledby="log-h">
     <h2 id="log-h" class="mb-2 text-lg font-medium">Log</h2>
-    <LogViewer {ws} runId={run.id} onstatus={applyStatus} />
+    <LogViewer {ws} {runId} onstatus={applyStatus} />
   </section>
 
   <section aria-labelledby="hosts-h">

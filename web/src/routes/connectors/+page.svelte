@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { api, type Connector, type ConnectorCreated, type ConnectorType } from '$lib/api';
   import { fmtDuration, statusClass, statusLabel } from '$lib/connectors';
@@ -38,7 +39,8 @@
   }
 
   $effect(() => {
-    if (session.slug && canRead) void load(session.slug);
+    const ws = session.slug;
+    if (ws && canRead) untrack(() => void load(ws));
     else loading = false;
   });
 

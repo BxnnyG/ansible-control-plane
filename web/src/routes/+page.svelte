@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { api, type Connector, type FleetAlert, type FleetHost, type Run } from '$lib/api';
   import {
     connectorHealth,
@@ -59,9 +60,11 @@
   $effect(() => {
     const ws = session.slug;
     if (!ws) return;
-    void load(ws);
+    // Permissions are read here (tracked) so a workspace switch reloads once they are known.
+    void [canRuns, canFleet, canConnectors];
+    untrack(() => void load(ws));
     // Keep the numbers fresh without a live stream.
-    const t = setInterval(() => void load(ws), 30_000);
+    const t = setInterval(() => untrack(() => void load(ws)), 30_000);
     return () => clearInterval(t);
   });
 

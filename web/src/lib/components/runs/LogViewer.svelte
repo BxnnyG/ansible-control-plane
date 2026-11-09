@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { runStreamUrl, type RunStatusEvent } from '$lib/api';
+  import { openRunLog } from '$lib/runStream';
   import { segmentStyle } from '$lib/ansi';
   import { LogModel, parseJsonEvent, parseLogEvent, searchLines, type LogLine } from '$lib/runlog';
   import { btn, input } from '$lib/ui';
@@ -22,8 +24,18 @@
   const hitSet = $derived(new Set(hits));
   const current = $derived(hits.length > 0 ? hits[Math.min(cursor, hits.length - 1)] : -1);
 
+  // Props like `runId={run.id}` are getters over the parent's mutable state: reading them in an
+  // effect would re-run it on every parent update (e.g. each status event). A derived value only
+  // notifies when the key really changes.
+  const streamUrl = $derived(runStreamUrl(ws, 'log', runId));
+
   $effect(() => {
-    // Reset on run change; the stream resumes by itself through Last-Event-ID.
+    // Reconnect only when the stream URL (workspace or run) changes; everything else is untracked.
+    const url = streamUrl;
+    return untrack(() => connect(url));
+  });
+
+  function connect(url: string): () => void {
     const model = new LogModel();
     lines = [];
     dropped = 0;
@@ -34,31 +46,33 @@
       lines = model.all();
       dropped = model.dropped;
     };
-    const es = new EventSource(runStreamUrl(ws, 'log', runId), { withCredentials: true });
-    es.onopen = () => (connection = 'live');
-    es.onerror = () => {
-      if (es.readyState !== EventSource.CLOSED) connection = 'reconnecting';
-    };
-    es.addEventListener('log', (e) => {
-      connection = 'live';
-      model.append(parseLogEvent((e as MessageEvent<string>).data));
-      timer ??= setTimeout(flush, 60);
-    });
-    es.addEventListener('status', (e) => {
-      const st = parseJsonEvent<RunStatusEvent>((e as MessageEvent<string>).data);
-      if (st) onstatus?.(st);
-    });
-    es.addEventListener('end', () => {
-      es.close();
+    const finish = () => {
       if (timer) clearTimeout(timer);
       flush();
       connection = 'ended';
+    };
+    const close = openRunLog(url, {
+      onOpen: () => (connection = 'live'),
+      onError: (closed) => {
+        if (closed) finish();
+        else if (connection !== 'ended') connection = 'reconnecting';
+      },
+      onLog: (data) => {
+        connection = 'live';
+        model.append(parseLogEvent(data));
+        timer ??= setTimeout(flush, 60);
+      },
+      onStatus: (data) => {
+        const st = parseJsonEvent<RunStatusEvent>(data);
+        if (st) onstatus?.(st);
+      },
+      onEnd: finish,
     });
     return () => {
-      es.close();
+      close();
       if (timer) clearTimeout(timer);
     };
-  });
+  }
 
   $effect(() => {
     void lines;
