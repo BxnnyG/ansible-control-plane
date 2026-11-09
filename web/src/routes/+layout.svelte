@@ -111,29 +111,28 @@
         <span class="text-sm font-semibold tracking-tight">Control Plane</span>
       </a>
       <div class="border-b border-border p-3"><WorkspaceSwitcher /></div>
-      <nav aria-label="Main" class="flex-1 space-y-4 overflow-y-auto py-3">
+      <nav aria-label="Main" class="flex-1 space-y-5 overflow-y-auto px-3 py-4">
         {#each groups as g (g.section)}
           <div>
             {#if g.section}
-              <p class="mb-1 px-4 text-[0.68rem] font-semibold tracking-wider text-muted uppercase">
+              <p
+                class="mb-1.5 px-3 text-[0.68rem] font-semibold tracking-wider text-muted uppercase"
+              >
                 {g.section}
               </p>
             {/if}
-            <ul>
+            <ul class="space-y-0.5">
               {#each g.items as item (item.href)}
                 {@const current = isCurrent(item, page.url.pathname)}
                 <li>
                   <a
                     href={item.href}
                     aria-current={current ? 'page' : undefined}
-                    class="relative flex min-h-11 items-center gap-2.5 px-4 py-1.5 text-sm lg:min-h-8 {current
-                      ? 'bg-surface-2 font-medium text-fg'
+                    class="relative flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm lg:min-h-9 {current
+                      ? 'bg-accent-soft font-medium text-accent'
                       : 'text-muted hover:bg-surface-2 hover:text-fg'}"
                   >
-                    {#if current}
-                      <span class="absolute inset-y-0 left-0 w-0.5 bg-accent-fill"></span>
-                    {/if}
-                    <Icon d={item.icon} class="h-4 w-4 shrink-0 {current ? 'text-accent' : ''}" />
+                    <Icon d={item.icon} class="h-4 w-4 shrink-0" />
                     {item.label}
                   </a>
                 </li>

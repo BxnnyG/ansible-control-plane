@@ -29,7 +29,7 @@
 
 <svelte:head><title>Sign in - Ansible Control Plane</title></svelte:head>
 
-<section class="rise w-full max-w-sm rounded-md border border-border bg-surface p-6">
+<section class="rise w-full max-w-sm rounded-2xl border border-border bg-surface p-7 shadow-card">
   <div class="mb-5 flex items-center gap-3 border-b border-border pb-4">
     <BrandMark />
     <div class="leading-tight">
@@ -53,7 +53,7 @@
       {#if config.oidc}
         <a
           href={oidcLoginUrl(returnTo)}
-          class="bg-brand flex min-h-11 w-full items-center justify-center rounded-md px-4 py-2 text-center font-semibold hover:brightness-110"
+          class="bg-brand flex min-h-11 w-full items-center justify-center rounded-lg px-4 py-2 text-center font-semibold hover:brightness-110"
         >
           Sign in with SSO
         </a>

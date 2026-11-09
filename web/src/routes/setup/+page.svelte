@@ -57,7 +57,7 @@
     <Stepper steps={SETUP_STEPS} current={step} />
     <section
       aria-labelledby="step-heading"
-      class="rounded-2xl border border-border bg-surface p-5 shadow-card"
+      class="rounded-2xl border border-border bg-surface p-6 shadow-card"
     >
       <h2 id="step-heading" tabindex="-1" bind:this={heading} class="mb-4 text-base font-semibold">
         {SETUP_STEPS[step].title}

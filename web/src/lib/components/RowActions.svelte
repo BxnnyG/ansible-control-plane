@@ -37,7 +37,7 @@
   <div
     class="{open
       ? 'flex'
-      : 'hidden'} absolute right-0 z-20 mt-1 min-w-44 flex-col gap-1 rounded-md border border-border-strong bg-surface p-1.5 shadow-2xl max-lg:[&>button]:w-full max-lg:[&>button]:justify-start lg:static lg:mt-0 lg:flex lg:min-w-0 lg:flex-row lg:justify-end lg:gap-1 lg:whitespace-nowrap lg:[&>button]:border-transparent lg:[&>button]:bg-transparent lg:[&>button]:px-2 lg:[&>button]:py-0.5 lg:[&>button]:text-muted lg:[&>button:hover]:border-border-strong lg:[&>button:hover]:text-fg lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none"
+      : 'hidden'} absolute right-0 z-20 mt-1 min-w-44 flex-col gap-1 rounded-xl border border-border-strong bg-surface p-1.5 shadow-2xl max-lg:[&>button]:w-full max-lg:[&>button]:justify-start lg:static lg:mt-0 lg:flex lg:min-w-0 lg:flex-row lg:justify-end lg:gap-1 lg:whitespace-nowrap lg:[&>button]:border-transparent lg:[&>button]:bg-transparent lg:[&>button]:px-2 lg:[&>button]:py-0.5 lg:[&>button]:text-muted lg:[&>button:hover]:border-border-strong lg:[&>button:hover]:text-fg lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none"
     role="group"
     aria-label={label}
   >

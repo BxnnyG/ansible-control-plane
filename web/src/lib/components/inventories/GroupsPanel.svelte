@@ -289,7 +289,7 @@
                   {#if menuKey === row.key}
                     <div
                       role="menu"
-                      class="absolute right-0 z-20 mt-1 w-40 rounded-md border border-border-strong bg-surface p-1 shadow-2xl"
+                      class="absolute right-0 z-20 mt-1 w-40 rounded-xl border border-border-strong bg-surface p-1 shadow-2xl"
                     >
                       <button
                         type="button"

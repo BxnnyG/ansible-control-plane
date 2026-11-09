@@ -75,7 +75,8 @@
   const outcomes = $derived(recentOutcomes(runs));
   const recent = $derived(runs.slice(0, 8));
 
-  const cell = 'block px-4 py-3 hover:bg-surface-2';
+  const cell =
+    'block rounded-xl border border-border bg-surface p-4 shadow-card hover:-translate-y-px hover:border-border-strong';
   const cellLabel = 'text-[0.68rem] font-semibold tracking-wider text-muted uppercase';
 </script>
 
@@ -100,25 +101,27 @@
 {:else}
   <section
     aria-label="Key figures"
-    class="mb-6 grid grid-cols-2 divide-border overflow-hidden rounded-md border border-border bg-surface max-lg:[&>*:nth-child(n+3)]:border-t max-lg:[&>*:nth-child(even)]:border-l lg:grid-cols-5 lg:divide-x max-lg:[&>*:last-child:nth-child(odd)]:col-span-2 [&>*]:border-border"
+    class="mb-6 grid grid-cols-2 gap-3 max-lg:[&>*:last-child:nth-child(odd)]:col-span-2 lg:grid-cols-5"
   >
     {#if loading}
-      {#each [0, 1, 2, 3, 4] as i (i)}<div class="p-4"><Skeleton class="h-10" /></div>{/each}
+      {#each [0, 1, 2, 3, 4] as i (i)}<div class="rounded-xl border border-border bg-surface p-4">
+          <Skeleton class="h-10" />
+        </div>{/each}
     {:else}
       {#if canRuns}
         <a class={cell} href="/runs">
           <p class={cellLabel}>Succeeded, 24 h</p>
-          <p class="mt-1 font-mono text-2xl font-medium text-accent">{stats.ok}</p>
+          <p class="mt-1.5 font-mono text-3xl font-medium text-accent">{stats.ok}</p>
         </a>
         <a class={cell} href="/runs?status=failed">
           <p class={cellLabel}>Failed, 24 h</p>
-          <p class="mt-1 font-mono text-2xl font-medium {stats.failed > 0 ? 'text-bad' : ''}">
+          <p class="mt-1.5 font-mono text-3xl font-medium {stats.failed > 0 ? 'text-bad' : ''}">
             {stats.failed}
           </p>
         </a>
         <a class={cell} href="/runs?status=running">
           <p class={cellLabel}>Running / queued</p>
-          <p class="mt-1 font-mono text-2xl font-medium">
+          <p class="mt-1.5 font-mono text-3xl font-medium">
             {stats.running}<span class="text-base font-normal text-muted"> / {stats.queued}</span>
           </p>
         </a>
@@ -126,14 +129,14 @@
       {#if canFleet}
         <a class={cell} href="/fleet">
           <p class={cellLabel}>Hosts online</p>
-          <p class="mt-1 font-mono text-2xl font-medium">
+          <p class="mt-1.5 font-mono text-3xl font-medium">
             {fleet.online}<span class="text-base font-normal text-muted"> / {fleet.total}</span>
           </p>
           <p class="text-xs text-muted">{fleet.unmanaged} not managed</p>
         </a>
         <a class={cell} href="/fleet/alerts">
           <p class={cellLabel}>Open alerts / drift</p>
-          <p class="mt-1 font-mono text-2xl font-medium">
+          <p class="mt-1.5 font-mono text-3xl font-medium">
             <span class={alerts.length > 0 ? 'text-warn' : ''}>{alerts.length}</span><span
               class="text-base font-normal text-muted"
             >
@@ -169,7 +172,7 @@
               <EmptyState title="No runs yet" hint="Start one from a template." />
             </div>
           {:else}
-            <div class="tbl-wrap !max-h-none !rounded-none !border-0">
+            <div class="tbl-wrap !max-h-none !rounded-none !border-0 !shadow-none">
               <table class="w-full">
                 <thead>
                   <tr>

@@ -12,7 +12,7 @@
       Workspace
     </span>
     <select
-      class="min-h-11 w-full rounded-md border border-border-strong bg-surface px-2 py-1 text-sm font-medium lg:min-h-8"
+      class="min-h-11 w-full rounded-lg border border-border bg-surface-2 px-2.5 py-1 text-sm font-medium lg:min-h-8"
       value={session.slug}
       {onchange}
     >

@@ -101,7 +101,7 @@
   );
 </script>
 
-<div class="overflow-clip rounded-md border border-border-strong bg-console">
+<div class="overflow-clip rounded-xl border border-border-strong bg-console shadow-card">
   <div
     class="sticky top-12 z-[5] flex flex-wrap items-center gap-2 border-b border-white/10 bg-console px-3 py-1.5 text-xs text-console-fg"
   >

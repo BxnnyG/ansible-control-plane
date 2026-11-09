@@ -51,12 +51,12 @@
   {#if open}
     <ul
       role="menu"
-      class="absolute right-0 z-40 mt-2 w-48 rounded-md border border-border-strong bg-surface p-1 shadow-2xl"
+      class="absolute right-0 z-40 mt-2 w-48 rounded-xl border border-border-strong bg-surface p-1 shadow-2xl"
     >
       <li role="none">
         <a
           role="menuitem"
-          class="block rounded px-3 py-2.5 max-lg:min-h-11 lg:py-1.5 text-sm hover:bg-surface-2"
+          class="block rounded-lg px-3 py-2.5 max-lg:min-h-11 lg:py-1.5 text-sm hover:bg-surface-2"
           href="/settings"
           onclick={() => (open = false)}>Settings</a
         >
@@ -66,7 +66,7 @@
           type="button"
           role="menuitem"
           disabled={busy}
-          class="block w-full rounded px-3 py-2.5 max-lg:min-h-11 lg:py-1.5 text-left text-sm hover:bg-surface-2"
+          class="block w-full rounded-lg px-3 py-2.5 max-lg:min-h-11 lg:py-1.5 text-left text-sm hover:bg-surface-2"
           onclick={logout}>Sign out</button
         >
       </li>
