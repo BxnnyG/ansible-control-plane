@@ -2,12 +2,15 @@ package notify
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"mime"
 	"net"
+	"net/mail"
 	"net/smtp"
 	"net/textproto"
 	"strconv"
@@ -138,6 +141,10 @@ func (smtpSender) Send(ctx context.Context, ch Channel, cred []byte, msg Message
 		return fmt.Errorf("smtp greeting: %w", err)
 	}
 	defer func() { _ = cl.Close() }()
+	// Greet with a real domain: the default "localhost" is a spam signal.
+	if err := cl.Hello(mailDomain(c.From)); err != nil {
+		return fmt.Errorf("smtp hello: %w", err)
+	}
 	if sec == SecStartTLS {
 		if ok, _ := cl.Extension("STARTTLS"); !ok {
 			return errors.New("server does not offer STARTTLS")
@@ -179,7 +186,26 @@ func buildMail(c smtpConfig, msg Message) []byte {
 	b.WriteString("To: " + strings.Join(c.To, ", ") + "\r\n")
 	b.WriteString("Subject: " + mime.QEncoding.Encode("utf-8", msg.Title()) + "\r\n")
 	b.WriteString("Date: " + time.Now().UTC().Format(time.RFC1123Z) + "\r\n")
+	b.WriteString("Message-ID: <" + messageID() + "@" + mailDomain(c.From) + ">\r\n")
 	b.WriteString("MIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n")
 	b.WriteString(strings.ReplaceAll(strings.ReplaceAll(msg.Text(), "\r\n", "\n"), "\n", "\r\n"))
 	return []byte(b.String())
+}
+
+// mailDomain returns the domain of an address (optionally "Name <a@b>"),
+// used for EHLO and Message-ID; falls back to "localhost.localdomain".
+func mailDomain(addr string) string {
+	if a, err := mail.ParseAddress(addr); err == nil {
+		addr = a.Address
+	}
+	if i := strings.LastIndexByte(addr, '@'); i >= 0 && i < len(addr)-1 {
+		return strings.ToLower(strings.TrimSpace(addr[i+1:]))
+	}
+	return "localhost.localdomain"
+}
+
+func messageID() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:])
+	return hex.EncodeToString(b[:])
 }
