@@ -89,7 +89,7 @@
   </header>
 
   <section class="{card} mb-6" aria-label="Run details">
-    <dl class="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-3 lg:grid-cols-6">
+    <dl class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3 lg:grid-cols-6">
       <div>
         <dt class="text-muted">Trigger</dt>
         <dd>{run.trigger}</dd>

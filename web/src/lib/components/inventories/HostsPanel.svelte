@@ -69,12 +69,15 @@
               <td class="{td} text-right whitespace-nowrap">
                 {#if canWrite}
                   <button
-                    class="text-xs text-muted hover:text-fg hover:underline"
+                    class="text-xs text-muted hover:text-fg hover:underline max-md:min-h-11 max-md:pr-4"
                     onclick={() => open(h)}
                   >
                     edit
                   </button>
-                  <button class="text-xs text-bad hover:underline" onclick={() => remove(h)}>
+                  <button
+                    class="text-xs text-bad hover:underline max-md:min-h-11 max-md:pr-4"
+                    onclick={() => remove(h)}
+                  >
                     delete
                   </button>
                 {/if}
