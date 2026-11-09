@@ -47,6 +47,7 @@ type NetworkView struct {
 	Interface     string    `json:"interface"`
 	Description   string    `json:"description"`
 	Source        string    `json:"source"`
+	Tracked       bool      `json:"tracked"`
 	FirstSeen     time.Time `json:"first_seen"`
 	LastSeen      time.Time `json:"last_seen"`
 	HostCount     int       `json:"host_count"`
@@ -80,7 +81,7 @@ func (s *Store) Networks(ctx context.Context, ws uuid.UUID, allow func(id uuid.U
 			continue
 		}
 		v := NetworkView{ID: n.ID, ConnectorID: n.ConnectorID, ConnectorName: names[n.ConnectorID], ExternalKey: n.ExternalKey,
-			CIDR: n.Cidr.String(), Interface: n.Interface, Description: n.Description, Source: n.Source,
+			CIDR: n.Cidr.String(), Interface: n.Interface, Description: n.Description, Source: n.Source, Tracked: n.Tracked,
 			FirstSeen: n.FirstSeen.Time.UTC(), LastSeen: n.LastSeen.Time.UTC()}
 		if n.Vlan.Valid {
 			vl := int(n.Vlan.Int32)
@@ -165,6 +166,10 @@ type HostFilter struct {
 	// Managed narrows to hosts linked (true) or not linked (false) to an
 	// inventory host of the workspace.
 	Managed *bool
+	// ExcludeUntracked hides hosts whose only networks are untracked (see
+	// tracking.go). The zero value keeps every host so internal consumers
+	// (group rules, remediation) are unaffected.
+	ExcludeUntracked bool
 	// SkipStatus leaves the Ansible status fields empty (cheaper; for
 	// callers that only need identities).
 	SkipStatus bool
@@ -341,11 +346,17 @@ func (s *Store) Hosts(ctx context.Context, ws uuid.UUID, f HostFilter, visible V
 	if err != nil {
 		return nil, err
 	}
+	var hidden func([]string) bool
+	if f.ExcludeUntracked {
+		if hidden, err = s.untrackedFilter(ctx, ws); err != nil {
+			return nil, err
+		}
+	}
 	q := strings.ToLower(strings.TrimSpace(f.Q))
 	out := []HostView{}
 	for _, e := range entries {
 		v := e.view
-		if !visible.ok(v.IPs) {
+		if !visible.ok(v.IPs) || (hidden != nil && hidden(v.IPs)) {
 			continue
 		}
 		if f.Alerts && v.OpenAlerts == 0 {

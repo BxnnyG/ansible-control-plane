@@ -46,7 +46,7 @@ func (q *Queries) ClearMembershipScopes(ctx context.Context, membershipID uuid.U
 
 const completeWorkspaceSetup = `-- name: CompleteWorkspaceSetup :one
 UPDATE workspaces SET setup_completed_at = COALESCE(setup_completed_at, now()), updated_at = now()
-WHERE id = $1 RETURNING id, slug, name, description, created_at, updated_at, setup_completed_at
+WHERE id = $1 RETURNING id, slug, name, description, created_at, updated_at, setup_completed_at, fleet_new_networks_tracked
 `
 
 func (q *Queries) CompleteWorkspaceSetup(ctx context.Context, id uuid.UUID) (Workspace, error) {
@@ -60,6 +60,7 @@ func (q *Queries) CompleteWorkspaceSetup(ctx context.Context, id uuid.UUID) (Wor
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.SetupCompletedAt,
+		&i.FleetNewNetworksTracked,
 	)
 	return i, err
 }
@@ -115,7 +116,7 @@ func (q *Queries) CreateMembership(ctx context.Context, arg CreateMembershipPara
 }
 
 const createWorkspace = `-- name: CreateWorkspace :one
-INSERT INTO workspaces (slug, name, description) VALUES ($1, $2, $3) RETURNING id, slug, name, description, created_at, updated_at, setup_completed_at
+INSERT INTO workspaces (slug, name, description) VALUES ($1, $2, $3) RETURNING id, slug, name, description, created_at, updated_at, setup_completed_at, fleet_new_networks_tracked
 `
 
 type CreateWorkspaceParams struct {
@@ -135,6 +136,7 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.SetupCompletedAt,
+		&i.FleetNewNetworksTracked,
 	)
 	return i, err
 }
@@ -193,7 +195,7 @@ func (q *Queries) GetMembership(ctx context.Context, arg GetMembershipParams) (M
 }
 
 const getWorkspace = `-- name: GetWorkspace :one
-SELECT id, slug, name, description, created_at, updated_at, setup_completed_at FROM workspaces WHERE id = $1
+SELECT id, slug, name, description, created_at, updated_at, setup_completed_at, fleet_new_networks_tracked FROM workspaces WHERE id = $1
 `
 
 func (q *Queries) GetWorkspace(ctx context.Context, id uuid.UUID) (Workspace, error) {
@@ -207,12 +209,13 @@ func (q *Queries) GetWorkspace(ctx context.Context, id uuid.UUID) (Workspace, er
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.SetupCompletedAt,
+		&i.FleetNewNetworksTracked,
 	)
 	return i, err
 }
 
 const getWorkspaceBySlug = `-- name: GetWorkspaceBySlug :one
-SELECT id, slug, name, description, created_at, updated_at, setup_completed_at FROM workspaces WHERE slug = $1
+SELECT id, slug, name, description, created_at, updated_at, setup_completed_at, fleet_new_networks_tracked FROM workspaces WHERE slug = $1
 `
 
 func (q *Queries) GetWorkspaceBySlug(ctx context.Context, slug string) (Workspace, error) {
@@ -226,6 +229,7 @@ func (q *Queries) GetWorkspaceBySlug(ctx context.Context, slug string) (Workspac
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.SetupCompletedAt,
+		&i.FleetNewNetworksTracked,
 	)
 	return i, err
 }
@@ -365,7 +369,7 @@ func (q *Queries) ListMembershipsForWorkspace(ctx context.Context, workspaceID u
 }
 
 const listWorkspaces = `-- name: ListWorkspaces :many
-SELECT id, slug, name, description, created_at, updated_at, setup_completed_at FROM workspaces ORDER BY name, id
+SELECT id, slug, name, description, created_at, updated_at, setup_completed_at, fleet_new_networks_tracked FROM workspaces ORDER BY name, id
 `
 
 func (q *Queries) ListWorkspaces(ctx context.Context) ([]Workspace, error) {
@@ -385,6 +389,7 @@ func (q *Queries) ListWorkspaces(ctx context.Context) ([]Workspace, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.SetupCompletedAt,
+			&i.FleetNewNetworksTracked,
 		); err != nil {
 			return nil, err
 		}
@@ -397,7 +402,7 @@ func (q *Queries) ListWorkspaces(ctx context.Context) ([]Workspace, error) {
 }
 
 const listWorkspacesForUser = `-- name: ListWorkspacesForUser :many
-SELECT w.id, w.slug, w.name, w.description, w.created_at, w.updated_at, w.setup_completed_at FROM workspaces w
+SELECT w.id, w.slug, w.name, w.description, w.created_at, w.updated_at, w.setup_completed_at, w.fleet_new_networks_tracked FROM workspaces w
 JOIN memberships m ON m.workspace_id = w.id
 WHERE m.user_id = $1
 ORDER BY w.name, w.id
@@ -420,6 +425,7 @@ func (q *Queries) ListWorkspacesForUser(ctx context.Context, userID uuid.UUID) (
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.SetupCompletedAt,
+			&i.FleetNewNetworksTracked,
 		); err != nil {
 			return nil, err
 		}
@@ -433,7 +439,7 @@ func (q *Queries) ListWorkspacesForUser(ctx context.Context, userID uuid.UUID) (
 
 const renameWorkspace = `-- name: RenameWorkspace :one
 UPDATE workspaces SET name = $2, updated_at = now()
-WHERE id = $1 RETURNING id, slug, name, description, created_at, updated_at, setup_completed_at
+WHERE id = $1 RETURNING id, slug, name, description, created_at, updated_at, setup_completed_at, fleet_new_networks_tracked
 `
 
 type RenameWorkspaceParams struct {
@@ -452,6 +458,7 @@ func (q *Queries) RenameWorkspace(ctx context.Context, arg RenameWorkspaceParams
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.SetupCompletedAt,
+		&i.FleetNewNetworksTracked,
 	)
 	return i, err
 }
@@ -489,7 +496,7 @@ func (q *Queries) UpdateMembershipRole(ctx context.Context, arg UpdateMembership
 
 const updateWorkspace = `-- name: UpdateWorkspace :one
 UPDATE workspaces SET name = $2, description = $3, updated_at = now()
-WHERE id = $1 RETURNING id, slug, name, description, created_at, updated_at, setup_completed_at
+WHERE id = $1 RETURNING id, slug, name, description, created_at, updated_at, setup_completed_at, fleet_new_networks_tracked
 `
 
 type UpdateWorkspaceParams struct {
@@ -509,6 +516,7 @@ func (q *Queries) UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.SetupCompletedAt,
+		&i.FleetNewNetworksTracked,
 	)
 	return i, err
 }

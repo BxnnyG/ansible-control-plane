@@ -223,6 +223,7 @@ type Network struct {
 	Source      string
 	FirstSeen   pgtype.Timestamptz
 	LastSeen    pgtype.Timestamptz
+	Tracked     bool
 }
 
 type NotificationChannel struct {
@@ -499,11 +500,12 @@ type VaultIdentity struct {
 }
 
 type Workspace struct {
-	ID               uuid.UUID
-	Slug             string
-	Name             string
-	Description      string
-	CreatedAt        pgtype.Timestamptz
-	UpdatedAt        pgtype.Timestamptz
-	SetupCompletedAt pgtype.Timestamptz
+	ID                      uuid.UUID
+	Slug                    string
+	Name                    string
+	Description             string
+	CreatedAt               pgtype.Timestamptz
+	UpdatedAt               pgtype.Timestamptz
+	SetupCompletedAt        pgtype.Timestamptz
+	FleetNewNetworksTracked bool
 }

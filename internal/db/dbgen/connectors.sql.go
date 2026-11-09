@@ -271,6 +271,17 @@ func (q *Queries) GetConnectorByName(ctx context.Context, arg GetConnectorByName
 	return i, err
 }
 
+const getFleetNewNetworksTracked = `-- name: GetFleetNewNetworksTracked :one
+SELECT fleet_new_networks_tracked FROM workspaces WHERE id = $1
+`
+
+func (q *Queries) GetFleetNewNetworksTracked(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, getFleetNewNetworksTracked, id)
+	var fleet_new_networks_tracked bool
+	err := row.Scan(&fleet_new_networks_tracked)
+	return fleet_new_networks_tracked, err
+}
+
 const insertConnectorSync = `-- name: InsertConnectorSync :one
 INSERT INTO connector_syncs (connector_id, workspace_id, trigger, status, started_at, finished_at, duration_ms, counts, error)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -437,7 +448,7 @@ func (q *Queries) ListConnectors(ctx context.Context, workspaceID uuid.UUID) ([]
 }
 
 const listNetworks = `-- name: ListNetworks :many
-SELECT id, workspace_id, connector_id, external_key, cidr, vlan, interface, description, source, first_seen, last_seen FROM networks WHERE workspace_id = $1 ORDER BY cidr, external_key
+SELECT id, workspace_id, connector_id, external_key, cidr, vlan, interface, description, source, first_seen, last_seen, tracked FROM networks WHERE workspace_id = $1 ORDER BY cidr, external_key
 `
 
 func (q *Queries) ListNetworks(ctx context.Context, workspaceID uuid.UUID) ([]Network, error) {
@@ -461,6 +472,7 @@ func (q *Queries) ListNetworks(ctx context.Context, workspaceID uuid.UUID) ([]Ne
 			&i.Source,
 			&i.FirstSeen,
 			&i.LastSeen,
+			&i.Tracked,
 		); err != nil {
 			return nil, err
 		}
@@ -575,6 +587,55 @@ func (q *Queries) RequestConnectorSync(ctx context.Context, arg RequestConnector
 	return result.RowsAffected(), nil
 }
 
+const setFleetNewNetworksTracked = `-- name: SetFleetNewNetworksTracked :exec
+UPDATE workspaces SET fleet_new_networks_tracked = $2, updated_at = now() WHERE id = $1
+`
+
+type SetFleetNewNetworksTrackedParams struct {
+	ID                      uuid.UUID
+	FleetNewNetworksTracked bool
+}
+
+func (q *Queries) SetFleetNewNetworksTracked(ctx context.Context, arg SetFleetNewNetworksTrackedParams) error {
+	_, err := q.db.Exec(ctx, setFleetNewNetworksTracked, arg.ID, arg.FleetNewNetworksTracked)
+	return err
+}
+
+const setNetworksTracked = `-- name: SetNetworksTracked :execrows
+UPDATE networks SET tracked = $3 WHERE workspace_id = $1 AND id = ANY($2::uuid[])
+`
+
+type SetNetworksTrackedParams struct {
+	WorkspaceID uuid.UUID
+	Column2     []uuid.UUID
+	Tracked     bool
+}
+
+func (q *Queries) SetNetworksTracked(ctx context.Context, arg SetNetworksTrackedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setNetworksTracked, arg.WorkspaceID, arg.Column2, arg.Tracked)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setNetworksTrackedOnly = `-- name: SetNetworksTrackedOnly :execrows
+UPDATE networks SET tracked = (id = ANY($2::uuid[])) WHERE workspace_id = $1
+`
+
+type SetNetworksTrackedOnlyParams struct {
+	WorkspaceID uuid.UUID
+	Column2     []uuid.UUID
+}
+
+func (q *Queries) SetNetworksTrackedOnly(ctx context.Context, arg SetNetworksTrackedOnlyParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setNetworksTrackedOnly, arg.WorkspaceID, arg.Column2)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateConnector = `-- name: UpdateConnector :one
 UPDATE connectors
 SET name = $3, base_url = $4, config = $5, secret_id = $6, interval_seconds = $7, enabled = $8, updated_at = now()
@@ -631,8 +692,8 @@ func (q *Queries) UpdateConnector(ctx context.Context, arg UpdateConnectorParams
 }
 
 const upsertNetwork = `-- name: UpsertNetwork :exec
-INSERT INTO networks (workspace_id, connector_id, external_key, cidr, vlan, interface, description, source, first_seen, last_seen)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
+INSERT INTO networks (workspace_id, connector_id, external_key, cidr, vlan, interface, description, source, first_seen, last_seen, tracked)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9, (SELECT w.fleet_new_networks_tracked FROM workspaces w WHERE w.id = $1))
 ON CONFLICT (connector_id, external_key) DO UPDATE
 SET cidr = EXCLUDED.cidr, vlan = EXCLUDED.vlan, interface = EXCLUDED.interface,
     description = EXCLUDED.description, source = EXCLUDED.source, last_seen = EXCLUDED.last_seen
@@ -650,6 +711,7 @@ type UpsertNetworkParams struct {
 	FirstSeen   pgtype.Timestamptz
 }
 
+// New networks start with the workspace default; the update branch keeps the user's choice.
 func (q *Queries) UpsertNetwork(ctx context.Context, arg UpsertNetworkParams) error {
 	_, err := q.db.Exec(ctx, upsertNetwork,
 		arg.WorkspaceID,
