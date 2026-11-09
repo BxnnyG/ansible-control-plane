@@ -1,13 +1,14 @@
+<!-- Brand mark: a small amber tile with a three-node graph. -->
 <span
-  class="bg-brand inline-flex h-9 w-9 items-center justify-center rounded-xl shadow-sm"
+  class="bg-brand inline-flex h-7 w-7 items-center justify-center rounded-md"
   aria-hidden="true"
 >
   <svg
     viewBox="0 0 24 24"
-    class="h-5 w-5"
+    class="h-4 w-4"
     fill="none"
     stroke="currentColor"
-    stroke-width="2"
+    stroke-width="2.2"
     stroke-linecap="round"
     stroke-linejoin="round"
   >

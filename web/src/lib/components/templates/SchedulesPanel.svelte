@@ -52,7 +52,7 @@
 {#if canRead}
   <section class={card} aria-labelledby="sched-h">
     <div class="mb-3 flex items-center justify-between">
-      <h2 id="sched-h" class="text-lg font-medium">Schedules</h2>
+      <h2 id="sched-h" class="text-sm font-semibold">Schedules</h2>
       {#if canWrite && !editing}
         <button class={btnPrimary} onclick={() => (editing = 'new')}>New schedule</button>
       {/if}

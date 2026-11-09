@@ -60,9 +60,11 @@
 
 <svelte:head><title>Secrets - Ansible Control Plane</title></svelte:head>
 
-<header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+<header
+  class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
+>
   <div>
-    <h1 class="text-2xl font-semibold sm:text-3xl">Secrets</h1>
+    <h1 class="text-xl font-semibold">Secrets</h1>
     <p class="mt-1 text-muted">Credentials used by projects and runs. Values are write-only.</p>
   </div>
   {#if canWrite && editing === null}

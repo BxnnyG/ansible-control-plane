@@ -63,7 +63,7 @@
     close();
   }}
 >
-  <h2 id="dec-h" class="text-lg font-medium">Decrypted value</h2>
+  <h2 id="dec-h" class="text-sm font-semibold">Decrypted value</h2>
   <p class="mt-1 text-sm break-all text-muted">
     <code>{path}</code>{#if keyPath}&nbsp;<code>{keyPath}</code>{/if}
   </p>

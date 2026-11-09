@@ -100,7 +100,10 @@
       {#if vaultSecrets.length === 0}
         <p class="mt-1 text-xs text-muted">
           No secrets of type "vault_password" yet. Create one on the
-          <a class="text-accent hover:underline" href="/secrets">Secrets</a> page.
+          <a
+            class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+            href="/secrets">Secrets</a
+          > page.
         </p>
       {/if}
     </div>

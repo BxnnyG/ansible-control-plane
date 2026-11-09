@@ -103,9 +103,11 @@
 
 <svelte:head><title>Connectors - Ansible Control Plane</title></svelte:head>
 
-<header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+<header
+  class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
+>
   <div>
-    <h1 class="text-2xl font-semibold sm:text-3xl">Connectors</h1>
+    <h1 class="text-xl font-semibold">Connectors</h1>
     <p class="mt-1 text-muted">
       Read-only links to OPNsense, Proxmox and other systems that feed the fleet view.
     </p>

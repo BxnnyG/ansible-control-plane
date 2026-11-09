@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { api, type Run, type Template } from '$lib/api';
@@ -66,13 +67,15 @@
 
 <svelte:head><title>{template?.name ?? 'Template'} - Ansible Control Plane</title></svelte:head>
 
-<p class="mb-2 text-sm"><a class="text-accent hover:underline" href="/templates">Templates</a></p>
+<Breadcrumbs trail={[{ label: 'Templates', href: '/templates' }]} />
 <FormError id="template-page-error" message={error} />
 
 {#if template && ws}
-  <header class="mb-6 flex flex-wrap items-start justify-between gap-4">
+  <header
+    class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
+  >
     <div>
-      <h1 class="text-2xl font-semibold sm:text-3xl">{template.name}</h1>
+      <h1 class="text-xl font-semibold">{template.name}</h1>
       {#if template.description}<p class="mt-1 text-muted">{template.description}</p>{/if}
     </div>
     <div class="flex gap-2">
@@ -157,9 +160,10 @@
     {#if recent.length > 0}
       <section class={card} aria-labelledby="recent-h">
         <div class="mb-2 flex items-center justify-between">
-          <h2 id="recent-h" class="text-lg font-medium">Recent runs</h2>
-          <a class="text-sm text-accent hover:underline" href="/runs?template={template.id}"
-            >All runs</a
+          <h2 id="recent-h" class="text-sm font-semibold">Recent runs</h2>
+          <a
+            class="text-sm underline decoration-border-strong underline-offset-2 hover:decoration-current"
+            href="/runs?template={template.id}">All runs</a
           >
         </div>
         <table class="w-full">

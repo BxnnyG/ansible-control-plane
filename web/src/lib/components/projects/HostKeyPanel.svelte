@@ -50,7 +50,7 @@
 </script>
 
 <section class={card} aria-labelledby="hostkey-h">
-  <h2 id="hostkey-h" class="mb-2 text-lg font-medium">SSH host key</h2>
+  <h2 id="hostkey-h" class="mb-2 text-sm font-semibold">SSH host key</h2>
   {#if project.host_key_pinned}
     <p class="text-sm">Pinned fingerprints:</p>
     <ul class="mt-1 space-y-1">

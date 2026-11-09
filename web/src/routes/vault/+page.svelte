@@ -62,9 +62,11 @@
 
 <svelte:head><title>Vault identities - Ansible Control Plane</title></svelte:head>
 
-<header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+<header
+  class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
+>
   <div>
-    <h1 class="text-2xl font-semibold sm:text-3xl">Vault identities</h1>
+    <h1 class="text-xl font-semibold">Vault identities</h1>
     <p class="mt-1 text-muted">
       Named sources for Ansible Vault passwords. The passwords themselves are never shown.
     </p>

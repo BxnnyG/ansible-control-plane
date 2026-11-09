@@ -18,7 +18,7 @@
   import Skeleton from '$lib/components/Skeleton.svelte';
   import RunBars from '$lib/components/RunBars.svelte';
   import FormError from '$lib/components/FormError.svelte';
-  import { btn } from '$lib/ui';
+  import { btn, td, th } from '$lib/ui';
 
   const canRuns = $derived(session.can('run.read'));
   const canFleet = $derived(session.can('fleet.read'));
@@ -75,8 +75,8 @@
   const outcomes = $derived(recentOutcomes(runs));
   const recent = $derived(runs.slice(0, 8));
 
-  const tile =
-    'rise rounded-2xl border border-border bg-surface p-4 shadow-card hover:border-border-strong';
+  const cell = 'block px-4 py-3 hover:bg-surface-2';
+  const cellLabel = 'text-[0.68rem] font-semibold tracking-wider text-muted uppercase';
 </script>
 
 <svelte:head><title>Dashboard - Ansible Control Plane</title></svelte:head>
@@ -100,92 +100,103 @@
 {:else}
   <section
     aria-label="Key figures"
-    class="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6"
+    class="mb-6 grid grid-cols-2 divide-border overflow-hidden rounded-md border border-border bg-surface max-lg:[&>*:nth-child(n+3)]:border-t max-lg:[&>*:nth-child(even)]:border-l lg:grid-cols-5 lg:divide-x max-lg:[&>*:last-child:nth-child(odd)]:col-span-2 [&>*]:border-border"
   >
     {#if loading}
-      {#each [0, 1, 2, 3, 4, 5] as i (i)}<Skeleton class="h-28" />{/each}
+      {#each [0, 1, 2, 3, 4] as i (i)}<div class="p-4"><Skeleton class="h-10" /></div>{/each}
     {:else}
       {#if canRuns}
-        <a class="{tile} col-span-2 xl:col-span-2" href="/runs">
-          <p class="text-xs font-semibold tracking-wide text-muted uppercase">Runs, last 24 h</p>
-          <p class="mt-2 flex items-baseline gap-3">
-            <span class="text-brand text-4xl font-semibold">{stats.ok}</span>
-            <span class="text-sm text-muted">succeeded</span>
-            <span class="text-2xl font-semibold {stats.failed > 0 ? 'text-bad' : 'text-muted'}"
-              >{stats.failed}</span
-            >
-            <span class="text-sm text-muted">failed</span>
-          </p>
-          <div class="mt-2"><RunBars {outcomes} /></div>
+        <a class={cell} href="/runs">
+          <p class={cellLabel}>Succeeded, 24 h</p>
+          <p class="mt-1 font-mono text-2xl font-medium text-accent">{stats.ok}</p>
         </a>
-        <a class={tile} href="/runs?status=running">
-          <p class="text-xs font-semibold tracking-wide text-muted uppercase">Running now</p>
-          <p class="mt-2 text-3xl font-semibold">{stats.running}</p>
-          <p class="mt-1 text-sm text-muted">{stats.queued} queued</p>
+        <a class={cell} href="/runs?status=failed">
+          <p class={cellLabel}>Failed, 24 h</p>
+          <p class="mt-1 font-mono text-2xl font-medium {stats.failed > 0 ? 'text-bad' : ''}">
+            {stats.failed}
+          </p>
+        </a>
+        <a class={cell} href="/runs?status=running">
+          <p class={cellLabel}>Running / queued</p>
+          <p class="mt-1 font-mono text-2xl font-medium">
+            {stats.running}<span class="text-base font-normal text-muted"> / {stats.queued}</span>
+          </p>
         </a>
       {/if}
       {#if canFleet}
-        <a class={tile} href="/fleet">
-          <p class="text-xs font-semibold tracking-wide text-muted uppercase">Hosts online</p>
-          <p class="mt-2 text-3xl font-semibold">
-            {fleet.online}<span class="text-lg font-normal text-muted"> / {fleet.total}</span>
+        <a class={cell} href="/fleet">
+          <p class={cellLabel}>Hosts online</p>
+          <p class="mt-1 font-mono text-2xl font-medium">
+            {fleet.online}<span class="text-base font-normal text-muted"> / {fleet.total}</span>
           </p>
-          <p class="mt-1 text-sm text-muted">{fleet.unmanaged} not managed</p>
+          <p class="text-xs text-muted">{fleet.unmanaged} not managed</p>
         </a>
-        <a class={tile} href="/fleet/alerts">
-          <p class="text-xs font-semibold tracking-wide text-muted uppercase">Open alerts</p>
-          <p class="mt-2 text-3xl font-semibold {alerts.length > 0 ? 'text-warn' : ''}">
-            {alerts.length}
+        <a class={cell} href="/fleet/alerts">
+          <p class={cellLabel}>Open alerts / drift</p>
+          <p class="mt-1 font-mono text-2xl font-medium">
+            <span class={alerts.length > 0 ? 'text-warn' : ''}>{alerts.length}</span><span
+              class="text-base font-normal text-muted"
+            >
+              /
+            </span><span class={fleet.drift > 0 ? 'text-warn' : ''}>{fleet.drift}</span>
           </p>
-          <p class="mt-1 text-sm text-muted">from monitoring</p>
-        </a>
-        <a class={tile} href="/fleet">
-          <p class="text-xs font-semibold tracking-wide text-muted uppercase">Drift</p>
-          <p class="mt-2 text-3xl font-semibold {fleet.drift > 0 ? 'text-warn' : ''}">
-            {fleet.drift}
-          </p>
-          <p class="mt-1 text-sm text-muted">hosts with changes</p>
         </a>
       {/if}
     {/if}
   </section>
 
+  {#if canRuns && !loading && outcomes.length > 0}
+    <div class="mb-6 flex items-center gap-3 text-xs text-muted">
+      <span class="font-semibold tracking-wider uppercase">Run history</span>
+      <RunBars {outcomes} />
+    </div>
+  {/if}
+
   <div class="grid gap-6 xl:grid-cols-3">
     {#if canRuns}
       <div class="xl:col-span-2">
         <Card title="Recent runs" padded={false}>
-          {#snippet actions()}<a class="text-sm text-accent hover:underline" href="/runs"
-              >View all</a
+          {#snippet actions()}<a
+              class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+              href="/runs">View all</a
             >{/snippet}
           {#if loading}
-            <div class="space-y-3 p-4">
-              {#each [0, 1, 2, 3] as i (i)}<Skeleton class="h-10" />{/each}
+            <div class="space-y-2 p-3">
+              {#each [0, 1, 2, 3] as i (i)}<Skeleton class="h-8" />{/each}
             </div>
           {:else if recent.length === 0}
-            <div class="p-4">
+            <div class="p-3">
               <EmptyState title="No runs yet" hint="Start one from a template." />
             </div>
           {:else}
-            <ul class="divide-y divide-border">
-              {#each recent as r (r.id)}
-                <li>
-                  <a
-                    href="/runs/{r.id}"
-                    class="flex min-h-14 flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 hover:bg-surface-2 sm:px-5"
-                  >
-                    <span class={statusClass(r.status)}>{r.status}</span>
-                    <span class="min-w-0 flex-1 basis-32 truncate font-medium"
-                      >{r.template_name}</span
-                    >
-                    <span class="w-full text-sm text-muted sm:w-auto">
-                      {formatDuration(r.started_at, r.finished_at, now)}
-                      <span aria-hidden="true"> · </span>
-                      {relativeTime(r.created_at, now)}
-                    </span>
-                  </a>
-                </li>
-              {/each}
-            </ul>
+            <div class="tbl-wrap !max-h-none !rounded-none !border-0">
+              <table class="w-full">
+                <thead>
+                  <tr>
+                    <th class={th}>Status</th>
+                    <th class={th}>Template</th>
+                    <th class={th}>Duration</th>
+                    <th class={th}>Started</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {#each recent as r (r.id)}
+                    <tr>
+                      <td class={td}><span class={statusClass(r.status)}>{r.status}</span></td>
+                      <td class="{td} min-w-0">
+                        <a class="font-medium hover:underline" href="/runs/{r.id}"
+                          >{r.template_name}</a
+                        >
+                      </td>
+                      <td class="{td} font-mono text-muted">
+                        {formatDuration(r.started_at, r.finished_at, now)}
+                      </td>
+                      <td class="{td} text-muted">{relativeTime(r.created_at, now)}</td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            </div>
           {/if}
         </Card>
       </div>
@@ -197,14 +208,14 @@
           {#if loading}
             <Skeleton class="h-16" />
           {:else if failing.length === 0}
-            <p class="text-sm text-muted">No failed runs among the latest {runs.length}. Nice.</p>
+            <p class="text-sm text-muted">No failed runs among the latest {runs.length}.</p>
           {:else}
-            <ul class="space-y-2">
+            <ul class="space-y-1.5 text-sm">
               {#each failing as f (f.name)}
                 <li class="flex items-center justify-between gap-3">
                   <a class="min-w-0 truncate hover:underline" href="/runs/{f.lastRunId}">{f.name}</a
                   >
-                  <span class="tone-bad">{f.failures} failed</span>
+                  <span class="tone-bad font-mono">{f.failures} failed</span>
                 </li>
               {/each}
             </ul>
@@ -214,15 +225,16 @@
 
       {#if canConnectors}
         <Card title="Connector health">
-          {#snippet actions()}<a class="text-sm text-accent hover:underline" href="/connectors"
-              >Manage</a
+          {#snippet actions()}<a
+              class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+              href="/connectors">Manage</a
             >{/snippet}
           {#if loading}
             <Skeleton class="h-16" />
           {:else if connectors.length === 0}
             <p class="text-sm text-muted">No connectors configured.</p>
           {:else}
-            <div class="flex flex-wrap gap-2">
+            <div class="flex flex-wrap gap-x-4 gap-y-1">
               <span class="tone-ok">{health.ok} ok</span>
               {#if health.error > 0}<span class="tone-bad">{health.error} error</span>{/if}
               {#if health.pending > 0}<span class="tone-warn">{health.pending} pending</span>{/if}

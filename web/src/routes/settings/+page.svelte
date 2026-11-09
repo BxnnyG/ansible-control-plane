@@ -10,7 +10,7 @@
 <PageHeader title="Settings" description="Workspace, access and platform configuration." />
 {#if session.slug && session.can('fleet.read')}
   <section aria-labelledby="tracking-h" class="{card} max-w-3xl">
-    <h2 id="tracking-h" class="mb-3 text-lg font-medium">Fleet networks</h2>
+    <h2 id="tracking-h" class="mb-3 text-sm font-semibold">Fleet networks</h2>
     <NetworkTrackingPanel ws={session.slug} />
   </section>
 {:else}

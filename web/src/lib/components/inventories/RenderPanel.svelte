@@ -24,7 +24,7 @@
 </script>
 
 <section class={card} aria-labelledby="render-h">
-  <h2 id="render-h" class="mb-2 text-lg font-medium">Rendered preview</h2>
+  <h2 id="render-h" class="mb-2 text-sm font-semibold">Rendered preview</h2>
   <button class={btn} onclick={render} disabled={busy}>
     {text === null ? 'Render' : 'Refresh'}
   </button>

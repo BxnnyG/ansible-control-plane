@@ -7,10 +7,12 @@
 </script>
 
 {#if session.me && session.me.memberships.length > 0}
-  <label class="flex items-center gap-2 text-sm">
-    <span class="sr-only">Workspace</span>
+  <label class="block">
+    <span class="mb-1 block px-1 text-[0.68rem] font-semibold tracking-wider text-muted uppercase">
+      Workspace
+    </span>
     <select
-      class="max-w-40 min-h-11 rounded-lg border border-border bg-surface px-3 py-1.5 font-medium sm:max-w-56 lg:min-h-0"
+      class="min-h-11 w-full rounded-md border border-border-strong bg-surface px-2 py-1 text-sm font-medium lg:min-h-8"
       value={session.slug}
       {onchange}
     >

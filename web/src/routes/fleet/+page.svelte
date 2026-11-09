@@ -179,7 +179,7 @@
 {:else}
   <section aria-labelledby="networks-h" class="mb-8">
     <div class="mb-2 flex flex-wrap items-center gap-3">
-      <h2 id="networks-h" class="text-lg font-medium">Networks</h2>
+      <h2 id="networks-h" class="text-sm font-semibold">Networks</h2>
       {#if networks.length > 0}
         <label class="flex items-center gap-2 text-sm">
           <input type="checkbox" bind:checked={showHidden} /> Show hidden networks{hidden > 0
@@ -255,7 +255,7 @@
   </section>
 
   <section aria-labelledby="hosts-h">
-    <h2 id="hosts-h" class="mb-2 text-lg font-medium">Hosts</h2>
+    <h2 id="hosts-h" class="mb-2 text-sm font-semibold">Hosts</h2>
     <div class="mb-3 flex flex-wrap items-center gap-3">
       <input
         type="search"
@@ -327,7 +327,10 @@
                   </td>
                 {/if}
                 <td class={td}
-                  ><a class="text-accent underline" href="/fleet/hosts/{h.id}">{h.name}</a></td
+                  ><a
+                    class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+                    href="/fleet/hosts/{h.id}">{h.name}</a
+                  ></td
                 >
                 <td class={td}>{h.kind || '-'}</td>
                 <td class={td}>

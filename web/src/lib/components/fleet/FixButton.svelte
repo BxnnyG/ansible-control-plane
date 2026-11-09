@@ -108,7 +108,10 @@
             .hosts.length === 1
             ? ''
             : 's'}:
-          <a class="text-accent underline" href="/runs/{result.run.id}">open run</a>
+          <a
+            class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+            href="/runs/{result.run.id}">open run</a
+          >
         </p>
         {#if result.phase === 'check'}
           {#if status && isFinal(status)}

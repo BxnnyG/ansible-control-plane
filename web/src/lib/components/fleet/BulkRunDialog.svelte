@@ -51,11 +51,14 @@
 </script>
 
 <div role="dialog" aria-label="Bulk run" class="{card} mb-6 max-w-xl">
-  <h2 class="mb-2 text-lg font-medium">Run a template on {hosts.length} selected host(s)</h2>
+  <h2 class="mb-2 text-sm font-semibold">Run a template on {hosts.length} selected host(s)</h2>
   {#if result}
     <p role="status" class="text-sm">
       Run queued on {result.hosts.length} inventory host(s):
-      <a class="text-accent underline" href="/runs/{result.run.id}">open run</a>
+      <a
+        class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+        href="/runs/{result.run.id}">open run</a
+      >
     </p>
     {#if result.skipped?.length}
       <p class="mt-2 text-sm text-muted">Skipped:</p>

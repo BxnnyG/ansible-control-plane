@@ -94,7 +94,9 @@
           {#each hosts as h (h.id)}
             <tr>
               <td class={td}
-                ><a class="text-accent underline" href="/fleet/hosts/{h.id}">{h.name || h.id}</a
+                ><a
+                  class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+                  href="/fleet/hosts/{h.id}">{h.name || h.id}</a
                 ></td
               >
               <td class={td}>{h.kind || '-'}</td>

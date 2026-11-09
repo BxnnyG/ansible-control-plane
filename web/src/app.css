@@ -1,83 +1,91 @@
 @import 'tailwindcss';
+@import '@fontsource/ibm-plex-sans/latin-400.css';
+@import '@fontsource/ibm-plex-sans/latin-500.css';
+@import '@fontsource/ibm-plex-sans/latin-600.css';
+@import '@fontsource/ibm-plex-mono/latin-400.css';
+@import '@fontsource/ibm-plex-mono/latin-500.css';
+@import '@fontsource/ibm-plex-mono/latin-600.css';
 
 /*
- * Design tokens. Light is the default; dark applies via data-theme or system preference.
- * One accent (indigo to violet) is used sparingly: brand mark, primary buttons, active nav, hero numbers.
- * Semantic colors (ok / bad / warn / info / neutral) are shared by every status pill.
+ * Design tokens. A quiet "control room": near-neutral graphite surfaces, structure through 1px
+ * hairlines, small radii. Dark is the primary theme (data-theme or system preference), light is
+ * kept equally polished.
+ *
+ * ONE accent, signal amber: primary actions, focus ring, active nav indicator, brand mark and key
+ * numbers. Status colors (ok / bad / warn / info / neutral) are reserved for status; warn is a
+ * yellow and additionally uses a diamond marker so it never reads as the accent.
  */
 :root {
   color-scheme: light;
-  --bg: #f5f6fb;
+  --bg: #f6f6f4;
   --surface: #ffffff;
-  --surface-2: #eff1f8;
-  --border: #e1e4ef;
-  --border-strong: #c7ccdf;
-  --text: #12142a;
-  --text-muted: #565b78;
-  --accent: #4f46e5;
-  --accent-soft: rgb(79 70 229 / 0.1);
-  --accent-contrast: #ffffff;
-  --brand-gradient: linear-gradient(135deg, #4338ca 0%, #7c3aed 100%);
-  --focus: #4f46e5;
-  --overlay: rgb(18 20 42 / 0.5);
-  --shadow: 0 1px 2px rgb(18 20 42 / 0.05), 0 4px 16px -6px rgb(18 20 42 / 0.1);
-  --ok: #15803d;
-  --ok-bg: rgb(22 163 74 / 0.12);
-  --bad: #b91c1c;
-  --bad-bg: rgb(220 38 38 / 0.1);
-  --warn: #a15207;
-  --warn-bg: rgb(217 119 6 / 0.14);
-  --info: #1d4ed8;
-  --info-bg: rgb(37 99 235 / 0.1);
+  --surface-2: #eeeeeb;
+  --border: #deded9;
+  --border-strong: #c3c3bc;
+  --text: #19191a;
+  --text-muted: #5c5c58;
+  --accent: #a84a00; /* amber as text / indicator on light: 5.9:1 on white */
+  --accent-fill: #f5a524; /* amber as button fill; label uses --accent-contrast */
+  --accent-soft: rgb(168 74 0 / 0.09);
+  --accent-contrast: #1a1203;
+  --focus: #b45309;
+  --overlay: rgb(20 20 18 / 0.45);
+  --ok: #17803d;
+  --bad: #c42b2b;
+  --warn: #8a6a00;
+  --info: #1f5fcc;
+  --neutral: #6e6e69;
+  --console-bg: #0c0c0d;
+  --console-fg: #d6d6d3;
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #0b0d1a;
-  --surface: #14172a;
-  --surface-2: #1c2038;
-  --border: #292e4a;
-  --border-strong: #3b4166;
-  --text: #eceefb;
-  --text-muted: #9ca2c6;
-  --accent: #a5b4fc;
-  --accent-soft: rgb(165 180 252 / 0.12);
-  --focus: #a5b4fc;
+  --bg: #0d0d0e;
+  --surface: #141415;
+  --surface-2: #1b1b1d;
+  --border: #29292c;
+  --border-strong: #3b3b40;
+  --text: #ececea;
+  --text-muted: #9b9b96;
+  --accent: #f5a524;
+  --accent-fill: #f5a524;
+  --accent-soft: rgb(245 165 36 / 0.1);
+  --accent-contrast: #1a1203;
+  --focus: #f5a524;
   --overlay: rgb(0 0 0 / 0.65);
-  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 6px 20px -8px rgb(0 0 0 / 0.6);
-  --ok: #4ade80;
-  --ok-bg: rgb(74 222 128 / 0.12);
-  --bad: #fca5a5;
-  --bad-bg: rgb(248 113 113 / 0.14);
-  --warn: #fcd34d;
-  --warn-bg: rgb(251 191 36 / 0.13);
-  --info: #93c5fd;
-  --info-bg: rgb(96 165 250 / 0.14);
+  --ok: #4cc77a;
+  --bad: #f06c6c;
+  --warn: #e6d24a;
+  --info: #62a8ff;
+  --neutral: #84847f;
+  --console-bg: #08080a;
+  --console-fg: #d6d6d3;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
-    --bg: #0b0d1a;
-    --surface: #14172a;
-    --surface-2: #1c2038;
-    --border: #292e4a;
-    --border-strong: #3b4166;
-    --text: #eceefb;
-    --text-muted: #9ca2c6;
-    --accent: #a5b4fc;
-    --accent-soft: rgb(165 180 252 / 0.12);
-    --focus: #a5b4fc;
+    --bg: #0d0d0e;
+    --surface: #141415;
+    --surface-2: #1b1b1d;
+    --border: #29292c;
+    --border-strong: #3b3b40;
+    --text: #ececea;
+    --text-muted: #9b9b96;
+    --accent: #f5a524;
+    --accent-fill: #f5a524;
+    --accent-soft: rgb(245 165 36 / 0.1);
+    --accent-contrast: #1a1203;
+    --focus: #f5a524;
     --overlay: rgb(0 0 0 / 0.65);
-    --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 6px 20px -8px rgb(0 0 0 / 0.6);
-    --ok: #4ade80;
-    --ok-bg: rgb(74 222 128 / 0.12);
-    --bad: #fca5a5;
-    --bad-bg: rgb(248 113 113 / 0.14);
-    --warn: #fcd34d;
-    --warn-bg: rgb(251 191 36 / 0.13);
-    --info: #93c5fd;
-    --info-bg: rgb(96 165 250 / 0.14);
+    --ok: #4cc77a;
+    --bad: #f06c6c;
+    --warn: #e6d24a;
+    --info: #62a8ff;
+    --neutral: #84847f;
+    --console-bg: #08080a;
+    --console-fg: #d6d6d3;
   }
 }
 
@@ -90,26 +98,47 @@
   --color-fg: var(--text);
   --color-muted: var(--text-muted);
   --color-accent: var(--accent);
+  --color-accent-fill: var(--accent-fill);
   --color-accent-soft: var(--accent-soft);
   --color-accent-fg: var(--accent-contrast);
   --color-ok: var(--ok);
   --color-bad: var(--bad);
   --color-warn: var(--warn);
   --color-info: var(--info);
-  --shadow-card: var(--shadow);
+  --color-console: var(--console-bg);
+  --color-console-fg: var(--console-fg);
+}
+
+@theme {
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  /* Small radii and no soft shadows: structure comes from hairlines. */
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 5px;
+  --radius-xl: 6px;
+  --radius-2xl: 6px;
+  --radius-3xl: 8px;
+  --shadow-2xs: none;
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+  --shadow-2xl: none;
+  --shadow-2xl: 0 12px 32px -12px rgb(0 0 0 / 0.5);
+}
+
+html {
+  font-size: 15px;
 }
 
 body {
   background: var(--bg);
   color: var(--text);
-  font-family:
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    Roboto,
-    'Helvetica Neue',
-    sans-serif;
+  font-family: var(--font-sans);
+  font-size: 0.9333rem;
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -117,13 +146,21 @@ body {
 h1,
 h2,
 h3 {
-  letter-spacing: -0.015em;
+  letter-spacing: -0.01em;
+}
+
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
 }
 
 :focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
-  border-radius: 6px;
+  border-radius: 4px;
 }
 
 a,
@@ -132,134 +169,112 @@ input,
 select,
 textarea {
   transition:
-    background-color 150ms,
-    border-color 150ms,
-    color 150ms,
-    box-shadow 150ms,
-    opacity 150ms;
+    background-color 120ms,
+    border-color 120ms,
+    color 120ms,
+    opacity 120ms;
 }
 
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
+  border-color: var(--focus);
 }
 
-/* ---- Brand gradient (primary buttons, brand mark, active nav accent, hero numbers) ---- */
+/* Primary action: flat amber fill. */
 .bg-brand {
-  background-image: var(--brand-gradient);
-  color: #fff;
-}
-.text-brand {
-  background-image: var(--brand-gradient);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-:root[data-theme='dark'] .text-brand {
-  background-image: linear-gradient(135deg, #a5b4fc 0%, #c4b5fd 100%);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .text-brand {
-    background-image: linear-gradient(135deg, #a5b4fc 0%, #c4b5fd 100%);
-  }
+  background: var(--accent-fill);
+  color: var(--accent-contrast);
 }
 
-/* ---- Status pills: tone-* classes come from the helpers in lib (statusClass, severityClass, ...) ---- */
+/* ---- Status markers: solid dot + text, no pastel blobs. tone-* come from lib helpers ---- */
 [class*='tone-'] {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  border-radius: 9999px;
-  padding: 0.125rem 0.6rem;
-  font-size: 0.75rem;
+  gap: 0.4rem;
+  font-size: 0.8rem;
   font-weight: 500;
   line-height: 1.25rem;
   white-space: nowrap;
 }
+[class*='tone-']::before {
+  content: '';
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: currentColor;
+}
 .tone-ok {
-  background: var(--ok-bg);
   color: var(--ok);
 }
 .tone-bad {
-  background: var(--bad-bg);
   color: var(--bad);
 }
 .tone-warn {
-  background: var(--warn-bg);
   color: var(--warn);
 }
+.tone-warn::before {
+  border-radius: 1px;
+  transform: rotate(45deg) scale(0.9);
+}
 .tone-info {
-  background: var(--info-bg);
   color: var(--info);
 }
 .tone-neutral {
-  background: var(--surface-2);
-  color: var(--text-muted);
+  color: var(--neutral);
+}
+.tone-neutral::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px currentColor;
 }
 .tone-pulse::before {
-  content: '';
-  width: 0.45rem;
-  height: 0.45rem;
-  border-radius: 9999px;
-  background: currentColor;
-  animation: acp-pulse 1.4s ease-in-out infinite;
+  animation: acp-pulse 1.6s ease-in-out infinite;
 }
 
 @keyframes acp-pulse {
   0%,
   100% {
     opacity: 1;
-    transform: scale(1);
   }
   50% {
-    opacity: 0.35;
-    transform: scale(0.7);
+    opacity: 0.3;
   }
 }
 
-@keyframes acp-shimmer {
-  to {
-    background-position-x: -200%;
-  }
-}
 .skeleton {
-  border-radius: 8px;
-  background: linear-gradient(90deg, var(--surface-2) 25%, var(--border) 50%, var(--surface-2) 75%);
-  background-size: 200% 100%;
-  animation: acp-shimmer 1.4s linear infinite;
+  border-radius: 4px;
+  background: var(--surface-2);
+  animation: acp-pulse 1.6s ease-in-out infinite;
 }
 
 @keyframes acp-rise {
   from {
     opacity: 0;
-    transform: translateY(6px);
   }
 }
 .rise {
-  animation: acp-rise 200ms ease-out;
+  animation: acp-rise 120ms ease-out;
 }
 
-/* ---- Empty state (dashed container used by the pages) ---- */
+/* ---- Empty state ---- */
 .empty {
   border: 1px dashed var(--border-strong);
-  border-radius: 16px;
-  background: var(--surface);
-  padding: 2.5rem 1rem;
+  border-radius: 6px;
+  padding: 2rem 1rem;
   text-align: center;
   color: var(--text-muted);
 }
 
-/* ---- Tables: card-like container, sticky header, hover rows; stacked cards below 1024px ---- */
+/* ---- Tables: hairline container, sticky header, dense rows; stacked rows below 1024px ---- */
 .tbl-wrap {
   overflow: auto;
   max-height: calc(100dvh - 11rem);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 6px;
   background: var(--surface);
-  box-shadow: var(--shadow);
 }
 .tbl-wrap thead th {
   position: sticky;
@@ -268,20 +283,17 @@ textarea:focus-visible {
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
 }
-.tbl-wrap tbody tr {
-  transition: background-color 150ms;
+.tbl-wrap tbody tr + tr {
+  border-top: 1px solid var(--border);
 }
 .tbl-wrap tbody tr:hover {
-  background: color-mix(in srgb, var(--surface-2) 60%, transparent);
+  background: var(--surface-2);
 }
 
 @media (max-width: 1023px) {
   .tbl-wrap {
     overflow: visible;
     max-height: none;
-    border: 0;
-    background: transparent;
-    box-shadow: none;
   }
   .tbl-wrap table,
   .tbl-wrap tbody {
@@ -298,13 +310,8 @@ textarea:focus-visible {
   .tbl-wrap tbody tr {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 0.5rem 1rem;
-    margin-bottom: 0.75rem;
-    padding: 0.75rem 1rem;
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    background: var(--surface);
-    box-shadow: var(--shadow);
+    gap: 0.4rem 1rem;
+    padding: 0.7rem 0.85rem;
   }
   .tbl-wrap tbody td {
     display: block;
@@ -316,9 +323,9 @@ textarea:focus-visible {
     content: attr(data-label);
     display: block;
     margin-bottom: 0.1rem;
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     font-weight: 600;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--text-muted);
   }
@@ -340,7 +347,8 @@ textarea:focus-visible {
 
 /* ---- Dialogs: centered card on desktop, bottom sheet on phones ---- */
 .dlg {
-  box-shadow: 0 24px 60px -20px rgb(0 0 0 / 0.5);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 12px 32px -12px rgb(0 0 0 / 0.5);
 }
 @media (max-width: 767px) {
   dialog.dlg {
@@ -349,7 +357,7 @@ textarea:focus-visible {
     width: 100%;
     max-height: 92dvh;
     overflow-y: auto;
-    border-radius: 20px 20px 0 0;
+    border-radius: 8px 8px 0 0;
   }
   .dlg-overlay {
     align-items: flex-end !important;
@@ -360,12 +368,12 @@ textarea:focus-visible {
     max-width: 100%;
     max-height: 92dvh;
     overflow-y: auto;
-    border-radius: 20px 20px 0 0;
+    border-radius: 8px 8px 0 0;
   }
 }
 @keyframes acp-sheet {
   from {
-    transform: translateY(24px);
+    transform: translateY(12px);
     opacity: 0;
   }
 }
@@ -381,19 +389,4 @@ textarea:focus-visible {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-}
-
-.empty::before {
-  content: '';
-  display: block;
-  width: 2.75rem;
-  height: 2.75rem;
-  margin: 0 auto 0.75rem;
-  border-radius: 14px;
-  background: var(--accent-soft);
-  -webkit-mask: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b8cf8' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 12h-6l-2 3h-4l-2-3H2'/%3E%3Cpath d='M5.5 5h13l3.5 7v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: 1.5rem;
 }

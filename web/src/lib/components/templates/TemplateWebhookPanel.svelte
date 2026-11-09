@@ -69,7 +69,7 @@
 </script>
 
 <section class={card} aria-labelledby="twh-h">
-  <h2 id="twh-h" class="mb-2 text-lg font-medium">Webhook</h2>
+  <h2 id="twh-h" class="mb-2 text-sm font-semibold">Webhook</h2>
   {#if hook}
     <p class="text-sm text-muted">
       {hook.enabled

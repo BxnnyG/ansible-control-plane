@@ -46,7 +46,7 @@
 </script>
 
 <section class={card} aria-labelledby="git-h">
-  <h2 id="git-h" class="mb-2 text-lg font-medium">Git write-back</h2>
+  <h2 id="git-h" class="mb-2 text-sm font-semibold">Git write-back</h2>
   <p class="mb-3 text-sm text-muted">
     Changes are committed to branch <code>{inv.write_branch || 'default'}</code> of the project. Vault
     values are written in their encrypted form.

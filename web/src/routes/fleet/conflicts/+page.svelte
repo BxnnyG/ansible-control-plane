@@ -99,7 +99,10 @@
               </td>
               <td class={td}>
                 {#each conflictHosts(c) as h (h.id)}
-                  <a class="mr-2 text-accent underline" href="/fleet/hosts/{h.id}">{h.label}</a>
+                  <a
+                    class="mr-2 underline decoration-border-strong underline-offset-2 hover:decoration-current"
+                    href="/fleet/hosts/{h.id}">{h.label}</a
+                  >
                 {/each}
               </td>
               <td class={td}>

@@ -11,7 +11,7 @@
 {#if outcomes.length > 0}
   <svg
     viewBox="0 0 {width} 28"
-    class="h-7 w-auto max-w-full"
+    class="h-5 w-auto max-w-full"
     role="img"
     aria-label="Last {outcomes.length} finished runs: {ok} succeeded, {outcomes.length - ok} failed"
   >
@@ -23,7 +23,7 @@
         height={good ? 20 : 28}
         rx="2"
         fill={good ? 'var(--ok)' : 'var(--bad)'}
-        opacity={good ? 0.75 : 1}
+        opacity={good ? 0.8 : 1}
       />
     {/each}
   </svg>

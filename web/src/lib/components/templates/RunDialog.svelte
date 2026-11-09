@@ -79,7 +79,7 @@
     aria-labelledby="run-dialog-h"
     class="dlg mt-8 w-full max-w-xl rounded-2xl border border-border bg-surface p-5"
   >
-    <h2 id="run-dialog-h" class="text-lg font-semibold">Run {template.name}</h2>
+    <h2 id="run-dialog-h" class="text-base font-semibold">Run {template.name}</h2>
     <p class="text-sm text-muted">
       <code>{template.playbook}</code>
       {#if !template.allow_limit_override && template.default_limit}

@@ -82,7 +82,10 @@
               {d.last_error || '-'}
             </td>
             <td class={td}>
-              <a class="text-accent hover:underline" href="/runs/{d.run_id}">Open run</a>
+              <a
+                class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+                href="/runs/{d.run_id}">Open run</a
+              >
             </td>
           </tr>
         {/each}

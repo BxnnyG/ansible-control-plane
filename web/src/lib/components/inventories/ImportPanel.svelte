@@ -69,7 +69,7 @@
 </script>
 
 <section class={card} aria-labelledby="import-h">
-  <h2 id="import-h" class="mb-2 text-lg font-medium">Import from project</h2>
+  <h2 id="import-h" class="mb-2 text-sm font-semibold">Import from project</h2>
   <p class="mb-3 text-sm text-muted">
     Replaces hosts and groups with the content of an inventory file from a synced project.
   </p>

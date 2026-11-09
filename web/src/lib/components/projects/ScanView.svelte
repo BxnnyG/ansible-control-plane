@@ -7,7 +7,7 @@
 </script>
 
 <section class="space-y-4" aria-labelledby="scan-h">
-  <h2 id="scan-h" class="text-lg font-medium">Latest scan</h2>
+  <h2 id="scan-h" class="text-sm font-semibold">Latest scan</h2>
 
   {#if scan.warnings.length > 0}
     <ul class="{card} space-y-1 text-sm text-warn">
@@ -105,8 +105,9 @@
       {/each}
     </ul>
     <p class="mt-2 text-xs text-muted">
-      Vault passwords are managed as <a class="text-accent hover:underline" href="/vault"
-        >vault identities</a
+      Vault passwords are managed as <a
+        class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+        href="/vault">vault identities</a
       >. Decrypt, encrypt and rekey are available in the vault panel above.
     </p>
   </details>

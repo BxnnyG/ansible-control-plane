@@ -105,10 +105,12 @@
 
 <section class="{card} space-y-4" aria-labelledby="vault-h">
   <div>
-    <h2 id="vault-h" class="text-lg font-medium">Vault</h2>
+    <h2 id="vault-h" class="text-sm font-semibold">Vault</h2>
     <p class="text-sm text-muted">
-      Passwords come from <a class="text-accent hover:underline" href="/vault">vault identities</a>.
-      Encrypt and rekey commit to a separate branch of the project.
+      Passwords come from <a
+        class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+        href="/vault">vault identities</a
+      >. Encrypt and rekey commit to a separate branch of the project.
     </p>
   </div>
   <ErrorBox error={loadError} />

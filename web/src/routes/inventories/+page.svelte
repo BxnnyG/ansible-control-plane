@@ -62,9 +62,11 @@
 
 <svelte:head><title>Inventories - Ansible Control Plane</title></svelte:head>
 
-<header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+<header
+  class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
+>
   <div>
-    <h1 class="text-2xl font-semibold sm:text-3xl">Inventories</h1>
+    <h1 class="text-xl font-semibold">Inventories</h1>
     <p class="mt-1 text-muted">Host and group definitions stored in the database or in Git.</p>
   </div>
   {#if canWrite && !creating}
@@ -136,7 +138,10 @@
           {#each items as i (i.id)}
             <tr>
               <td class={td}
-                ><a class="text-accent hover:underline" href="/inventories/{i.id}">{i.name}</a></td
+                ><a
+                  class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+                  href="/inventories/{i.id}">{i.name}</a
+                ></td
               >
               <td class={td}>{i.mode}</td>
               <td class={td}>{i.hosts}</td>

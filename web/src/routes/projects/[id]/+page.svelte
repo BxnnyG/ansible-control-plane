@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
@@ -95,12 +96,14 @@
 
 <svelte:head><title>{project?.name ?? 'Project'} - Ansible Control Plane</title></svelte:head>
 
-<p class="mb-2 text-sm"><a class="text-accent hover:underline" href="/projects">Projects</a></p>
+<Breadcrumbs trail={[{ label: 'Projects', href: '/projects' }]} />
 
 {#if project && ws}
-  <header class="mb-6 flex flex-wrap items-start justify-between gap-4">
+  <header
+    class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
+  >
     <div>
-      <h1 class="text-2xl font-semibold sm:text-3xl">{project.name}</h1>
+      <h1 class="text-xl font-semibold">{project.name}</h1>
       <p class="mt-1 text-sm break-all text-muted">{project.url}</p>
       <p class="mt-1 text-sm">
         <SyncBadge status={project.last_sync_status} />
@@ -146,7 +149,7 @@
 
   <div class="grid gap-6 lg:grid-cols-2">
     <section class={card} aria-labelledby="settings-h">
-      <h2 id="settings-h" class="mb-3 text-lg font-medium">Settings</h2>
+      <h2 id="settings-h" class="mb-3 text-sm font-semibold">Settings</h2>
       {#if canWrite}
         {#key project.updated_at}
           <ProjectForm
@@ -173,7 +176,7 @@
   </div>
 
   <section class="mt-6" aria-labelledby="rev-h">
-    <h2 id="rev-h" class="mb-2 text-lg font-medium">Revisions</h2>
+    <h2 id="rev-h" class="mb-2 text-sm font-semibold">Revisions</h2>
     {#if revisions.length === 0}
       <p class="text-sm text-muted">No revisions yet. Run a sync.</p>
     {:else}

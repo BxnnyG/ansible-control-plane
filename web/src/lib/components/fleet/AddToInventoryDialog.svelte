@@ -78,7 +78,7 @@
     onclose();
   }}
 >
-  <h2 id="add-h" class="text-lg font-medium">Add {host.name || 'host'} to an inventory</h2>
+  <h2 id="add-h" class="text-sm font-semibold">Add {host.name || 'host'} to an inventory</h2>
   <p class="mt-1 text-sm text-muted">
     ansible_host is set to the primary address ({host.ips?.[0] ?? 'none'}). Git inventories get a
     commit on their write branch.

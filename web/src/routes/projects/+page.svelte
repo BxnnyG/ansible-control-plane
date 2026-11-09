@@ -41,9 +41,11 @@
 
 <svelte:head><title>Projects - Ansible Control Plane</title></svelte:head>
 
-<header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+<header
+  class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
+>
   <div>
-    <h1 class="text-2xl font-semibold sm:text-3xl">Projects</h1>
+    <h1 class="text-xl font-semibold">Projects</h1>
     <p class="mt-1 text-muted">Git repositories containing playbooks and roles.</p>
   </div>
   {#if canWrite && !creating}
@@ -84,7 +86,10 @@
           {#each items as p (p.id)}
             <tr>
               <td class={td}>
-                <a class="text-accent hover:underline" href="/projects/{p.id}">{p.name}</a>
+                <a
+                  class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+                  href="/projects/{p.id}">{p.name}</a
+                >
               </td>
               <td class="{td} break-all text-muted">{p.url}</td>
               <td class={td}>

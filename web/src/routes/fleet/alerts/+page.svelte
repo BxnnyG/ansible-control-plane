@@ -68,7 +68,10 @@
     </select>
     {#if hostId}
       <span class="text-sm text-muted">
-        Filtered by host. <a class="text-accent underline" href="/fleet/alerts">Show all</a>
+        Filtered by host. <a
+          class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+          href="/fleet/alerts">Show all</a
+        >
       </span>
     {/if}
   </div>
@@ -96,7 +99,9 @@
               </td>
               <td class={td}>
                 {#if a.host_id}
-                  <a class="text-accent underline" href="/fleet/hosts/{a.host_id}">{alertHost(a)}</a
+                  <a
+                    class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+                    href="/fleet/hosts/{a.host_id}">{alertHost(a)}</a
                   >
                 {:else}
                   {alertHost(a)} <span class="text-xs text-muted">(unlinked)</span>

@@ -194,7 +194,10 @@
             <tr>
               <td class={td}><a href="/runs/{r.id}"><StatusBadge status={r.status} /></a></td>
               <td class={td}>
-                <a class="text-accent hover:underline" href="/runs/{r.id}">{r.template_name}</a>
+                <a
+                  class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+                  href="/runs/{r.id}">{r.template_name}</a
+                >
                 <div class="font-mono text-xs text-muted">{r.params.playbook}</div>
               </td>
               <td class={td}>
