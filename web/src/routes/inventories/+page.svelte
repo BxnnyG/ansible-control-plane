@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { goto } from '$app/navigation';
   import { api, type Inventory, type InventoryMode, type Project } from '$lib/api';
   import { session } from '$lib/session.svelte';
@@ -59,9 +60,9 @@
 
 <svelte:head><title>Inventories - Ansible Control Plane</title></svelte:head>
 
-<header class="mb-6 flex items-start justify-between gap-4">
+<header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
   <div>
-    <h1 class="text-2xl font-semibold">Inventories</h1>
+    <h1 class="text-2xl font-semibold sm:text-3xl">Inventories</h1>
     <p class="mt-1 text-muted">Host and group definitions stored in the database or in Git.</p>
   </div>
   {#if canWrite && !creating}
@@ -117,7 +118,7 @@
   <ErrorBox {error} />
 
   {#if loading}
-    <p class="text-muted">Loading...</p>
+    <ListSkeleton />
   {:else if items.length === 0}
     <div class="empty">No inventories yet.</div>
   {:else}

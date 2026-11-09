@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { goto } from '$app/navigation';
   import { api, type Template } from '$lib/api';
   import { describeError } from '$lib/errors';
@@ -44,9 +45,9 @@
 
 <svelte:head><title>Templates - Ansible Control Plane</title></svelte:head>
 
-<header class="mb-6 flex items-start justify-between gap-4">
+<header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
   <div>
-    <h1 class="text-2xl font-semibold">Templates</h1>
+    <h1 class="text-2xl font-semibold sm:text-3xl">Templates</h1>
     <p class="mt-1 text-muted">Reusable playbook run definitions.</p>
   </div>
   {#if canWrite && !creating}
@@ -71,7 +72,7 @@
   {/if}
 
   {#if loading}
-    <p class="text-muted">Loading...</p>
+    <ListSkeleton />
   {:else if items.length === 0}
     <div class="empty">No templates yet.</div>
   {:else}

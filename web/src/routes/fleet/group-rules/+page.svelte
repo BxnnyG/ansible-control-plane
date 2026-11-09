@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { api, type GroupRule, type GroupRulePreview, type Inventory } from '$lib/api';
   import { describeError } from '$lib/errors';
   import { describeMatch, describeRuleError, summarizePlan } from '$lib/groupRules';
@@ -108,9 +109,9 @@
 
 <svelte:head><title>Group rules - Ansible Control Plane</title></svelte:head>
 
-<header class="mb-4 flex items-start justify-between gap-4">
+<header class="mb-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
   <div>
-    <h1 class="text-2xl font-semibold">Group rules</h1>
+    <h1 class="text-2xl font-semibold sm:text-3xl">Group rules</h1>
     <p class="mt-1 text-muted">Fill inventory groups automatically from fleet data.</p>
   </div>
   {#if canManage && editing === null}
@@ -188,7 +189,7 @@
   {/if}
 
   {#if loading}
-    <p class="text-muted">Loading...</p>
+    <ListSkeleton />
   {:else if rules.length === 0}
     <div class="empty">No group rules yet.</div>
   {:else}

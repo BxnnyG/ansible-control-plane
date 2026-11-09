@@ -1,4 +1,5 @@
 <script lang="ts">
+  import BrandMark from '$lib/components/BrandMark.svelte';
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { api, oidcLoginUrl, type AuthConfig } from '$lib/api';
@@ -28,10 +29,16 @@
 
 <svelte:head><title>Sign in - Ansible Control Plane</title></svelte:head>
 
-<section class="w-full max-w-sm rounded-xl border border-border bg-surface p-6">
-  <h1 class="text-xl font-semibold">Sign in</h1>
+<section
+  class="rise w-full max-w-sm rounded-3xl border border-border bg-surface p-6 shadow-card sm:p-8"
+>
+  <div class="mb-6 flex flex-col items-center text-center">
+    <span class="scale-125"><BrandMark /></span>
+    <p class="mt-4 text-sm font-semibold tracking-wide text-muted uppercase">Control Plane</p>
+    <h1 class="mt-1 text-2xl font-semibold">Sign in</h1>
+  </div>
 
-  <p role="alert" class="mt-3 min-h-5 text-sm text-red-600 dark:text-red-400">
+  <p role="alert" class="mt-3 min-h-5 text-sm text-bad">
     {errorText ?? ''}
   </p>
 
@@ -46,7 +53,7 @@
       {#if config.oidc}
         <a
           href={oidcLoginUrl(returnTo)}
-          class="block w-full rounded-md bg-accent px-4 py-2 text-center text-accent-fg"
+          class="bg-brand flex min-h-11 w-full items-center justify-center rounded-lg px-4 py-2 text-center font-medium shadow-sm hover:brightness-110"
         >
           Sign in with SSO
         </a>

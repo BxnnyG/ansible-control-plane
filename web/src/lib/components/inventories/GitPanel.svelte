@@ -81,7 +81,7 @@
   {/if}
 
   {#if committed}
-    <p role="status" class="mt-3 text-sm text-green-700 dark:text-green-400">
+    <p role="status" class="mt-3 text-sm text-ok">
       {committed.no_op
         ? 'Nothing to commit.'
         : `Committed ${committed.sha.slice(0, 8)} to ${committed.branch}${committed.branch_created ? ' (new branch)' : ''}.`}

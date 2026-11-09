@@ -189,12 +189,7 @@
   </label>
 
   {#if testResult}
-    <p
-      role="status"
-      class="text-sm {testResult.ok
-        ? 'text-green-700 dark:text-green-400'
-        : 'text-red-600 dark:text-red-400'}"
-    >
+    <p role="status" class="text-sm {testResult.ok ? 'text-ok' : 'text-bad'}">
       {testResult.ok ? 'Connection OK.' : `Connection failed: ${testResult.error}`}
     </p>
   {/if}

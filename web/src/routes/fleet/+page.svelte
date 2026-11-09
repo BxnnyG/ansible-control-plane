@@ -1,4 +1,6 @@
 <script lang="ts">
+  import ListSkeleton from '$lib/components/ListSkeleton.svelte';
+  import PageHeader from '$lib/components/PageHeader.svelte';
   import { api, type FleetHost, type FleetNetwork, type Template } from '$lib/api';
   import { describeError } from '$lib/errors';
   import { session } from '$lib/session.svelte';
@@ -100,10 +102,7 @@
 
 <svelte:head><title>Fleet - Ansible Control Plane</title></svelte:head>
 
-<header class="mb-4">
-  <h1 class="text-2xl font-semibold">Fleet</h1>
-  <p class="mt-1 text-muted">Hosts and networks merged from all connectors.</p>
-</header>
+<PageHeader title="Fleet" description="Hosts and networks merged from all connectors." />
 <FleetTabs />
 <FormError id="fleet-error" message={error} />
 
@@ -179,7 +178,7 @@
       />
     {/if}
     {#if loading}
-      <p class="text-muted">Loading...</p>
+      <ListSkeleton />
     {:else if hosts.length === 0}
       <div class="empty">No hosts match.</div>
     {:else}
@@ -229,8 +228,7 @@
                   <span class="rounded px-2 py-0.5 text-xs {ansibleClass(h)}"
                     >{ansibleLabel(h)}</span
                   >
-                  {#if h.reachable === 'no'}<span
-                      class="ml-1 text-xs text-red-600 dark:text-red-400">unreachable</span
+                  {#if h.reachable === 'no'}<span class="ml-1 text-xs text-bad">unreachable</span
                     >{/if}
                 </td>
                 <td class={td}>
@@ -251,7 +249,7 @@
                 </td>
                 <td class={td}>
                   {#if h.open_conflicts > 0}
-                    <span class="text-red-600 dark:text-red-400">{h.open_conflicts}</span>
+                    <span class="text-bad">{h.open_conflicts}</span>
                   {:else}0{/if}
                 </td>
                 <td class={td}>{fmtDate(h.last_seen)}</td>

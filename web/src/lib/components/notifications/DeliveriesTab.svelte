@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { api, type NotificationChannel, type NotificationDelivery } from '$lib/api';
   import { describeError } from '$lib/errors';
   import { deliveryStatusClass, eventLabel } from '$lib/notifications';
@@ -52,7 +53,7 @@
 <FormError id="deliveries-error" message={error} />
 
 {#if loading}
-  <p class="text-muted">Loading...</p>
+  <ListSkeleton />
 {:else if items.length === 0}
   <div class="empty">No deliveries.</div>
 {:else}
@@ -77,7 +78,7 @@
               </span>
             </td>
             <td class={td}>{d.attempts}</td>
-            <td class="{td} max-w-xs text-xs break-words text-red-600 dark:text-red-400">
+            <td class="{td} max-w-xs text-xs break-words text-bad">
               {d.last_error || '-'}
             </td>
             <td class={td}>

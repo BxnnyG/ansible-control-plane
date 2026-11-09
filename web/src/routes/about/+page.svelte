@@ -5,7 +5,7 @@
 <svelte:head><title>About - Ansible Control Plane</title></svelte:head>
 
 <article class="max-w-2xl">
-  <h1 class="text-2xl font-semibold">About</h1>
+  <h1 class="text-2xl font-semibold sm:text-3xl">About</h1>
   <p class="mt-3">
     Ansible Control Plane is a self-hosted web platform to run, organize and monitor Ansible.
   </p>

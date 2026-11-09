@@ -6,8 +6,9 @@ export const btnDanger = `inline-flex items-center justify-center gap-2 rounded-
 export const input = `w-full rounded-lg border border-border bg-surface px-3 py-1.5 text-base text-fg placeholder:text-muted/70 disabled:opacity-60 md:text-sm ${touch}`;
 export const card = 'rounded-2xl border border-border bg-surface p-4 shadow-card sm:p-5';
 export const label = 'mb-1 block text-sm font-medium';
-export const th = 'px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted';
-export const td = 'px-4 py-3 text-sm';
+export const th =
+  'px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted';
+export const td = 'px-3.5 py-3 text-sm';
 /** Table container: card look, sticky header, stacked cards on small screens (see app.css). */
 export const tblWrap = 'tbl-wrap';
 export const emptyBox = 'empty';

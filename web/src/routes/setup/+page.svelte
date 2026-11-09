@@ -44,7 +44,7 @@
 
 <div class="max-w-3xl space-y-6">
   <header>
-    <h1 class="text-2xl font-semibold">Welcome</h1>
+    <h1 class="text-2xl font-semibold sm:text-3xl">Welcome</h1>
     <p class="mt-1 text-muted">A few steps to get this workspace ready.</p>
   </header>
 
@@ -54,7 +54,10 @@
     <p role="alert">Could not load the setup status. Reload the page.</p>
   {:else if status}
     <Stepper steps={SETUP_STEPS} current={step} />
-    <section aria-labelledby="step-heading" class="rounded-lg border border-border bg-surface p-5">
+    <section
+      aria-labelledby="step-heading"
+      class="rounded-2xl border border-border bg-surface p-5 shadow-card"
+    >
       <h2 id="step-heading" tabindex="-1" bind:this={heading} class="mb-4 text-lg font-semibold">
         {SETUP_STEPS[step].title}
       </h2>

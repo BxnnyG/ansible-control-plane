@@ -218,7 +218,7 @@
         </div>
         <button class={btnPrimary} disabled={busy}>Encrypt and commit</button>
         {#if encResult}
-          <p role="status" class="text-sm text-green-700 dark:text-green-400">
+          <p role="status" class="text-sm text-ok">
             {describeResult(encResult)}
           </p>
         {/if}
@@ -268,7 +268,7 @@
           Rekey and commit
         </button>
         {#if rekResult}
-          <p role="status" class="text-sm text-green-700 dark:text-green-400">
+          <p role="status" class="text-sm text-ok">
             {describeResult(rekResult)}
           </p>
         {/if}

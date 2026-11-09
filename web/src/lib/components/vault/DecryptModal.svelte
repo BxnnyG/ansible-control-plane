@@ -57,7 +57,7 @@
 <dialog
   bind:this={dialog}
   aria-labelledby="dec-h"
-  class="m-auto w-full max-w-2xl rounded-lg border border-border bg-surface p-4 text-fg backdrop:bg-black/50"
+  class="dlg m-auto w-full max-w-2xl rounded-2xl border border-border bg-surface p-5 text-fg backdrop:bg-(--overlay)"
   oncancel={(e) => {
     e.preventDefault();
     close();
@@ -67,7 +67,7 @@
   <p class="mt-1 text-sm break-all text-muted">
     <code>{path}</code>{#if keyPath}&nbsp;<code>{keyPath}</code>{/if}
   </p>
-  <p class="mt-2 text-sm text-amber-700 dark:text-amber-400">
+  <p class="mt-2 text-sm text-warn">
     This action is recorded in the audit log. Do not share the content.
   </p>
   {#if busy}

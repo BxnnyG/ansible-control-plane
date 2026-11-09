@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { page } from '$app/state';
   import { api, type FleetAlert, type FleetHostDetail, type RemediationRef } from '$lib/api';
   import { describeError } from '$lib/errors';
@@ -66,10 +67,10 @@
 {#if !canRead}
   <p class="text-muted">You do not have permission to view the fleet in this workspace.</p>
 {:else if loading}
-  <p class="text-muted">Loading...</p>
+  <ListSkeleton />
 {:else if host}
   <header class="mb-6">
-    <h1 class="text-2xl font-semibold">{host.name}</h1>
+    <h1 class="text-2xl font-semibold sm:text-3xl">{host.name}</h1>
     <p class="mt-1 text-muted">
       First seen {fmtDate(host.first_seen)}, last seen {fmtDate(host.last_seen)}
     </p>

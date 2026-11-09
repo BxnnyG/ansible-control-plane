@@ -171,8 +171,10 @@
                     class="flex min-h-14 flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 hover:bg-surface-2 sm:px-5"
                   >
                     <span class={statusClass(r.status)}>{r.status}</span>
-                    <span class="min-w-0 flex-1 truncate font-medium">{r.template_name}</span>
-                    <span class="text-sm text-muted">
+                    <span class="min-w-0 flex-1 basis-32 truncate font-medium"
+                      >{r.template_name}</span
+                    >
+                    <span class="w-full text-sm text-muted sm:w-auto">
                       {formatDuration(r.started_at, r.finished_at, now)}
                       <span aria-hidden="true"> · </span>
                       {relativeTime(r.created_at, now)}

@@ -72,7 +72,7 @@
 <dialog
   bind:this={dialog}
   aria-labelledby="add-h"
-  class="m-auto w-full max-w-lg rounded-lg border border-border bg-surface p-4 text-fg backdrop:bg-black/50"
+  class="dlg m-auto w-full max-w-lg rounded-2xl border border-border bg-surface p-5 text-fg backdrop:bg-(--overlay)"
   oncancel={(e) => {
     e.preventDefault();
     onclose();

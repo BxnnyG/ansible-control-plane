@@ -91,10 +91,7 @@
       </div>
     {/if}
     {#if revealed}
-      <div
-        role="alert"
-        class="mt-3 rounded-md border border-amber-500/60 bg-amber-500/10 p-3 text-sm"
-      >
+      <div role="alert" class="mt-3 rounded-xl border border-warn/40 bg-warn/10 p-3 text-sm">
         <p class="font-medium">Webhook secret - shown only once</p>
         <p class="text-muted">Copy it now. It cannot be shown again.</p>
         <code class="mt-2 block rounded bg-surface-2 p-2 text-xs break-all">{revealed}</code>

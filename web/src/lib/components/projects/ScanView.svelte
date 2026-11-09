@@ -10,7 +10,7 @@
   <h2 id="scan-h" class="text-lg font-medium">Latest scan</h2>
 
   {#if scan.warnings.length > 0}
-    <ul class="{card} space-y-1 text-sm text-amber-700 dark:text-amber-400">
+    <ul class="{card} space-y-1 text-sm text-warn">
       {#each scan.warnings as w, i (i)}<li><code>{w.path}</code> {w.message}</li>{/each}
     </ul>
   {/if}
@@ -70,7 +70,7 @@
       {#each scan.vars_files as v (v.path)}
         <li>
           <code>{v.path}</code> <span class="text-muted">{v.scope} {v.name}</span>
-          {#if v.vaulted}<span class="text-amber-700 dark:text-amber-400"> (vault)</span>{/if}
+          {#if v.vaulted}<span class="text-warn"> (vault)</span>{/if}
         </li>
       {/each}
     </ul>

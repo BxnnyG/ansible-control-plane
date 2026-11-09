@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { api, type RemediationRule, type Template } from '$lib/api';
   import { describeError } from '$lib/errors';
   import { describeTarget } from '$lib/remediation';
@@ -58,9 +59,9 @@
 
 <svelte:head><title>Remediation - Ansible Control Plane</title></svelte:head>
 
-<header class="mb-4 flex items-start justify-between gap-4">
+<header class="mb-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
   <div>
-    <h1 class="text-2xl font-semibold">Remediation</h1>
+    <h1 class="text-2xl font-semibold sm:text-3xl">Remediation</h1>
     <p class="mt-1 text-muted">
       Map alerts to a template and a limit. Rules only offer a Fix button on matching alerts;
       nothing runs automatically.
@@ -103,7 +104,7 @@
   {/if}
 
   {#if loading}
-    <p class="text-muted">Loading...</p>
+    <ListSkeleton />
   {:else if rules.length === 0}
     <div class="empty">No remediation rules yet.</div>
   {:else}

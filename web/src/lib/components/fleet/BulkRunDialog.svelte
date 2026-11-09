@@ -83,9 +83,7 @@
           <input type="checkbox" bind:checked={checkMode} /> Check mode (dry run, changes nothing)
         </label>
         {#if checkBlocked}
-          <p class="text-xs text-red-600 dark:text-red-400">
-            This template does not allow check mode overrides.
-          </p>
+          <p class="text-xs text-bad">This template does not allow check mode overrides.</p>
         {/if}
         {#if unlinked.length > 0}
           <p class="text-xs text-muted">

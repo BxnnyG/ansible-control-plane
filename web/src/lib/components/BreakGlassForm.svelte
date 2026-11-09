@@ -53,7 +53,7 @@
       autocomplete="username"
       required
       bind:value={username}
-      class="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2"
+      class="mt-1 min-h-11 w-full rounded-lg border border-border bg-surface px-3 py-2 text-base"
     />
   </div>
   <div>
@@ -65,7 +65,7 @@
       autocomplete="current-password"
       required
       bind:value={password}
-      class="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2"
+      class="mt-1 min-h-11 w-full rounded-lg border border-border bg-surface px-3 py-2 text-base"
     />
   </div>
   <div>
@@ -81,14 +81,14 @@
       required
       bind:value={totp}
       bind:this={totpInput}
-      class="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 font-mono tracking-widest"
+      class="mt-1 min-h-11 w-full rounded-lg border border-border bg-surface px-3 py-2 text-base font-mono tracking-widest"
     />
   </div>
   <FormError id="bg-error" message={error} />
   <button
     type="submit"
     disabled={busy}
-    class="w-full rounded-md border border-border px-4 py-2 hover:bg-surface-2 disabled:opacity-60"
+    class="min-h-11 w-full rounded-lg border border-border px-4 py-2 hover:bg-surface-2 disabled:opacity-60"
   >
     {busy ? 'Signing in...' : 'Sign in'}
   </button>

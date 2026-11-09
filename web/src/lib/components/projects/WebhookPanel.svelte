@@ -112,10 +112,7 @@
     {/if}
 
     {#if revealed}
-      <div
-        role="alert"
-        class="mt-3 rounded-md border border-amber-500/60 bg-amber-500/10 p-3 text-sm"
-      >
+      <div role="alert" class="mt-3 rounded-xl border border-warn/40 bg-warn/10 p-3 text-sm">
         <p class="font-medium">Webhook secret - shown only once</p>
         <p class="text-muted">
           Copy it now and store it in your Git provider. It cannot be shown again.

@@ -7,8 +7,8 @@
   const rows = $derived(results ?? []);
 
   function tone(r: HostResult): string {
-    if (r.failed > 0 || r.unreachable > 0) return 'text-red-600 dark:text-red-400';
-    if (r.changed > 0) return 'text-amber-600 dark:text-amber-400';
+    if (r.failed > 0 || r.unreachable > 0) return 'text-bad';
+    if (r.changed > 0) return 'text-warn';
     return '';
   }
 </script>

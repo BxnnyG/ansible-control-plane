@@ -1,4 +1,6 @@
 <script lang="ts">
+  import ListSkeleton from '$lib/components/ListSkeleton.svelte';
+  import PageHeader from '$lib/components/PageHeader.svelte';
   import { api, type FleetHost, type Inventory } from '$lib/api';
   import { describeError } from '$lib/errors';
   import { session } from '$lib/session.svelte';
@@ -55,13 +57,10 @@
 
 <svelte:head><title>Unmanaged hosts - Ansible Control Plane</title></svelte:head>
 
-<header class="mb-4">
-  <h1 class="text-2xl font-semibold">Fleet</h1>
-  <p class="mt-1 text-muted">Hosts that no inventory of this workspace manages yet.</p>
-</header>
+<PageHeader title="Fleet" description="Hosts that no inventory of this workspace manages yet." />
 <FleetTabs />
 <FormError id="unmanaged-error" message={error} />
-{#if notice}<p role="status" class="mb-3 text-sm text-green-700 dark:text-green-400">
+{#if notice}<p role="status" class="mb-3 text-sm text-ok">
     {notice}
   </p>{/if}
 
@@ -78,7 +77,7 @@
     />
   </div>
   {#if loading}
-    <p class="text-muted">Loading...</p>
+    <ListSkeleton />
   {:else if hosts.length === 0}
     <div class="empty">Every host is linked to an inventory host.</div>
   {:else}

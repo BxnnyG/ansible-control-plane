@@ -8,6 +8,7 @@ All notable changes are documented here. The format follows
 
 ### Added
 
+- **Web UI redesign:** light/dark design tokens with an indigo to violet accent, semantic status pills, a sidebar grouped into Operate / Configure / Security with an off-canvas drawer on phones, a new Dashboard home page (runs of the last 24 hours, running now, hosts online, open alerts, drift, recent runs, failing templates, connector health) and responsive pages: tables become stacked cards below 1024 px, row actions collapse into a menu, dialogs become bottom sheets, long connector warnings collapse into an expandable badge.
 - **Notification channels in the UI:** per-type setup guides, field help and defaults, inline credential entry (creates the encrypted secret for you) and replacing a linked secret's value, and a hint for channels without rules.
 - **Draft test:** `POST /api/v1/workspaces/{workspace}/notifications/channels/test` sends a test message through an unsaved channel definition (also for edits of existing channels); the credential is used in memory only, audited as `notification.channel.test_draft`, rate limited to 10 per minute and user.
 
@@ -18,6 +19,7 @@ All notable changes are documented here. The format follows
 
 ### Fixed
 
+- The runs page no longer re-runs its load effect on every filter change (it reloaded and could loop); filters apply with the Filter button as before.
 - Old Semaphore URLs (`/auth/login`, `/project/<n>/...`) redirect to the matching ACP page instead of showing a 404.
 
 ## [1.1.0] - 2026-11-07

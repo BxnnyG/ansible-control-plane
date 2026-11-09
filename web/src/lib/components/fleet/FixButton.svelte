@@ -127,6 +127,6 @@
         >
       </div>
     {/if}
-    {#if error}<p role="alert" class="text-sm text-red-600 dark:text-red-400">{error}</p>{/if}
+    {#if error}<p role="alert" class="text-sm text-bad">{error}</p>{/if}
   </div>
 {/if}

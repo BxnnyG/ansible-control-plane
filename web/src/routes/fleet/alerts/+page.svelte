@@ -1,4 +1,6 @@
 <script lang="ts">
+  import ListSkeleton from '$lib/components/ListSkeleton.svelte';
+  import PageHeader from '$lib/components/PageHeader.svelte';
   import { page } from '$app/state';
   import { api, type FleetAlert, type RemediationRef } from '$lib/api';
   import { describeError } from '$lib/errors';
@@ -48,10 +50,10 @@
 
 <svelte:head><title>Alerts - Ansible Control Plane</title></svelte:head>
 
-<header class="mb-4">
-  <h1 class="text-2xl font-semibold">Alerts</h1>
-  <p class="mt-1 text-muted">Monitoring alerts from Checkmk and alert webhooks, linked to hosts.</p>
-</header>
+<PageHeader
+  title="Alerts"
+  description="Monitoring alerts from Checkmk and alert webhooks, linked to hosts."
+/>
 <FleetTabs />
 <FormError id="alerts-error" message={error} />
 
@@ -71,7 +73,7 @@
     {/if}
   </div>
   {#if loading}
-    <p class="text-muted">Loading...</p>
+    <ListSkeleton />
   {:else if items.length === 0}
     <div class="empty">No alerts.</div>
   {:else}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { api, ApiError, type Project, type ProjectRevision, type SecretMeta } from '$lib/api';
@@ -99,7 +100,7 @@
 {#if project && ws}
   <header class="mb-6 flex flex-wrap items-start justify-between gap-4">
     <div>
-      <h1 class="text-2xl font-semibold">{project.name}</h1>
+      <h1 class="text-2xl font-semibold sm:text-3xl">{project.name}</h1>
       <p class="mt-1 text-sm break-all text-muted">{project.url}</p>
       <p class="mt-1 text-sm">
         <SyncBadge status={project.last_sync_status} />
@@ -108,7 +109,7 @@
           >{/if}
       </p>
       {#if project.last_sync_status === 'error' && project.last_sync_error}
-        <p class="mt-1 text-sm text-red-600 dark:text-red-400">{project.last_sync_error}</p>
+        <p class="mt-1 text-sm text-bad">{project.last_sync_error}</p>
       {/if}
     </div>
     <div class="flex flex-wrap gap-2">
@@ -128,7 +129,7 @@
     </div>
   </header>
 
-  {#if notice}<p role="status" class="mb-3 text-sm text-green-700 dark:text-green-400">
+  {#if notice}<p role="status" class="mb-3 text-sm text-ok">
       {notice}
     </p>{/if}
   <FormError id="project-detail-error" message={error} />
@@ -211,7 +212,7 @@
     <div class="mt-6"><ScanView scan={normalizeScan(latest.scan)} /></div>
   {/if}
 {:else if !error}
-  <p class="text-muted">Loading...</p>
+  <ListSkeleton />
 {:else}
   <FormError id="project-detail-error" message={error} />
 {/if}

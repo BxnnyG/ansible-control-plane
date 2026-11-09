@@ -71,10 +71,7 @@
                   <button class="text-xs text-accent hover:underline" onclick={() => open(h)}>
                     edit
                   </button>
-                  <button
-                    class="text-xs text-red-600 hover:underline dark:text-red-400"
-                    onclick={() => remove(h)}
-                  >
+                  <button class="text-xs text-bad hover:underline" onclick={() => remove(h)}>
                     delete
                   </button>
                 {/if}

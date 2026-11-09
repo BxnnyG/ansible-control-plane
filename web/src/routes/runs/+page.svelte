@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
+  import ListSkeleton from '$lib/components/ListSkeleton.svelte';
+  import PageHeader from '$lib/components/PageHeader.svelte';
   import { page } from '$app/state';
   import { api, runStreamUrl, type Run, type RunFilter, type Template } from '$lib/api';
   import { describeError } from '$lib/errors';
@@ -89,8 +92,10 @@
         .then((t) => (templates = t ?? []))
         .catch(() => {});
     }
-    applied = formFilter();
-    void load(ws, applied);
+    untrack(() => {
+      applied = formFilter();
+      void load(ws, applied);
+    });
 
     // Live status updates; the stream has no snapshot, so reload after a reconnect.
     let opened = false;
@@ -116,10 +121,7 @@
 
 <svelte:head><title>Runs - Ansible Control Plane</title></svelte:head>
 
-<header class="mb-6">
-  <h1 class="text-2xl font-semibold">Runs</h1>
-  <p class="mt-1 text-muted">History and live output of playbook runs.</p>
-</header>
+<PageHeader title="Runs" description="History and live output of playbook runs." />
 
 {#if !canRead}
   <p class="text-muted">You do not have permission to view runs in this workspace.</p>
@@ -170,14 +172,12 @@
     <button class={btnPrimary} disabled={userInvalid}>Filter</button>
     <button type="button" class={btn} onclick={reset}>Reset</button>
   </form>
-  {#if userInvalid}<p class="mb-2 text-xs text-red-600 dark:text-red-400">
-      The user filter must be a UUID.
-    </p>{/if}
+  {#if userInvalid}<p class="mb-2 text-xs text-bad">The user filter must be a UUID.</p>{/if}
 
   <FormError id="runs-error" message={error} />
 
   {#if loading && items.length === 0}
-    <p class="text-muted">Loading...</p>
+    <ListSkeleton />
   {:else if items.length === 0}
     <div class="empty">No runs found.</div>
   {:else}
@@ -206,7 +206,7 @@
               <td class={td}>
                 {(r.params.hosts ?? []).length}
                 {#if r.hosts_failed + r.hosts_unreachable > 0}
-                  <span class="text-xs text-red-600 dark:text-red-400"
+                  <span class="text-xs text-bad"
                     >({r.hosts_failed + r.hosts_unreachable} failed)</span
                   >
                 {/if}

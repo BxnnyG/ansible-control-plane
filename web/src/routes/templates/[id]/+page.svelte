@@ -72,7 +72,7 @@
 {#if template && ws}
   <header class="mb-6 flex flex-wrap items-start justify-between gap-4">
     <div>
-      <h1 class="text-2xl font-semibold">{template.name}</h1>
+      <h1 class="text-2xl font-semibold sm:text-3xl">{template.name}</h1>
       {#if template.description}<p class="mt-1 text-muted">{template.description}</p>{/if}
     </div>
     <div class="flex gap-2">

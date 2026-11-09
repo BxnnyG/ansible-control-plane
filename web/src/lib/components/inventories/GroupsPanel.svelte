@@ -66,10 +66,7 @@
             <button class="text-xs text-accent hover:underline" onclick={() => open(node.group)}>
               edit
             </button>
-            <button
-              class="text-xs text-red-600 hover:underline dark:text-red-400"
-              onclick={() => remove(node.group)}
-            >
+            <button class="text-xs text-bad hover:underline" onclick={() => remove(node.group)}>
               delete
             </button>
           {/if}

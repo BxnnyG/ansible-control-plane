@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import {
@@ -101,7 +102,7 @@
 {#if inv && ws}
   <header class="mb-6 flex flex-wrap items-start justify-between gap-4">
     <div>
-      <h1 class="text-2xl font-semibold">{inv.name}</h1>
+      <h1 class="text-2xl font-semibold sm:text-3xl">{inv.name}</h1>
       <p class="mt-1 text-sm text-muted">
         Mode: {inv.mode}{inv.mode === 'git' ? ` (${inv.path})` : ''} - version {inv.version} - last import
         {fmtDate(inv.last_import_at)}
@@ -144,5 +145,5 @@
 {:else if error}
   <ErrorBox {error} />
 {:else}
-  <p class="text-muted">Loading...</p>
+  <ListSkeleton />
 {/if}

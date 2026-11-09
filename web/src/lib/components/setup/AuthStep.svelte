@@ -50,7 +50,7 @@
     This step is read-only; authentication is configured on the server.
   </p>
 
-  <button type="button" class="rounded-md bg-accent px-4 py-2 text-accent-fg" onclick={onnext}>
+  <button type="button" class="bg-brand min-h-11 rounded-lg px-4 py-2 font-medium" onclick={onnext}>
     Continue
   </button>
 </div>

@@ -8,7 +8,7 @@
 </script>
 
 <!-- Always rendered so screen readers announce changes. -->
-<div role="alert" class="min-h-5 text-sm text-red-600 dark:text-red-400">
+<div role="alert" class="min-h-5 text-sm text-bad">
   {#if error}
     <p>{describeError(error)}</p>
     {#if paths.length > 0}

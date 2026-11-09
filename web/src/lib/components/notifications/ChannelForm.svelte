@@ -414,12 +414,7 @@
 
   <FormError id="nc-error" message={error} />
   {#if testResult}
-    <p
-      role="status"
-      class="text-sm {testResult.ok
-        ? 'text-green-700 dark:text-green-400'
-        : 'text-red-700 dark:text-red-400'}"
-    >
+    <p role="status" class="text-sm {testResult.ok ? 'text-ok' : 'text-bad'}">
       {testResult.text}
     </p>
   {/if}
