@@ -90,6 +90,8 @@ export type NotificationRulePatch = S['NotificationRulePatch'];
 export type NotificationDelivery = S['NotificationDelivery'];
 export type FleetNetwork = S['FleetNetwork'];
 export type FleetNetworkCounts = S['FleetNetworkCounts'];
+export type FleetSettings = S['FleetSettings'];
+export type FleetTrackResult = S['FleetTrackResult'];
 export type FleetAnsibleLink = S['FleetAnsibleLink'];
 export type FleetRunRef = S['FleetRunRef'];
 export type FleetDrift = S['FleetDrift'];
@@ -162,6 +164,8 @@ export interface FleetAlertFilter {
   state?: 'open' | 'resolved';
   host_id?: string;
   connector?: string;
+  /** true also returns alerts of hosts whose only networks are untracked. */
+  includeUntracked?: boolean;
 }
 
 export interface FleetHostFilter {
@@ -171,6 +175,8 @@ export interface FleetHostFilter {
   alerts?: boolean;
   /** false lists the unmanaged hosts (not linked to any inventory host). */
   managed?: boolean;
+  /** true also lists hosts whose only networks are untracked. */
+  includeUntracked?: boolean;
 }
 
 export class ApiError extends Error {
@@ -547,6 +553,16 @@ export const api = {
         check_mode: checkMode,
       }),
     networks: (ws: string) => request<FleetNetwork[]>('GET', fleetPath(ws, 'networks')),
+    trackNetwork: (ws: string, id: string, tracked: boolean) =>
+      request<FleetTrackResult>('PATCH', fleetPath(ws, `networks/${encodeURIComponent(id)}`), {
+        tracked,
+      }),
+    /** Tracks exactly the given networks and untracks all others. */
+    trackOnly: (ws: string, ids: string[]) =>
+      request<FleetTrackResult>('PATCH', fleetPath(ws, 'networks'), { track_only: ids }),
+    settings: (ws: string) => request<FleetSettings>('GET', fleetPath(ws, 'fleet/settings')),
+    setSettings: (ws: string, s: FleetSettings) =>
+      request<FleetSettings>('PUT', fleetPath(ws, 'fleet/settings'), s),
     hosts: (ws: string, f: FleetHostFilter = {}) => {
       const q = new URLSearchParams();
       if (f.network) q.set('network', f.network);
@@ -554,6 +570,7 @@ export const api = {
       if (f.conflicts) q.set('conflicts', 'true');
       if (f.alerts) q.set('alerts', 'true');
       if (f.managed !== undefined) q.set('managed', String(f.managed));
+      if (f.includeUntracked) q.set('include_untracked', 'true');
       const qs = q.toString();
       return request<FleetHost[]>('GET', fleetPath(ws, 'hosts') + (qs ? `?${qs}` : ''));
     },
@@ -572,6 +589,7 @@ export const api = {
       if (f.state) q.set('state', f.state);
       if (f.host_id) q.set('host_id', f.host_id);
       if (f.connector) q.set('connector', f.connector);
+      if (f.includeUntracked) q.set('include_untracked', 'true');
       const qs = q.toString();
       return request<FleetAlert[]>('GET', fleetPath(ws, 'alerts') + (qs ? `?${qs}` : ''));
     },

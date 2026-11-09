@@ -50,7 +50,9 @@
         applicable = {};
         if (h.open_alerts > 0) {
           // Alerts and fix suggestions are extras: failing here keeps the page usable.
-          alerts = await api.fleet.alerts(ws, { state: 'open', host_id: h.id }).catch(() => []);
+          alerts = await api.fleet
+            .alerts(ws, { state: 'open', host_id: h.id, includeUntracked: true })
+            .catch(() => []);
           if (canFix) applicable = await api.remediation.applicable(ws).catch(() => ({}));
         }
       })

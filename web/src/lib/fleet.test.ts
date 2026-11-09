@@ -6,6 +6,10 @@ import {
   ansibleClass,
   ansibleLabel,
   driftLabel,
+  hiddenNetworkCount,
+  listedNetworks,
+  selectedIds,
+  trackedSelection,
   networkCountsLabel,
   onlineClass,
   onlineLabel,
@@ -138,5 +142,25 @@ describe('host status helpers', () => {
     expect(
       networkCountsLabel({ online: 4, ansible_ok: 3, failed: 1, never_managed: 2, open_alerts: 0 }),
     ).toBe('4 online, 3 ok, 1 failed, 2 never managed');
+  });
+});
+
+describe('network tracking helpers', () => {
+  const nets = [
+    { id: 'a', tracked: true },
+    { id: 'b', tracked: false },
+    { id: 'c', tracked: true },
+  ];
+  it('hides untracked networks unless asked', () => {
+    expect(listedNetworks(nets, false).map((n) => n.id)).toEqual(['a', 'c']);
+    expect(listedNetworks(nets, true).map((n) => n.id)).toEqual(['a', 'b', 'c']);
+  });
+  it('counts hidden networks', () => {
+    expect(hiddenNetworkCount(nets)).toBe(1);
+    expect(hiddenNetworkCount([])).toBe(0);
+  });
+  it('round-trips the selection', () => {
+    expect(selectedIds(trackedSelection(nets))).toEqual(['a', 'c']);
+    expect(selectedIds({ a: false, b: undefined as unknown as boolean })).toEqual([]);
   });
 });

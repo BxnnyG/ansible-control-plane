@@ -181,3 +181,28 @@ export function networkCountsLabel(c: FleetNetworkCounts | undefined): string {
   if (!c) return '';
   return `${c.online} online, ${c.ansible_ok} ok, ${c.failed} failed, ${c.never_managed} never managed`;
 }
+
+/** Networks to list: untracked ones only when showHidden is on. */
+export function listedNetworks<T extends { tracked: boolean }>(
+  networks: readonly T[],
+  showHidden: boolean,
+): T[] {
+  return showHidden ? [...networks] : networks.filter((n) => n.tracked);
+}
+
+/** Number of networks the fleet does not track. */
+export function hiddenNetworkCount(networks: readonly { tracked: boolean }[]): number {
+  return networks.filter((n) => !n.tracked).length;
+}
+
+/** Tracked flags as a selection map keyed by network id. */
+export function trackedSelection(
+  networks: readonly { id: string; tracked: boolean }[],
+): Record<string, boolean> {
+  return Object.fromEntries(networks.map((n) => [n.id, n.tracked]));
+}
+
+/** Ids marked true in a selection map. */
+export function selectedIds(selection: Record<string, boolean>): string[] {
+  return Object.keys(selection).filter((id) => selection[id]);
+}

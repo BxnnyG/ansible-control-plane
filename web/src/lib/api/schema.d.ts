@@ -1237,6 +1237,50 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /**
+         * Bulk-change which networks the fleet tracks
+         * @description Either set `tracked` on `ids`, or give `track_only` to track exactly those networks and untrack all others.
+         */
+        patch: operations["trackFleetNetworks"];
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace}/networks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Track or untrack one network */
+        patch: operations["trackFleetNetwork"];
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace}/fleet/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        get: operations["getFleetSettings"];
+        put: operations["setFleetSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
         patch?: never;
         trace?: never;
     };
@@ -2587,6 +2631,8 @@ export interface components {
             interface: string;
             description: string;
             source: string;
+            /** @description Untracked networks are hidden from host lists */
+            tracked: boolean;
             /** Format: date-time */
             first_seen: string;
             /** Format: date-time */
@@ -2594,6 +2640,22 @@ export interface components {
             host_count: number;
             /** @description Status counters of the visible hosts in the network. */
             counts: components["schemas"]["FleetNetworkCounts"];
+        };
+        FleetNetworkTrackInput: {
+            tracked: boolean;
+        };
+        FleetNetworksTrackInput: {
+            ids?: string[];
+            tracked?: boolean;
+            /** @description Track exactly these networks */
+            track_only?: string[];
+        };
+        FleetTrackResult: {
+            updated: number;
+        };
+        FleetSettings: {
+            /** @description Whether newly discovered networks start tracked. */
+            new_networks_tracked: boolean;
         };
         /** @description An inventory host linked to a fleet host. */
         FleetAnsibleLink: {
@@ -5538,6 +5600,115 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    trackFleetNetworks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FleetNetworksTrackInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FleetTrackResult"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    trackFleetNetwork: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FleetNetworkTrackInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FleetTrackResult"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getFleetSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FleetSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setFleetSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FleetSettings"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FleetSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     listFleetHosts: {
         parameters: {
             query?: {
@@ -5547,6 +5718,8 @@ export interface operations {
                 alerts?: boolean;
                 /** @description false lists hosts not linked to any inventory host. */
                 managed?: boolean;
+                /** @description true also returns hosts whose only networks are untracked. */
+                include_untracked?: boolean;
             };
             header?: never;
             path: {
@@ -5632,6 +5805,8 @@ export interface operations {
                 state?: "open" | "resolved";
                 host_id?: string;
                 connector?: string;
+                /** @description true also returns hosts whose only networks are untracked. */
+                include_untracked?: boolean;
             };
             header?: never;
             path: {
