@@ -92,18 +92,14 @@
     <ul class="mt-2 text-sm">
       {#each scan.vault_files as v (v.path)}
         <li>
-          <span class="rounded bg-amber-500/15 px-1 text-xs text-amber-700 dark:text-amber-400"
-            >vault</span
-          >
+          <span class="tone-warn">vault</span>
           <code>{v.path}</code>
           <span class="text-muted">{v.version}{v.vault_id ? `, id ${v.vault_id}` : ''}</span>
         </li>
       {/each}
       {#each scan.inline_vault as v (v.file)}
         <li>
-          <span class="rounded bg-amber-500/15 px-1 text-xs text-amber-700 dark:text-amber-400"
-            >inline</span
-          >
+          <span class="tone-warn">inline</span>
           <code>{v.file}</code> <span class="text-muted">{v.paths.join(', ')}</span>
         </li>
       {/each}

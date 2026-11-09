@@ -145,7 +145,7 @@
 
   <section aria-labelledby="fields-h" class="mb-8">
     <h2 id="fields-h" class="mb-2 text-lg font-medium">Merged fields</h2>
-    <div class="overflow-x-auto rounded-lg border border-border">
+    <div class="tbl-wrap">
       <table class="w-full">
         <thead class="bg-surface-2">
           <tr><th class={th}>Field</th><th class={th}>Value</th><th class={th}>Source</th></tr>
@@ -183,7 +183,7 @@
 
   <section aria-labelledby="obs-h">
     <h2 id="obs-h" class="mb-2 text-lg font-medium">Observations</h2>
-    <div class="overflow-x-auto rounded-lg border border-border">
+    <div class="tbl-wrap">
       <table class="w-full">
         <thead class="bg-surface-2">
           <tr>

@@ -176,7 +176,7 @@
     {#if revisions.length === 0}
       <p class="text-sm text-muted">No revisions yet. Run a sync.</p>
     {:else}
-      <div class="overflow-x-auto rounded-lg border border-border">
+      <div class="tbl-wrap">
         <table class="w-full">
           <thead class="bg-surface-2">
             <tr><th class={th}>Commit</th><th class={th}>Synced</th><th class={th}>Warnings</th></tr

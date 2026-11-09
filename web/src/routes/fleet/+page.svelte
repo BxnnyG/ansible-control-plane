@@ -181,11 +181,9 @@
     {#if loading}
       <p class="text-muted">Loading...</p>
     {:else if hosts.length === 0}
-      <div class="rounded-lg border border-dashed border-border p-8 text-center text-muted">
-        No hosts match.
-      </div>
+      <div class="empty">No hosts match.</div>
     {:else}
-      <div class="overflow-x-auto rounded-lg border border-border">
+      <div class="tbl-wrap">
         <table class="w-full">
           <thead class="bg-surface-2">
             <tr>
@@ -237,10 +235,7 @@
                 </td>
                 <td class={td}>
                   {#if h.drift}
-                    <a
-                      class="rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                      href="/runs/{h.drift.run_id}">{driftLabel(h)}</a
-                    >
+                    <a class="tone-warn" href="/runs/{h.drift.run_id}">{driftLabel(h)}</a>
                   {:else}-{/if}
                 </td>
                 <td class="{td} font-mono text-xs">{h.ips?.join(', ') || '-'}</td>

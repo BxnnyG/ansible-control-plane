@@ -10,7 +10,7 @@
   <label class="flex items-center gap-2 text-sm">
     <span class="sr-only">Workspace</span>
     <select
-      class="rounded-md border border-border bg-surface px-3 py-1.5"
+      class="max-w-40 min-h-11 rounded-lg border border-border bg-surface px-3 py-1.5 font-medium sm:max-w-56 lg:min-h-0"
       value={session.slug}
       {onchange}
     >

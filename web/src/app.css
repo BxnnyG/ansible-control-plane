@@ -1,47 +1,83 @@
 @import 'tailwindcss';
 
-/* Neutral design tokens. Light is the default; dark applies via data-theme or system preference. */
+/*
+ * Design tokens. Light is the default; dark applies via data-theme or system preference.
+ * One accent (indigo to violet) is used sparingly: brand mark, primary buttons, active nav, hero numbers.
+ * Semantic colors (ok / bad / warn / info / neutral) are shared by every status pill.
+ */
 :root {
   color-scheme: light;
-  --bg: #f8fafc;
+  --bg: #f5f6fb;
   --surface: #ffffff;
-  --surface-2: #f1f5f9;
-  --border: #e2e8f0;
-  --text: #0f172a;
-  --text-muted: #475569;
+  --surface-2: #eff1f8;
+  --border: #e1e4ef;
+  --border-strong: #c7ccdf;
+  --text: #12142a;
+  --text-muted: #565b78;
   --accent: #4f46e5;
+  --accent-soft: rgb(79 70 229 / 0.1);
   --accent-contrast: #ffffff;
+  --brand-gradient: linear-gradient(135deg, #4338ca 0%, #7c3aed 100%);
   --focus: #4f46e5;
-  --overlay: rgb(15 23 42 / 0.5);
+  --overlay: rgb(18 20 42 / 0.5);
+  --shadow: 0 1px 2px rgb(18 20 42 / 0.05), 0 4px 16px -6px rgb(18 20 42 / 0.1);
+  --ok: #15803d;
+  --ok-bg: rgb(22 163 74 / 0.12);
+  --bad: #b91c1c;
+  --bad-bg: rgb(220 38 38 / 0.1);
+  --warn: #a15207;
+  --warn-bg: rgb(217 119 6 / 0.14);
+  --info: #1d4ed8;
+  --info-bg: rgb(37 99 235 / 0.1);
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #0b1120;
-  --surface: #111827;
-  --surface-2: #1f2937;
-  --border: #273244;
-  --text: #f1f5f9;
-  --text-muted: #94a3b8;
-  --accent: #818cf8;
-  --accent-contrast: #0b1120;
+  --bg: #0b0d1a;
+  --surface: #14172a;
+  --surface-2: #1c2038;
+  --border: #292e4a;
+  --border-strong: #3b4166;
+  --text: #eceefb;
+  --text-muted: #9ca2c6;
+  --accent: #a5b4fc;
+  --accent-soft: rgb(165 180 252 / 0.12);
   --focus: #a5b4fc;
-  --overlay: rgb(0 0 0 / 0.6);
+  --overlay: rgb(0 0 0 / 0.65);
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 6px 20px -8px rgb(0 0 0 / 0.6);
+  --ok: #4ade80;
+  --ok-bg: rgb(74 222 128 / 0.12);
+  --bad: #fca5a5;
+  --bad-bg: rgb(248 113 113 / 0.14);
+  --warn: #fcd34d;
+  --warn-bg: rgb(251 191 36 / 0.13);
+  --info: #93c5fd;
+  --info-bg: rgb(96 165 250 / 0.14);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
-    --bg: #0b1120;
-    --surface: #111827;
-    --surface-2: #1f2937;
-    --border: #273244;
-    --text: #f1f5f9;
-    --text-muted: #94a3b8;
-    --accent: #818cf8;
-    --accent-contrast: #0b1120;
+    --bg: #0b0d1a;
+    --surface: #14172a;
+    --surface-2: #1c2038;
+    --border: #292e4a;
+    --border-strong: #3b4166;
+    --text: #eceefb;
+    --text-muted: #9ca2c6;
+    --accent: #a5b4fc;
+    --accent-soft: rgb(165 180 252 / 0.12);
     --focus: #a5b4fc;
-    --overlay: rgb(0 0 0 / 0.6);
+    --overlay: rgb(0 0 0 / 0.65);
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 6px 20px -8px rgb(0 0 0 / 0.6);
+    --ok: #4ade80;
+    --ok-bg: rgb(74 222 128 / 0.12);
+    --bad: #fca5a5;
+    --bad-bg: rgb(248 113 113 / 0.14);
+    --warn: #fcd34d;
+    --warn-bg: rgb(251 191 36 / 0.13);
+    --info: #93c5fd;
+    --info-bg: rgb(96 165 250 / 0.14);
   }
 }
 
@@ -50,31 +86,314 @@
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-fg: var(--text);
   --color-muted: var(--text-muted);
   --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
   --color-accent-fg: var(--accent-contrast);
+  --color-ok: var(--ok);
+  --color-bad: var(--bad);
+  --color-warn: var(--warn);
+  --color-info: var(--info);
+  --shadow-card: var(--shadow);
 }
 
 body {
   background: var(--bg);
   color: var(--text);
   font-family:
+    ui-sans-serif,
     system-ui,
     -apple-system,
     'Segoe UI',
     Roboto,
+    'Helvetica Neue',
     sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: -0.015em;
 }
 
 :focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
+  border-radius: 6px;
+}
+
+a,
+button,
+input,
+select,
+textarea {
+  transition:
+    background-color 150ms,
+    border-color 150ms,
+    color 150ms,
+    box-shadow 150ms,
+    opacity 150ms;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* ---- Brand gradient (primary buttons, brand mark, active nav accent, hero numbers) ---- */
+.bg-brand {
+  background-image: var(--brand-gradient);
+  color: #fff;
+}
+.text-brand {
+  background-image: var(--brand-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+:root[data-theme='dark'] .text-brand {
+  background-image: linear-gradient(135deg, #a5b4fc 0%, #c4b5fd 100%);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .text-brand {
+    background-image: linear-gradient(135deg, #a5b4fc 0%, #c4b5fd 100%);
+  }
+}
+
+/* ---- Status pills: tone-* classes come from the helpers in lib (statusClass, severityClass, ...) ---- */
+[class*='tone-'] {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 9999px;
+  padding: 0.125rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  white-space: nowrap;
+}
+.tone-ok {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+.tone-bad {
+  background: var(--bad-bg);
+  color: var(--bad);
+}
+.tone-warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.tone-info {
+  background: var(--info-bg);
+  color: var(--info);
+}
+.tone-neutral {
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+.tone-pulse::before {
+  content: '';
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: acp-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes acp-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.7);
+  }
+}
+
+@keyframes acp-shimmer {
+  to {
+    background-position-x: -200%;
+  }
+}
+.skeleton {
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--border) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%;
+  animation: acp-shimmer 1.4s linear infinite;
+}
+
+@keyframes acp-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.rise {
+  animation: acp-rise 200ms ease-out;
+}
+
+/* ---- Empty state (dashed container used by the pages) ---- */
+.empty {
+  border: 1px dashed var(--border-strong);
+  border-radius: 16px;
+  background: var(--surface);
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* ---- Tables: card-like container, sticky header, hover rows; stacked cards below 1024px ---- */
+.tbl-wrap {
+  overflow: auto;
+  max-height: calc(100dvh - 11rem);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.tbl-wrap thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.tbl-wrap tbody tr {
+  transition: background-color 150ms;
+}
+.tbl-wrap tbody tr:hover {
+  background: color-mix(in srgb, var(--surface-2) 60%, transparent);
+}
+
+@media (max-width: 1023px) {
+  .tbl-wrap {
+    overflow: visible;
+    max-height: none;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .tbl-wrap table,
+  .tbl-wrap tbody {
+    display: block;
+    width: 100%;
+  }
+  .tbl-wrap thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .tbl-wrap tbody tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem 1rem;
+    margin-bottom: 0.75rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+  .tbl-wrap tbody td {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    overflow-wrap: anywhere;
+  }
+  .tbl-wrap tbody td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.1rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .tbl-wrap tbody td:first-child,
+  .tbl-wrap tbody td[data-label=''],
+  .tbl-wrap tbody td[colspan],
+  .tbl-wrap tbody td:not([data-label]) {
+    grid-column: 1 / -1;
+  }
+  .tbl-wrap tbody td[data-label='']::before,
+  .tbl-wrap tbody td:not([data-label])::before,
+  .tbl-wrap tbody td:first-child::before {
+    display: none;
+  }
+  .tbl-wrap tbody td.text-right {
+    text-align: left;
+  }
+}
+
+/* ---- Dialogs: centered card on desktop, bottom sheet on phones ---- */
+.dlg {
+  box-shadow: 0 24px 60px -20px rgb(0 0 0 / 0.5);
+}
+@media (max-width: 767px) {
+  dialog.dlg {
+    margin: auto 0 0 0;
+    max-width: 100%;
+    width: 100%;
+    max-height: 92dvh;
+    overflow-y: auto;
+    border-radius: 20px 20px 0 0;
+  }
+  .dlg-overlay {
+    align-items: flex-end !important;
+    padding: 0 !important;
+  }
+  .dlg-overlay > .dlg {
+    margin-top: 0 !important;
+    max-width: 100%;
+    max-height: 92dvh;
+    overflow-y: auto;
+    border-radius: 20px 20px 0 0;
+  }
+}
+@keyframes acp-sheet {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+.dlg {
+  animation: acp-sheet 200ms ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+.empty::before {
+  content: '';
+  display: block;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin: 0 auto 0.75rem;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  -webkit-mask: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b8cf8' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 12h-6l-2 3h-4l-2-3H2'/%3E%3Cpath d='M5.5 5h13l3.5 7v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 1.5rem;
 }

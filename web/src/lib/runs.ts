@@ -83,16 +83,16 @@ export function applyRunUpdate(list: Run[], run: Run, f: RunFilter): Run[] {
 export function statusClass(status: RunStatus): string {
   switch (status) {
     case 'succeeded':
-      return 'bg-green-600/15 text-green-700 dark:text-green-400';
+      return 'tone-ok';
     case 'failed':
     case 'lost':
-      return 'bg-red-600/15 text-red-700 dark:text-red-400';
+      return 'tone-bad';
     case 'running':
-      return 'bg-blue-600/15 text-blue-700 dark:text-blue-400';
+      return 'tone-info tone-pulse';
     case 'cancelled':
-      return 'bg-amber-500/15 text-amber-700 dark:text-amber-400';
+      return 'tone-warn';
     default:
-      return 'bg-surface-2 text-muted';
+      return 'tone-neutral';
   }
 }
 

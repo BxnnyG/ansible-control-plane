@@ -229,11 +229,11 @@ export function usableSecrets(secrets: readonly SecretMeta[]): SecretMeta[] {
 export function deliveryStatusClass(s: NotificationDelivery['status']): string {
   switch (s) {
     case 'sent':
-      return 'bg-green-600/15 text-green-700 dark:text-green-400';
+      return 'tone-ok';
     case 'failed':
-      return 'bg-red-600/15 text-red-700 dark:text-red-400';
+      return 'tone-bad';
     default:
-      return 'bg-amber-600/15 text-amber-700 dark:text-amber-400';
+      return 'tone-warn';
   }
 }
 

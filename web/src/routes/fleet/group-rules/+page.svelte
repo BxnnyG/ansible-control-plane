@@ -190,11 +190,9 @@
   {#if loading}
     <p class="text-muted">Loading...</p>
   {:else if rules.length === 0}
-    <div class="rounded-lg border border-dashed border-border p-8 text-center text-muted">
-      No group rules yet.
-    </div>
+    <div class="empty">No group rules yet.</div>
   {:else}
-    <div class="overflow-x-auto rounded-lg border border-border">
+    <div class="tbl-wrap">
       <table class="w-full">
         <thead class="bg-surface-2">
           <tr>

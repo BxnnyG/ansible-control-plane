@@ -16,7 +16,7 @@
 {#if rows.length === 0}
   <p class="text-sm text-muted">No host results yet.</p>
 {:else}
-  <div class="overflow-x-auto rounded-lg border border-border">
+  <div class="tbl-wrap">
     <table class="w-full">
       <thead class="bg-surface-2">
         <tr>

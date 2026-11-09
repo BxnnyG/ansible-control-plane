@@ -28,7 +28,7 @@
 {:else if syncs.length === 0}
   <p class="text-sm text-muted">No syncs yet.</p>
 {:else}
-  <div class="overflow-x-auto rounded-lg border border-border">
+  <div class="tbl-wrap">
     <table class="w-full">
       <caption class="sr-only">Sync history</caption>
       <thead class="bg-surface-2">

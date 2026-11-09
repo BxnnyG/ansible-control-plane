@@ -77,11 +77,9 @@
   {#if loading}
     <p class="text-muted">Loading...</p>
   {:else if items.length === 0}
-    <div class="rounded-lg border border-dashed border-border p-8 text-center text-muted">
-      No conflicts.
-    </div>
+    <div class="empty">No conflicts.</div>
   {:else}
-    <div class="overflow-x-auto rounded-lg border border-border">
+    <div class="tbl-wrap">
       <table class="w-full">
         <thead class="bg-surface-2">
           <tr>
