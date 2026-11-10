@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
   import { toasts } from '$lib/toasts.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
@@ -135,13 +136,13 @@
   <FormError id="project-detail-error" message={error} />
 
   {#if confirmDelete}
-    <div role="alertdialog" aria-label="Confirm delete" class="{card} mb-6 max-w-xl">
+    <ConfirmDialog
+      title="Confirm delete"
+      onconfirm={remove}
+      oncancel={() => (confirmDelete = false)}
+    >
       <p>Delete project <strong>{project.name}</strong> and its synced data?</p>
-      <div class="mt-3 flex gap-2">
-        <button class={btnDanger} onclick={remove}>Delete</button>
-        <button class={btn} onclick={() => (confirmDelete = false)}>Cancel</button>
-      </div>
-    </div>
+    </ConfirmDialog>
   {/if}
 
   <div class="grid gap-6 lg:grid-cols-2">

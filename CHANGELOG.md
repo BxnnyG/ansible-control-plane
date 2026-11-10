@@ -23,6 +23,7 @@ All notable changes are documented here. The format follows
 - **Runs list:** filters apply on change (selects immediately, host text after 300 ms) with a guard against stale responses; the Filter button is gone. The user filter is a select built from the users seen in loaded runs plus you (no endpoint lists users). Rows have Cancel (active runs, needs `run.cancel`) and Run again (needs `run.execute`).
 - **Schedules API:** `GET /api/v1/workspaces/{workspace}/schedules` lists all schedules of a workspace (permission `schedule.read`, not available to scoped memberships); the templates list uses it instead of one call per template.
 - **Toasts:** global toast notifications (success auto-dismisses after 4 s, errors stay until closed, announced via `role="status"` / `role="alert"`, stacked above the bottom edge on phones) replace the page-top status texts on connectors, projects, notification channels, group rules and unmanaged hosts, and confirm deletes of secrets, connectors, projects, templates, inventories, vault identities, rules and schedules.
+- **Confirm dialogs:** one shared `ConfirmDialog` (native `<dialog>`, focus on Cancel, Esc and backdrop click cancel, bottom sheet on phones) replaces the inline confirmation cards on 11 pages; deleting an inventory host now asks for confirmation.
 
 ### Added
 

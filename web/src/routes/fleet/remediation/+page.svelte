@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
   import { toasts } from '$lib/toasts.svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { api, type RemediationRule, type Template } from '$lib/api';
@@ -98,13 +99,13 @@
   {/if}
 
   {#if deleting}
-    <div role="alertdialog" aria-label="Confirm delete" class="{card} mb-6 max-w-xl">
+    <ConfirmDialog
+      title="Confirm delete"
+      onconfirm={confirmDelete}
+      oncancel={() => (deleting = null)}
+    >
       <p>Delete rule <strong>{deleting.name}</strong>? Runs already started are not affected.</p>
-      <div class="mt-3 flex gap-2">
-        <button class={btnDanger} onclick={confirmDelete}>Delete</button>
-        <button class={btn} onclick={() => (deleting = null)}>Cancel</button>
-      </div>
-    </div>
+    </ConfirmDialog>
   {/if}
 
   {#if loading}

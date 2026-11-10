@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
   import { toasts } from '$lib/toasts.svelte';
   import { api, type NotificationChannel, type NotificationRule, type Template } from '$lib/api';
   import { describeError } from '$lib/errors';
@@ -77,13 +78,13 @@
 {/if}
 
 {#if deleting}
-  <div role="alertdialog" aria-label="Confirm delete" class="{card} mb-6 max-w-xl">
+  <ConfirmDialog
+    title="Confirm delete"
+    onconfirm={confirmDelete}
+    oncancel={() => (deleting = null)}
+  >
     <p>Delete this rule for channel <strong>{channelName(deleting.channel_id)}</strong>?</p>
-    <div class="mt-3 flex gap-2">
-      <button class={btnDanger} onclick={confirmDelete}>Delete</button>
-      <button class={btn} onclick={() => (deleting = null)}>Cancel</button>
-    </div>
-  </div>
+  </ConfirmDialog>
 {/if}
 
 {#if rules.length === 0}

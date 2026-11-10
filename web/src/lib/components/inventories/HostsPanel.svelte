@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { InventoryGroup, InventoryHost, InventoryHostInput } from '$lib/api';
   import { btn, btnPrimary, input, label, td, th } from '$lib/ui';
+  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
   import VarsEditor from './VarsEditor.svelte';
 
   let {
@@ -16,6 +17,14 @@
     save: (id: string | null, h: InventoryHostInput) => Promise<boolean>;
     remove: (h: InventoryHost) => Promise<void>;
   } = $props();
+
+  let deleting = $state<InventoryHost | null>(null);
+
+  async function confirmRemove() {
+    const h = deleting;
+    deleting = null;
+    if (h) await remove(h);
+  }
 
   const groupName = $derived(new Map(groups.map((g) => [g.id, g.name])));
 
@@ -76,7 +85,7 @@
                   </button>
                   <button
                     class="text-xs text-bad hover:underline max-md:min-h-11 max-md:pr-4"
-                    onclick={() => remove(h)}
+                    onclick={() => (deleting = h)}
                   >
                     delete
                   </button>
@@ -122,3 +131,9 @@
     </form>
   {/if}
 </section>
+
+{#if deleting}
+  <ConfirmDialog title="Delete host" onconfirm={confirmRemove} oncancel={() => (deleting = null)}>
+    <p>Delete host <strong>{deleting.name}</strong> from this inventory?</p>
+  </ConfirmDialog>
+{/if}

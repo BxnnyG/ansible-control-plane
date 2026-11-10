@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
   import { toasts } from '$lib/toasts.svelte';
   import { untrack } from 'svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
@@ -93,16 +94,16 @@
   {/if}
 
   {#if deleting}
-    <div role="alertdialog" aria-label="Confirm delete" class="{card} mb-6 max-w-xl">
+    <ConfirmDialog
+      title="Confirm delete"
+      onconfirm={confirmDelete}
+      oncancel={() => (deleting = null)}
+    >
       <p>
         Delete secret <strong>{deleting.name}</strong>? Projects referencing it lose their
         credential.
       </p>
-      <div class="mt-3 flex gap-2">
-        <button class={btnDanger} onclick={confirmDelete}>Delete</button>
-        <button class={btn} onclick={() => (deleting = null)}>Cancel</button>
-      </div>
-    </div>
+    </ConfirmDialog>
   {/if}
 
   {#if loading}

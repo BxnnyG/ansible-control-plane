@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
   import { toasts } from '$lib/toasts.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
   import { untrack } from 'svelte';
@@ -121,16 +122,16 @@
   </header>
 
   {#if confirmDelete}
-    <div role="alertdialog" aria-label="Confirm delete" class="{card} mb-6 max-w-xl">
+    <ConfirmDialog
+      title="Confirm delete"
+      onconfirm={remove}
+      oncancel={() => (confirmDelete = false)}
+    >
       <p>
         Delete template <strong>{template.name}</strong>? Queued runs are cancelled; run history is
         kept.
       </p>
-      <div class="mt-3 flex gap-2">
-        <button class={btnDanger} onclick={remove}>Delete</button>
-        <button class={btn} onclick={() => (confirmDelete = false)}>Cancel</button>
-      </div>
-    </div>
+    </ConfirmDialog>
   {/if}
 
   {#if editing}

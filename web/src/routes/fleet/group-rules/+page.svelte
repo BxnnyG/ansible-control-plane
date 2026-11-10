@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
   import { toasts } from '$lib/toasts.svelte';
   import { untrack } from 'svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
@@ -145,15 +146,15 @@
   {/if}
 
   {#if deleting}
-    <div role="alertdialog" aria-label="Confirm delete" class="{card} mb-6 max-w-xl">
+    <ConfirmDialog
+      title="Confirm delete"
+      onconfirm={confirmDelete}
+      oncancel={() => (deleting = null)}
+    >
       <p>
         Delete rule <strong>{deleting.name}</strong>? Existing group members stay in the inventory.
       </p>
-      <div class="mt-3 flex gap-2">
-        <button class={btnDanger} onclick={confirmDelete}>Delete</button>
-        <button class={btn} onclick={() => (deleting = null)}>Cancel</button>
-      </div>
-    </div>
+    </ConfirmDialog>
   {/if}
 
   {#if preview}
@@ -174,21 +175,20 @@
         <button class={btn} onclick={() => (preview = null)}>Close</button>
       </div>
       {#if confirmApply}
-        <div
-          role="alertdialog"
-          aria-label="Confirm apply"
-          class="mt-3 rounded-md border border-border p-3"
+        <ConfirmDialog
+          title="Confirm apply"
+          confirmLabel="Apply"
+          danger={false}
+          {busy}
+          onconfirm={doApply}
+          oncancel={() => (confirmApply = false)}
         >
-          <p class="text-sm">
+          <p>
             Apply this change to inventory <strong>{invName(preview.rule.inventory_id)}</strong>?
             {#if preview.inventory_mode === 'git'}A commit is written to the inventory's write
               branch.{/if}
           </p>
-          <div class="mt-2 flex gap-2">
-            <button class={btnPrimary} disabled={busy} onclick={doApply}>Confirm apply</button>
-            <button class={btn} onclick={() => (confirmApply = false)}>Cancel</button>
-          </div>
-        </div>
+        </ConfirmDialog>
       {/if}
     </section>
   {/if}
