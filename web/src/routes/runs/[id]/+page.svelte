@@ -1,11 +1,21 @@
 <script lang="ts">
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
   import { page } from '$app/state';
-  import { api, type RunDetail, type RunStatusEvent } from '$lib/api';
+  import {
+    api,
+    type RunDetail,
+    type RunOverrides,
+    type RunStatusEvent,
+    type Template,
+  } from '$lib/api';
   import { describeError } from '$lib/errors';
   import { formatDuration, isFinal, triggeredByLabel } from '$lib/runs';
   import { session } from '$lib/session.svelte';
-  import { btnDanger, card, fmtDate } from '$lib/ui';
+  import { overridesFromRun } from '$lib/runStart';
+  import { surveyToFormFields } from '$lib/survey';
+  import { surveyFields } from '$lib/templates';
+  import { btn, btnDanger, card, fmtDate } from '$lib/ui';
+  import RunDialog from '$lib/components/templates/RunDialog.svelte';
   import FormError from '$lib/components/FormError.svelte';
   import HostResults from '$lib/components/runs/HostResults.svelte';
   import LogViewer from '$lib/components/runs/LogViewer.svelte';
@@ -14,12 +24,33 @@
   const id = $derived(page.params.id ?? '');
   const ws = $derived(session.slug);
   const canCancel = $derived(session.can('run.cancel'));
+  const canRun = $derived(session.can('run.execute'));
 
   let run = $state<RunDetail | null>(null);
   const runId = $derived(run?.id ?? '');
   let error = $state<string | null>(null);
   let now = $state(Date.now());
   let busy = $state(false);
+  let again = $state<{ template: Template; prefill: RunOverrides; notCarried: string[] } | null>(
+    null,
+  );
+  let againBusy = $state(false);
+
+  async function runAgain() {
+    if (!ws || !run?.template_id) return;
+    againBusy = true;
+    error = null;
+    try {
+      const t = await api.templates.get(ws, run.template_id);
+      const fields = surveyToFormFields(surveyFields(t.survey));
+      const { overrides, notCarried } = overridesFromRun(t, fields, run.params);
+      again = { template: t, prefill: overrides, notCarried };
+    } catch (e) {
+      error = describeError(e);
+    } finally {
+      againBusy = false;
+    }
+  }
 
   async function load(slug: string, rid: string) {
     error = null;
@@ -81,11 +112,18 @@
       </h1>
       <p class="mt-1 font-mono text-xs text-muted">{run.params.playbook}</p>
     </div>
-    {#if canCancel && (run.status === 'queued' || run.status === 'running')}
-      <button class={btnDanger} disabled={busy || !!run.cancel_requested_at} onclick={cancel}>
-        {run.cancel_requested_at ? 'Cancelling...' : 'Cancel run'}
-      </button>
-    {/if}
+    <div class="flex flex-wrap gap-2">
+      {#if canRun && run.template_id}
+        <button class={btn} disabled={againBusy} onclick={runAgain}>
+          {againBusy ? 'Loading...' : 'Run again'}
+        </button>
+      {/if}
+      {#if canCancel && (run.status === 'queued' || run.status === 'running')}
+        <button class={btnDanger} disabled={busy || !!run.cancel_requested_at} onclick={cancel}>
+          {run.cancel_requested_at ? 'Cancelling...' : 'Cancel run'}
+        </button>
+      {/if}
+    </div>
   </header>
 
   <section class="{card} mb-6" aria-label="Run details">
@@ -153,4 +191,14 @@
     <h2 id="hosts-h" class="mb-2 text-sm font-semibold">Hosts</h2>
     <HostResults results={run.host_results} />
   </section>
+{/if}
+
+{#if again && ws}
+  <RunDialog
+    {ws}
+    template={again.template}
+    prefill={again.prefill}
+    notCarried={again.notCarried}
+    onclose={() => (again = null)}
+  />
 {/if}

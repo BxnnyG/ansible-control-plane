@@ -18,6 +18,7 @@ All notable changes are documented here. The format follows
 - **Network picker:** one shared picker (fleet page, Settings, setup wizard) with a filter box (CIDR, description, VLAN, connector), groups per connector with tri-state group checkboxes, select all / none / invert on the filtered set, an "n of m selected" counter and Save disabled until something changed. On the Fleet page the network card grid became a collapsible compact section.
 - **Hosts wording:** the sidebar entry "Fleet" is now "Hosts" (route, API and permissions unchanged), with an explanatory subtitle, one title scheme for all sub-pages and empty states with an "Add connector" action.
 - **Templates list:** search box (name, playbook, description), last-run status and age per template (one runs call, limit 100, filled in after the list renders), schedule column (one schedules call per template, up to 50, needs `schedule.read`), a real Run button and an empty state with a New template action.
+- **Run again:** the run detail page has a Run again button that opens the run dialog prefilled with the old run's limit, tags, mode and variables, restricted to what the template still allows. Secret variables are never prefilled and the dialog lists anything that could not be carried over.
 
 ### Added
 

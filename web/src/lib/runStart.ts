@@ -1,4 +1,4 @@
-import type { RunOverrides, Template } from './api';
+import type { RunOverrides, RunParams, Template } from './api';
 import { surveyToVars, varsToSurvey, type FormField } from './survey';
 
 export interface StartForm {
@@ -107,4 +107,70 @@ export function buildStartRequest(
   }
   if (Object.keys(vars).length > 0) ov.extra_vars = vars;
   return { overrides: ov, errors };
+}
+
+/**
+ * Overrides for "Run again": the old run's parameters, restricted to what the
+ * template currently lets a caller override. `notCarried` names the settings that
+ * could not be reused (override no longer allowed, or a secret value).
+ */
+export function overridesFromRun(
+  t: Template,
+  fields: readonly FormField[],
+  params: RunParams,
+): { overrides: RunOverrides; notCarried: string[] } {
+  const ov: RunOverrides = {};
+  const lost: string[] = [];
+  const differs = (a: unknown, b: unknown) => a !== b;
+  if (differs(params.limit, t.default_limit)) {
+    if (t.allow_limit_override) ov.limit = params.limit;
+    else lost.push('limit');
+  }
+  if (differs(params.tags, t.default_tags) || differs(params.skip_tags, t.default_skip_tags)) {
+    if (t.allow_tags_override) {
+      ov.tags = params.tags;
+      ov.skip_tags = params.skip_tags;
+    } else lost.push('tags');
+  }
+  if (differs(params.check, t.check_mode)) {
+    if (t.allow_check_override) ov.check = params.check;
+    else lost.push('check mode');
+  }
+  if (differs(params.diff, t.diff_mode)) {
+    if (t.allow_diff_override) ov.diff = params.diff;
+    else lost.push('diff mode');
+  }
+  if (differs(params.verbosity, t.verbosity)) {
+    if (t.allow_verbosity_override) ov.verbosity = params.verbosity;
+    else lost.push('verbosity');
+  }
+  // Variables: drop secret keys and everything the template already defines itself.
+  const secretKeys = new Set(params.secret_vars ?? []);
+  const own = t.extra_vars ?? {};
+  const vars: Record<string, unknown> = {};
+  let hadSecret = false;
+  let hadVars = false;
+  for (const [k, v] of Object.entries(params.extra_vars ?? {})) {
+    if (secretKeys.has(k)) {
+      hadSecret = true;
+      continue;
+    }
+    if (JSON.stringify(own[k]) === JSON.stringify(v)) continue;
+    hadVars = true;
+    vars[k] = v;
+  }
+  if (hadVars) {
+    if (t.allow_vars_override) ov.extra_vars = vars;
+    else {
+      // Only survey answers may be sent without the variable override.
+      const { rest } = varsToSurvey(fields, vars);
+      const kept: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(vars))
+        if (JSON.stringify(rest[k]) !== JSON.stringify(v)) kept[k] = v;
+      if (Object.keys(kept).length > 0) ov.extra_vars = kept;
+      if (Object.keys(rest).length > 0) lost.push('variables');
+    }
+  }
+  if (hadSecret) lost.push('secret variables (enter them again)');
+  return { overrides: ov, notCarried: lost };
 }
