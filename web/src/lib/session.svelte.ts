@@ -27,6 +27,10 @@ class SessionState {
   }
 
   async load(): Promise<void> {
+    // The stored workspace slug lets us fetch the workspace while `me` is in flight.
+    const guess = storedSlug();
+    const early = guess ? api.workspace(guess) : null;
+    early?.catch(() => undefined); // handled below; avoids an unhandled rejection
     try {
       this.me = await api.me();
     } catch (e) {
@@ -36,23 +40,31 @@ class SessionState {
     }
     this.slug = pickWorkspace(
       this.me.memberships.map((m) => m.slug),
-      storedSlug(),
+      guess,
     );
-    await this.loadWorkspace();
+    await this.loadWorkspace(this.slug === guess ? early : null);
     this.status = 'ready';
   }
 
-  async loadWorkspace(): Promise<void> {
+  /** Loads the active workspace; the setup status never blocks and may arrive after `ready`. */
+  async loadWorkspace(prefetched: Promise<WorkspaceDetail> | null = null): Promise<void> {
     this.workspace = null;
     this.needsSetup = false;
-    if (!this.slug) return;
+    const slug = this.slug;
+    if (!slug) return;
     try {
-      this.workspace = await api.workspace(this.slug);
-      if (this.slug === SETUP_WORKSPACE && this.can('workspace.manage')) {
-        this.needsSetup = !(await api.setupStatus(this.slug)).completed;
-      }
+      this.workspace = await (prefetched ?? api.workspace(slug));
     } catch {
       // The shell still works without workspace details; actions stay hidden.
+      return;
+    }
+    if (slug === SETUP_WORKSPACE && this.can('workspace.manage')) {
+      void api
+        .setupStatus(slug)
+        .then((st) => {
+          if (this.slug === slug) this.needsSetup = !st.completed;
+        })
+        .catch(() => undefined);
     }
   }
 
