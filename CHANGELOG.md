@@ -6,6 +6,10 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### v1.3 load times and UX polish
+
+- **Cache headers:** `/_app/immutable/*` is served with `public, max-age=31536000, immutable`; `index.html` and SPA fallbacks with `no-cache`.
+
 ### Added
 
 - **Tracked networks:** choose which discovered networks the fleet follows (migration 00020). Untracked networks are hidden from host lists, unmanaged hosts, alerts and the dashboard unless `include_untracked=true`; per-network and bulk (`track_only`) API, workspace default for new networks, a Tracked toggle on the Fleet page, a setup wizard step, a Settings panel and `acp admin fleet network list|track|untrack`.

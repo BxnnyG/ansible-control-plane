@@ -167,6 +167,13 @@ func spa(static fs.FS) http.Handler {
 		if p != "/" {
 			if f, err := static.Open(p[1:]); err == nil {
 				_ = f.Close()
+				switch {
+				case strings.HasPrefix(p, "/_app/immutable/"):
+					// Content-hashed build output never changes under the same name.
+					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+				case p == "/index.html":
+					w.Header().Set("Cache-Control", "no-cache")
+				}
 				files.ServeHTTP(w, r)
 				return
 			}
@@ -174,10 +181,12 @@ func spa(static fs.FS) http.Handler {
 		if f, err := static.Open("index.html"); err == nil {
 			_ = f.Close()
 			r.URL.Path = "/"
+			w.Header().Set("Cache-Control", "no-cache")
 			files.ServeHTTP(w, r)
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
 		_, _ = w.Write([]byte("<!doctype html><title>ACP</title><h1>Ansible Control Plane</h1><p>Web UI not built.</p><small>" +
 			version.Attribution + "</small>"))
 	})
