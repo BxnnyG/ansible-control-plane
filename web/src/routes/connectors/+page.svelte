@@ -31,7 +31,12 @@
     loading = true;
     error = null;
     try {
-      [items, types] = await Promise.all([api.connectors.list(ws), api.connectorTypes(ws)]);
+      [items, types] = await Promise.all([
+        api.connectors.list(ws, (d) => {
+          if (session.slug === ws) items = d;
+        }),
+        api.connectorTypes(ws),
+      ]);
     } catch (e) {
       error = describeError(e);
     } finally {

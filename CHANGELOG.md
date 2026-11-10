@@ -25,6 +25,7 @@ All notable changes are documented here. The format follows
 - **Toasts:** global toast notifications (success auto-dismisses after 4 s, errors stay until closed, announced via `role="status"` / `role="alert"`, stacked above the bottom edge on phones) replace the page-top status texts on connectors, projects, notification channels, group rules and unmanaged hosts, and confirm deletes of secrets, connectors, projects, templates, inventories, vault identities, rules and schedules.
 - **Confirm dialogs:** one shared `ConfirmDialog` (native `<dialog>`, focus on Cancel, Esc and backdrop click cancel, bottom sheet on phones) replaces the inline confirmation cards on 11 pages; deleting an inventory host now asks for confirmation.
 - **Run dialogs:** the run dialog and the bulk run dialog on the Hosts page are native modal dialogs (focus on open, Esc and backdrop click close, bottom sheet on phones).
+- **List cache:** list GETs of secrets (metadata), vault identities, projects, templates, inventories, connectors and schedules use an in-memory stale-while-revalidate cache keyed by workspace and URL. Returning to a list page shows the cached data at once and updates it when the background refresh differs. Any mutation drops the cached lists of its workspace; logout, sign-in and workspace switch clear everything. Nothing is persisted (no localStorage) and detail endpoints are never cached.
 
 ### Added
 

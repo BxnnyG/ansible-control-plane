@@ -23,7 +23,9 @@
     loading = true;
     error = null;
     try {
-      items = await api.secrets.list(ws);
+      items = await api.secrets.list(ws, (d) => {
+        if (session.slug === ws) items = d;
+      });
     } catch (e) {
       error = describeError(e);
     } finally {

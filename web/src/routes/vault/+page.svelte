@@ -24,7 +24,9 @@
     loading = true;
     error = null;
     try {
-      items = await api.vaultIdentities.list(ws);
+      items = await api.vaultIdentities.list(ws, (d) => {
+        if (session.slug === ws) items = d;
+      });
       secrets = session.can('secrets.meta.read') ? await api.secrets.list(ws) : [];
     } catch (e) {
       error = describeError(e);

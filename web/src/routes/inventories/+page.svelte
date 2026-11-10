@@ -26,7 +26,9 @@
     loading = true;
     error = null;
     try {
-      items = await api.inventories.list(ws);
+      items = await api.inventories.list(ws, (d) => {
+        if (session.slug === ws) items = d;
+      });
       projects = session.can('project.read') ? await api.projects.list(ws) : [];
     } catch (e) {
       error = e;

@@ -1,4 +1,5 @@
-import { api, ApiError, type Me, type WorkspaceDetail } from './api';
+import { api, ApiError, clearApiCache, type Me, type WorkspaceDetail } from './api';
+import { toasts } from './toasts.svelte';
 import { can } from './permissions';
 import { SETUP_WORKSPACE, pickWorkspace } from './workspace';
 
@@ -27,6 +28,7 @@ class SessionState {
   }
 
   async load(): Promise<void> {
+    clearApiCache(); // a new sign-in must never see another user's cached lists
     // The stored workspace slug lets us fetch the workspace while `me` is in flight.
     const guess = storedSlug();
     const early = guess ? api.workspace(guess) : null;
@@ -78,6 +80,8 @@ class SessionState {
   }
 
   async select(slug: string): Promise<void> {
+    clearApiCache();
+    toasts.clear();
     this.slug = slug;
     try {
       localStorage.setItem(KEY, slug);
@@ -92,6 +96,8 @@ class SessionState {
   }
 
   reset(): void {
+    clearApiCache();
+    toasts.clear();
     this.me = null;
     this.workspace = null;
     this.slug = null;

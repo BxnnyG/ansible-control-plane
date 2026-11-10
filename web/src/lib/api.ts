@@ -5,6 +5,7 @@
  * change the spec and regenerate.
  */
 import type { components } from './api/schema';
+import { apiCache, cacheKey, isCacheableList, workspaceOf } from './apiCache';
 
 type S = components['schemas'];
 
@@ -214,12 +215,18 @@ async function request<T>(
   if (ifMatch !== undefined) headers['If-Match'] = `"${ifMatch}"`;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (method !== 'GET') headers['X-CSRF-Token'] = csrfToken();
-  const res = await fetch(path, {
-    method,
-    headers,
-    credentials: 'same-origin',
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      method,
+      headers,
+      credentials: 'same-origin',
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } finally {
+    // Any mutation (even a failed one) drops the cached lists of its workspace.
+    if (method !== 'GET') invalidateFor(path);
+  }
   if (!res.ok) {
     let message = res.statusText;
     let code = '';
@@ -245,12 +252,49 @@ async function request<T>(
   return (await res.json()) as T;
 }
 
+function invalidateFor(path: string): void {
+  const ws = workspaceOf(path);
+  if (ws) apiCache.invalidateWorkspace(ws);
+  else apiCache.clear();
+}
+
+/**
+ * Stale-while-revalidate for list GETs. With a cached entry and an `onFresh` callback the cached
+ * data resolves at once and the callback receives the fresh data if it differs; without a cache
+ * entry (or callback) this is a plain request that fills the cache.
+ */
+function cachedList<T>(path: string, onFresh?: (data: T) => void): Promise<T> {
+  if (!isCacheableList(path)) return request<T>('GET', path);
+  const key = cacheKey(path);
+  const token = apiCache.token();
+  const hit = apiCache.get(key) as T | undefined;
+  const fresh = request<T>('GET', path).then((d) => {
+    apiCache.set(key, d, token);
+    return d;
+  });
+  if (hit === undefined || !onFresh) return fresh;
+  fresh
+    .then((d) => {
+      if (JSON.stringify(d) !== JSON.stringify(hit)) onFresh(d);
+    })
+    .catch(() => undefined); // the cached data stays on screen
+  return Promise.resolve(hit);
+}
+
+/** Drops all cached responses (logout, workspace switch). */
+export function clearApiCache(): void {
+  apiCache.clear();
+}
+
 export const api = {
   authConfig: () => request<AuthConfig>('GET', '/api/auth/config'),
   me: () => request<Me>('GET', '/api/v1/me'),
   breakGlassLogin: (c: BreakGlassCredentials) =>
     request<{ status: string }>('POST', '/api/auth/breakglass/login', c),
-  logout: () => request<{ redirect: string }>('POST', '/api/auth/logout'),
+  logout: () => {
+    clearApiCache();
+    return request<{ redirect: string }>('POST', '/api/auth/logout');
+  },
   workspace: (slug: string) =>
     request<WorkspaceDetail>('GET', `/api/v1/workspaces/${encodeURIComponent(slug)}`),
   setupStatus: (slug: string) =>
@@ -260,14 +304,16 @@ export const api = {
   completeSetup: (slug: string) =>
     request<SetupStatus>('POST', `/api/v1/workspaces/${encodeURIComponent(slug)}/setup/complete`),
   secrets: {
-    list: (ws: string) => request<SecretMeta[]>('GET', secretsPath(ws)),
+    list: (ws: string, onFresh?: (d: SecretMeta[]) => void) =>
+      cachedList<SecretMeta[]>(secretsPath(ws), onFresh),
     create: (ws: string, s: SecretCreate) => request<SecretMeta>('POST', secretsPath(ws), s),
     update: (ws: string, id: string, s: SecretUpdate) =>
       request<SecretMeta>('PUT', secretsPath(ws, id), s),
     remove: (ws: string, id: string) => request<void>('DELETE', secretsPath(ws, id)),
   },
   vaultIdentities: {
-    list: (ws: string) => request<VaultIdentity[]>('GET', vaultIdentitiesPath(ws)),
+    list: (ws: string, onFresh?: (d: VaultIdentity[]) => void) =>
+      cachedList<VaultIdentity[]>(vaultIdentitiesPath(ws), onFresh),
     create: (ws: string, i: VaultIdentityInput) =>
       request<VaultIdentity>('POST', vaultIdentitiesPath(ws), i),
     update: (ws: string, id: string, i: VaultIdentityInput) =>
@@ -288,7 +334,8 @@ export const api = {
       request<VaultWriteResult>('POST', projectsPath(ws, project, 'vault/rekey'), i),
   },
   projects: {
-    list: (ws: string) => request<Project[]>('GET', projectsPath(ws)),
+    list: (ws: string, onFresh?: (d: Project[]) => void) =>
+      cachedList<Project[]>(projectsPath(ws), onFresh),
     get: (ws: string, id: string) => request<Project>('GET', projectsPath(ws, id)),
     create: (ws: string, p: ProjectInput) => request<Project>('POST', projectsPath(ws), p),
     update: (ws: string, id: string, p: ProjectUpdate) =>
@@ -316,7 +363,8 @@ export const api = {
       request<ProjectRevision>('GET', projectsPath(ws, id, 'revisions/latest')),
   },
   templates: {
-    list: (ws: string) => request<Template[]>('GET', templatesPath(ws)),
+    list: (ws: string, onFresh?: (d: Template[]) => void) =>
+      cachedList<Template[]>(templatesPath(ws), onFresh),
     get: (ws: string, id: string) => request<Template>('GET', templatesPath(ws, id)),
     create: (ws: string, t: TemplateInput) => request<Template>('POST', templatesPath(ws), t),
     update: (ws: string, id: string, t: TemplateInput) =>
@@ -338,7 +386,8 @@ export const api = {
       request<Schedule>('POST', templatesPath(ws, id, 'schedules'), s),
   },
   schedules: {
-    list: (ws: string) => request<Schedule[]>('GET', schedulesBase(ws)),
+    list: (ws: string, onFresh?: (d: Schedule[]) => void) =>
+      cachedList<Schedule[]>(schedulesBase(ws), onFresh),
     update: (ws: string, id: string, s: ScheduleInput) =>
       request<Schedule>('PUT', schedulesPath(ws, id), s),
     remove: (ws: string, id: string) => request<void>('DELETE', schedulesPath(ws, id)),
@@ -356,7 +405,8 @@ export const api = {
     cancel: (ws: string, id: string) => request<Run>('POST', runsPath(ws, id, 'cancel')),
   },
   inventories: {
-    list: (ws: string) => request<Inventory[]>('GET', inventoriesPath(ws)),
+    list: (ws: string, onFresh?: (d: Inventory[]) => void) =>
+      cachedList<Inventory[]>(inventoriesPath(ws), onFresh),
     get: (ws: string, id: string) => request<Inventory>('GET', inventoriesPath(ws, id)),
     create: (ws: string, i: InventoryInput) => request<Inventory>('POST', inventoriesPath(ws), i),
     update: (ws: string, id: string, i: InventoryUpdate, version?: number) =>
@@ -463,7 +513,8 @@ export const api = {
   },
   connectorTypes: (ws: string) => request<ConnectorType[]>('GET', fleetPath(ws, 'connector-types')),
   connectors: {
-    list: (ws: string) => request<Connector[]>('GET', connectorsPath(ws)),
+    list: (ws: string, onFresh?: (d: Connector[]) => void) =>
+      cachedList<Connector[]>(connectorsPath(ws), onFresh),
     get: (ws: string, id: string) =>
       request<Connector>('GET', connectorsPath(ws, encodeURIComponent(id))),
     create: (ws: string, c: ConnectorInput) =>

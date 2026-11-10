@@ -43,11 +43,18 @@
     loading = true;
     error = null;
     try {
-      const [list, names] = await Promise.all([api.templates.list(ws), loadTemplateNames(ws)]);
+      // Names only decorate rows: the list (possibly cached) shows first, refs fill in after.
+      const namesP = loadTemplateNames(ws).then((names) => {
+        if (session.slug === ws) refs = { ...refs, ...names };
+      });
+      namesP.catch(() => undefined);
+      const list = await api.templates.list(ws, (d) => {
+        if (session.slug === ws) items = d ?? [];
+      });
       items = list ?? [];
-      refs = { ...refs, ...names };
       loading = false;
       void loadExtras(ws);
+      await namesP;
     } catch (e) {
       error = describeError(e);
       loading = false;
