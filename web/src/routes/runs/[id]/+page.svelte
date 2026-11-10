@@ -1,5 +1,6 @@
 <script lang="ts">
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
+  import { untrack } from 'svelte';
   import { page } from '$app/state';
   import {
     api,
@@ -15,6 +16,7 @@
   import { surveyToFormFields } from '$lib/survey';
   import { surveyFields } from '$lib/templates';
   import { btn, btnDanger, card, fmtDate } from '$lib/ui';
+  import Skeleton from '$lib/components/Skeleton.svelte';
   import RunDialog from '$lib/components/templates/RunDialog.svelte';
   import FormError from '$lib/components/FormError.svelte';
   import HostResults from '$lib/components/runs/HostResults.svelte';
@@ -52,17 +54,31 @@
     }
   }
 
+  let loading = $state(true);
+  let loadError = $state<string | null>(null);
+
   async function load(slug: string, rid: string) {
-    error = null;
+    loadError = null;
+    loading = true;
     try {
-      run = await api.runs.get(slug, rid);
+      const r = await api.runs.get(slug, rid);
+      // Ignore a response for a run the page has since navigated away from.
+      if (untrack(() => id) === rid) run = r;
     } catch (e) {
-      error = describeError(e);
+      if (untrack(() => id) === rid) loadError = describeError(e);
+    } finally {
+      loading = false;
     }
   }
 
   $effect(() => {
-    if (ws && id) void load(ws, id);
+    const slug = ws;
+    const rid = id;
+    if (!slug || !rid) return;
+    untrack(() => {
+      run = null;
+      void load(slug, rid);
+    });
   });
 
   // Ticking clock for the duration of a running run.
@@ -97,7 +113,23 @@
 <svelte:head><title>Run - Ansible Control Plane</title></svelte:head>
 
 <Breadcrumbs trail={[{ label: 'Runs', href: '/runs' }]} />
-<FormError id="run-page-error" message={error} />
+<FormError id="run-page-error" message={run ? error : (loadError ?? error)} />
+
+{#if !run}
+  {#if loading}
+    <div class="space-y-4" aria-busy="true" aria-label="Loading run">
+      <Skeleton class="h-7 w-64" />
+      <div class="{card} space-y-3">
+        <Skeleton class="h-4 w-full" />
+        <Skeleton class="h-4 w-3/4" />
+        <Skeleton class="h-4 w-1/2" />
+      </div>
+      <Skeleton class="h-48 w-full" />
+    </div>
+  {:else if loadError}
+    <button class={btn} onclick={() => ws && load(ws, id)}>Retry</button>
+  {/if}
+{/if}
 
 {#if run && ws}
   <header
