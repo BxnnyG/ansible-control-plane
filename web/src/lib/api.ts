@@ -338,6 +338,7 @@ export const api = {
       request<Schedule>('POST', templatesPath(ws, id, 'schedules'), s),
   },
   schedules: {
+    list: (ws: string) => request<Schedule[]>('GET', schedulesBase(ws)),
     update: (ws: string, id: string, s: ScheduleInput) =>
       request<Schedule>('PUT', schedulesPath(ws, id), s),
     remove: (ws: string, id: string) => request<void>('DELETE', schedulesPath(ws, id)),
@@ -648,6 +649,9 @@ function fleetPath(ws: string, sub: string): string {
   return `/api/v1/workspaces/${encodeURIComponent(ws)}/${sub}`;
 }
 
+function schedulesBase(ws: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(ws)}/schedules`;
+}
 function schedulesPath(ws: string, idOrSub: string): string {
   return `/api/v1/workspaces/${encodeURIComponent(ws)}/schedules/${encodeURIComponent(idOrSub)}`;
 }

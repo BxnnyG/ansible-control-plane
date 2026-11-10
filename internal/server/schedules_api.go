@@ -28,6 +28,7 @@ import (
 // layer; *schedules.Service implements it.
 type SchedulesAPI interface {
 	List(ctx context.Context, ws, tpl uuid.UUID) ([]schedules.Schedule, error)
+	ListAll(ctx context.Context, ws uuid.UUID) ([]schedules.Schedule, error)
 	Create(ctx context.Context, ws, tpl, createdBy uuid.UUID, in schedules.Input) (schedules.Schedule, error)
 	Get(ctx context.Context, ws, id uuid.UUID) (schedules.Schedule, error)
 	Update(ctx context.Context, ws, id uuid.UUID, in schedules.Input) (schedules.Schedule, error)
@@ -110,6 +111,23 @@ func scheduleRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc Sch
 		}
 		return in, true
 	}
+
+	az.Handle(r, http.MethodGet, ws+"/schedules", policy.ScheduleRead, func(w http.ResponseWriter, req *http.Request) {
+		d, ok := policy.DecisionFromContext(req.Context())
+		if !ok {
+			policy.WriteJSON(w, http.StatusInternalServerError, apiError{Error: "internal error"})
+			return
+		}
+		if !workspaceLevel(w, req, d, policy.ScheduleRead) {
+			return
+		}
+		list, err := svc.ListAll(req.Context(), d.Workspace.ID)
+		if err != nil {
+			fail(w, "list workspace schedules", err)
+			return
+		}
+		policy.WriteJSON(w, http.StatusOK, list)
+	})
 
 	az.Handle(r, http.MethodGet, ws+"/templates/{id}/schedules", policy.ScheduleRead, func(w http.ResponseWriter, req *http.Request) {
 		d, id, ok := target(w, req)

@@ -31,6 +31,9 @@ func (f *fakeSchedules) sched() schedules.Schedule {
 func (f *fakeSchedules) List(context.Context, uuid.UUID, uuid.UUID) ([]schedules.Schedule, error) {
 	return []schedules.Schedule{f.sched()}, f.err
 }
+func (f *fakeSchedules) ListAll(context.Context, uuid.UUID) ([]schedules.Schedule, error) {
+	return []schedules.Schedule{f.sched()}, f.err
+}
 func (f *fakeSchedules) Create(_ context.Context, _, _, _ uuid.UUID, in schedules.Input) (schedules.Schedule, error) {
 	f.inputs = append(f.inputs, in)
 	return f.sched(), f.err
@@ -81,6 +84,7 @@ func TestSchedulesAPIPermissions(t *testing.T) {
 		audit                          string
 	}{
 		{"viewer lists", policy.RoleViewer, "GET", "/templates/" + tpl + "/schedules", "", 200, ""},
+		{"viewer lists workspace", policy.RoleViewer, "GET", "/schedules", "", 200, ""},
 		{"viewer previews", policy.RoleViewer, "GET", "/schedules/preview?cron=*+*+*+*+*&tz=UTC", "", 200, ""},
 		{"viewer gets", policy.RoleViewer, "GET", "/schedules/" + sid, "", 200, ""},
 		{"viewer cannot create", policy.RoleViewer, "POST", "/templates/" + tpl + "/schedules", body, 403, ""},
@@ -126,7 +130,7 @@ func containsStr(l []string, s string) bool {
 func TestSchedulesAPIScopedDenied(t *testing.T) {
 	scope := dbgen.MembershipScope{}
 	h := schedulesRouter(policy.RoleEditor, &fakeSchedules{}, nil, scope)
-	for _, p := range []string{"/templates/" + uuid.NewString() + "/schedules", "/schedules/" + uuid.NewString(), "/templates/" + uuid.NewString() + "/webhook"} {
+	for _, p := range []string{"/schedules", "/templates/" + uuid.NewString() + "/schedules", "/schedules/" + uuid.NewString(), "/templates/" + uuid.NewString() + "/webhook"} {
 		if rec := doRuns(h, "GET", p, ""); rec.Code != 403 {
 			t.Errorf("scoped GET %s = %d, want 403", p, rec.Code)
 		}

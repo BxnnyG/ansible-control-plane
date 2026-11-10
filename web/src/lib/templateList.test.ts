@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Run, Schedule, Template } from './api';
-import { filterTemplates, lastRunByTemplate, scheduleLabel } from './templateList';
+import { filterTemplates, groupSchedules, lastRunByTemplate, scheduleLabel } from './templateList';
 
 const t = (name: string, playbook = 'site.yml', description = ''): Template =>
   ({ name, playbook, description }) as Template;
@@ -34,5 +34,17 @@ describe('scheduleLabel', () => {
     expect(scheduleLabel([s(false)])).toBe('paused');
     expect(scheduleLabel([s(true), s(false)])).toBe('scheduled');
     expect(scheduleLabel([s(true), s(true)])).toBe('2 schedules');
+  });
+});
+
+describe('groupSchedules', () => {
+  it('groups by template id', () => {
+    const g = groupSchedules([
+      { template_id: 'a', enabled: true } as Schedule,
+      { template_id: 'b', enabled: true } as Schedule,
+      { template_id: 'a', enabled: false } as Schedule,
+    ]);
+    expect(g.a).toHaveLength(2);
+    expect(g.b).toHaveLength(1);
   });
 });

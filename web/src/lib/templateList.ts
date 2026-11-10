@@ -25,3 +25,10 @@ export function scheduleLabel(schedules: readonly Schedule[] | undefined): strin
   if (active === 0) return 'paused';
   return active === 1 ? 'scheduled' : `${active} schedules`;
 }
+
+/** Groups a workspace-wide schedule list by template id. */
+export function groupSchedules(list: readonly Schedule[]): Record<string, Schedule[]> {
+  const out: Record<string, Schedule[]> = {};
+  for (const s of list) (out[s.template_id] ??= []).push(s);
+  return out;
+}

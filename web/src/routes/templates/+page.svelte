@@ -6,7 +6,7 @@
   import { relativeTime } from '$lib/dashboard';
   import { describeError } from '$lib/errors';
   import { buildRunQuery } from '$lib/runs';
-  import { filterTemplates, lastRunByTemplate, scheduleLabel } from '$lib/templateList';
+  import { filterTemplates, groupSchedules, lastRunByTemplate, scheduleLabel } from '$lib/templateList';
   import { session } from '$lib/session.svelte';
   import { loadTemplateCredentials, loadTemplateNames, type TemplateRefs } from '$lib/templateData';
   import { btn, btnPrimary, card, input, td, th } from '$lib/ui';
@@ -61,15 +61,12 @@
       }
     }
     if (session.can('schedule.read')) {
-      const entries = await Promise.all(
-        list.slice(0, 50).map((t) =>
-          api.templates
-            .schedules(ws, t.id)
-            .then((s) => [t.id, s ?? []] as const)
-            .catch(() => [t.id, []] as const),
-        ),
-      );
-      if (session.slug === ws) schedules = Object.fromEntries(entries);
+      try {
+        const res = await api.schedules.list(ws);
+        if (session.slug === ws) schedules = groupSchedules(res ?? []);
+      } catch {
+        // The schedule column is optional; the list stays usable without it.
+      }
     }
   }
 
