@@ -19,12 +19,14 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/fleet"
 )
 
-const fleetUsage = "usage: acp admin fleet <merge | hosts | unmanaged | conflicts [--state open|resolved|all] | add --host NAME|ID --inventory SLUG --group GROUP [--name NAME --author-name NAME --author-email EMAIL]> --workspace SLUG"
+const fleetUsage = "usage: acp admin fleet <merge | hosts | unmanaged [--include-untracked] | conflicts [--state open|resolved|all] | network <list | track | untrack> [--network NAME|ID] | add --host NAME|ID --inventory SLUG --group GROUP [--name NAME --author-name NAME --author-email EMAIL]> --workspace SLUG"
 
 type fleetArgs struct {
 	Sub, Workspace, State        string
 	Host, Inventory, Group, Name string
 	AuthorName, AuthorEmail      string
+	Action, Network              string // network <list|track|untrack> --network NAME|ID
+	IncludeUntracked             bool
 }
 
 func parseFleetArgs(args []string, stderr io.Writer) (fleetArgs, error) {
@@ -32,10 +34,20 @@ func parseFleetArgs(args []string, stderr io.Writer) (fleetArgs, error) {
 		return fleetArgs{}, errors.New(fleetUsage)
 	}
 	a := fleetArgs{Sub: args[0]}
+	if a.Sub == "network" {
+		if len(args) < 2 || (args[1] != "list" && args[1] != "track" && args[1] != "untrack") {
+			return fleetArgs{}, errors.New(fleetUsage)
+		}
+		a.Action, args = args[1], args[1:]
+	}
 	fs := flag.NewFlagSet("fleet "+a.Sub, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	switch a.Sub {
-	case "merge", "hosts", "unmanaged":
+	case "merge", "hosts":
+	case "unmanaged":
+		fs.BoolVar(&a.IncludeUntracked, "include-untracked", false, "also list hosts whose only networks are untracked")
+	case "network":
+		fs.StringVar(&a.Network, "network", "", "network name (external key, description or CIDR) or id")
 	case "add":
 		fs.StringVar(&a.Host, "host", "", "fleet host name or id")
 		fs.StringVar(&a.Inventory, "inventory", "", "target inventory slug")
@@ -57,6 +69,12 @@ func parseFleetArgs(args []string, stderr io.Writer) (fleetArgs, error) {
 	}
 	if a.Workspace == "" {
 		return fleetArgs{}, errors.New("--workspace is required")
+	}
+	if a.Sub == "network" && a.Action != "list" && a.Network == "" {
+		return fleetArgs{}, errors.New("--network is required")
+	}
+	if a.Sub == "network" && a.Action == "list" && a.Network != "" {
+		return fleetArgs{}, errors.New("--network is not used by list")
 	}
 	if a.Sub == "add" && (a.Host == "" || a.Inventory == "" || a.Group == "") {
 		return fleetArgs{}, errors.New("--host, --inventory and --group are required")
@@ -139,13 +157,15 @@ func runAdminFleet(ctx context.Context, args []string, cfg config.Config, stdout
 	switch a.Sub {
 	case "unmanaged":
 		no := false
-		list, err := fleet.NewStore(pool, nil).Hosts(ctx, ws, fleet.HostFilter{Managed: &no}, nil)
+		list, err := fleet.NewStore(pool, nil).Hosts(ctx, ws, fleet.HostFilter{Managed: &no, ExcludeUntracked: !a.IncludeUntracked}, nil)
 		if err != nil {
 			return err
 		}
 		for _, h := range list {
 			_, _ = fmt.Fprintln(stdout, formatUnmanaged(h))
 		}
+	case "network":
+		return runAdminFleetNetwork(ctx, a, ws, pool, stdout)
 	case "add":
 		return runAdminFleetAdd(ctx, a, ws, pool, cfg, stdout)
 	case "merge":

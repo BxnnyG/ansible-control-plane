@@ -3,4 +3,4 @@
 </script>
 
 <!-- Always rendered so screen readers announce the text when it changes. -->
-<p {id} role="alert" class="min-h-5 text-sm text-red-600 dark:text-red-400">{message ?? ''}</p>
+<p {id} role="alert" class="min-h-5 text-sm text-bad">{message ?? ''}</p>

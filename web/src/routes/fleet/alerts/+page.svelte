@@ -1,4 +1,6 @@
 <script lang="ts">
+  import ListSkeleton from '$lib/components/ListSkeleton.svelte';
+  import PageHeader from '$lib/components/PageHeader.svelte';
   import { page } from '$app/state';
   import { api, type FleetAlert, type RemediationRef } from '$lib/api';
   import { describeError } from '$lib/errors';
@@ -48,10 +50,10 @@
 
 <svelte:head><title>Alerts - Ansible Control Plane</title></svelte:head>
 
-<header class="mb-4">
-  <h1 class="text-2xl font-semibold">Alerts</h1>
-  <p class="mt-1 text-muted">Monitoring alerts from Checkmk and alert webhooks, linked to hosts.</p>
-</header>
+<PageHeader
+  title="Alerts"
+  description="Monitoring alerts from Checkmk and alert webhooks, linked to hosts."
+/>
 <FleetTabs />
 <FormError id="alerts-error" message={error} />
 
@@ -66,18 +68,19 @@
     </select>
     {#if hostId}
       <span class="text-sm text-muted">
-        Filtered by host. <a class="text-accent underline" href="/fleet/alerts">Show all</a>
+        Filtered by host. <a
+          class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+          href="/fleet/alerts">Show all</a
+        >
       </span>
     {/if}
   </div>
   {#if loading}
-    <p class="text-muted">Loading...</p>
+    <ListSkeleton />
   {:else if items.length === 0}
-    <div class="rounded-lg border border-dashed border-border p-8 text-center text-muted">
-      No alerts.
-    </div>
+    <div class="empty">No alerts.</div>
   {:else}
-    <div class="overflow-x-auto rounded-lg border border-border">
+    <div class="tbl-wrap">
       <table class="w-full">
         <thead class="bg-surface-2">
           <tr>
@@ -96,7 +99,9 @@
               </td>
               <td class={td}>
                 {#if a.host_id}
-                  <a class="text-accent underline" href="/fleet/hosts/{a.host_id}">{alertHost(a)}</a
+                  <a
+                    class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+                    href="/fleet/hosts/{a.host_id}">{alertHost(a)}</a
                   >
                 {:else}
                   {alertHost(a)} <span class="text-xs text-muted">(unlinked)</span>

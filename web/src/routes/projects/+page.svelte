@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
+  import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { goto } from '$app/navigation';
   import { api, type Project, type SecretMeta } from '$lib/api';
   import { describeError } from '$lib/errors';
@@ -31,16 +33,19 @@
   }
 
   $effect(() => {
-    if (session.slug && canRead) void load(session.slug);
+    const ws = session.slug;
+    if (ws && canRead) untrack(() => void load(ws));
     else loading = false;
   });
 </script>
 
 <svelte:head><title>Projects - Ansible Control Plane</title></svelte:head>
 
-<header class="mb-6 flex items-start justify-between gap-4">
+<header
+  class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
+>
   <div>
-    <h1 class="text-2xl font-semibold">Projects</h1>
+    <h1 class="text-xl font-semibold">Projects</h1>
     <p class="mt-1 text-muted">Git repositories containing playbooks and roles.</p>
   </div>
   {#if canWrite && !creating}
@@ -65,13 +70,11 @@
   {/if}
 
   {#if loading}
-    <p class="text-muted">Loading...</p>
+    <ListSkeleton />
   {:else if items.length === 0}
-    <div class="rounded-lg border border-dashed border-border p-8 text-center text-muted">
-      No projects yet.
-    </div>
+    <div class="empty">No projects yet.</div>
   {:else}
-    <div class="overflow-x-auto rounded-lg border border-border">
+    <div class="tbl-wrap">
       <table class="w-full">
         <thead class="bg-surface-2">
           <tr>
@@ -83,7 +86,10 @@
           {#each items as p (p.id)}
             <tr>
               <td class={td}>
-                <a class="text-accent hover:underline" href="/projects/{p.id}">{p.name}</a>
+                <a
+                  class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+                  href="/projects/{p.id}">{p.name}</a
+                >
               </td>
               <td class="{td} break-all text-muted">{p.url}</td>
               <td class={td}>

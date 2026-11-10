@@ -6,6 +6,10 @@ import {
   ansibleClass,
   ansibleLabel,
   driftLabel,
+  hiddenNetworkCount,
+  listedNetworks,
+  selectedIds,
+  trackedSelection,
   networkCountsLabel,
   onlineClass,
   onlineLabel,
@@ -86,9 +90,9 @@ describe('alert helpers', () => {
   it('labels and colours severities', () => {
     expect(severityLabel('warning')).toBe('Warning');
     expect(severityLabel('custom')).toBe('custom');
-    expect(severityClass('critical')).toContain('red');
-    expect(severityClass('warning')).toContain('amber');
-    expect(severityClass('info')).toContain('muted');
+    expect(severityClass('critical')).toContain('tone-bad');
+    expect(severityClass('warning')).toContain('tone-warn');
+    expect(severityClass('info')).toContain('tone-neutral');
   });
 
   it('picks the host cell text and sorts labels', () => {
@@ -104,9 +108,9 @@ describe('host status helpers', () => {
   it('labels and styles the online state', () => {
     expect(onlineLabel('online')).toBe('Online');
     expect(onlineLabel('weird')).toBe('weird');
-    expect(onlineClass('online')).toContain('green');
-    expect(onlineClass('offline')).toContain('red');
-    expect(onlineClass('unknown')).toContain('text-muted');
+    expect(onlineClass('online')).toContain('tone-ok');
+    expect(onlineClass('offline')).toContain('tone-bad');
+    expect(onlineClass('unknown')).toContain('tone-neutral');
   });
 
   it('describes the Ansible state', () => {
@@ -121,9 +125,9 @@ describe('host status helpers', () => {
     expect(ansibleLabel({ managed: true, last_run: null })).toBe('never run');
     expect(ansibleLabel({ managed: true, last_run: run('ok') })).toBe('ok');
     expect(ansibleLabel({ managed: true, last_run: run('ok', true) })).toBe('ok (check)');
-    expect(ansibleClass({ managed: true, last_run: run('failed') })).toContain('red');
-    expect(ansibleClass({ managed: true, last_run: run('ok') })).toContain('green');
-    expect(ansibleClass({ managed: true, last_run: null })).toContain('text-muted');
+    expect(ansibleClass({ managed: true, last_run: run('failed') })).toContain('tone-bad');
+    expect(ansibleClass({ managed: true, last_run: run('ok') })).toContain('tone-ok');
+    expect(ansibleClass({ managed: true, last_run: null })).toContain('tone-neutral');
   });
 
   it('labels drift and network counters', () => {
@@ -138,5 +142,25 @@ describe('host status helpers', () => {
     expect(
       networkCountsLabel({ online: 4, ansible_ok: 3, failed: 1, never_managed: 2, open_alerts: 0 }),
     ).toBe('4 online, 3 ok, 1 failed, 2 never managed');
+  });
+});
+
+describe('network tracking helpers', () => {
+  const nets = [
+    { id: 'a', tracked: true },
+    { id: 'b', tracked: false },
+    { id: 'c', tracked: true },
+  ];
+  it('hides untracked networks unless asked', () => {
+    expect(listedNetworks(nets, false).map((n) => n.id)).toEqual(['a', 'c']);
+    expect(listedNetworks(nets, true).map((n) => n.id)).toEqual(['a', 'b', 'c']);
+  });
+  it('counts hidden networks', () => {
+    expect(hiddenNetworkCount(nets)).toBe(1);
+    expect(hiddenNetworkCount([])).toBe(0);
+  });
+  it('round-trips the selection', () => {
+    expect(selectedIds(trackedSelection(nets))).toEqual(['a', 'c']);
+    expect(selectedIds({ a: false, b: undefined as unknown as boolean })).toEqual([]);
   });
 });

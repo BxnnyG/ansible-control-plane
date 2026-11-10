@@ -1,10 +1,15 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
+  import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { api, type Connector, type ConnectorCreated, type ConnectorType } from '$lib/api';
   import { fmtDuration, statusClass, statusLabel } from '$lib/connectors';
+  import { warningsOf } from '$lib/dashboard';
   import { describeError } from '$lib/errors';
   import { session } from '$lib/session.svelte';
   import { btn, btnDanger, btnPrimary, card, fmtDate, td, th } from '$lib/ui';
   import ConnectorForm from '$lib/components/connectors/ConnectorForm.svelte';
+  import WarningsBadge from '$lib/components/connectors/WarningsBadge.svelte';
+  import RowActions from '$lib/components/RowActions.svelte';
   import SyncHistory from '$lib/components/connectors/SyncHistory.svelte';
   import FormError from '$lib/components/FormError.svelte';
 
@@ -34,7 +39,8 @@
   }
 
   $effect(() => {
-    if (session.slug && canRead) void load(session.slug);
+    const ws = session.slug;
+    if (ws && canRead) untrack(() => void load(ws));
     else loading = false;
   });
 
@@ -97,9 +103,11 @@
 
 <svelte:head><title>Connectors - Ansible Control Plane</title></svelte:head>
 
-<header class="mb-6 flex items-start justify-between gap-4">
+<header
+  class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
+>
   <div>
-    <h1 class="text-2xl font-semibold">Connectors</h1>
+    <h1 class="text-xl font-semibold">Connectors</h1>
     <p class="mt-1 text-muted">
       Read-only links to OPNsense, Proxmox and other systems that feed the fleet view.
     </p>
@@ -158,20 +166,17 @@
   {/if}
 
   {#if loading}
-    <p class="text-muted">Loading...</p>
+    <ListSkeleton />
   {:else if items.length === 0}
-    <div class="rounded-lg border border-dashed border-border p-8 text-center text-muted">
-      No connectors yet.
-    </div>
+    <div class="empty">No connectors yet.</div>
   {:else}
-    <div class="overflow-x-auto rounded-lg border border-border">
+    <div class="tbl-wrap">
       <table class="w-full">
         <thead class="bg-surface-2">
           <tr>
             <th class={th}>Name</th><th class={th}>Type</th><th class={th}>Status</th>
             <th class={th}>Last success</th><th class={th}>Last error</th>
-            <th class={th}>Duration</th><th class={th}>Networks</th><th class={th}>Obs.</th>
-            <th class={th}>Alerts</th><th class={th}><span class="sr-only">Actions</span></th>
+            <th class={th}>Counts</th><th class={th}><span class="sr-only">Actions</span></th>
           </tr>
         </thead>
         <tbody class="divide-y divide-border">
@@ -183,50 +188,52 @@
                 {#if c.webhook_path}
                   <div class="font-mono text-xs text-muted">POST {c.webhook_path}</div>
                 {/if}
-                {#each c.warnings ?? [] as w (w)}
-                  <div class="text-xs text-amber-700 dark:text-amber-400">Warning: {w}</div>
-                {/each}
-                {#each c.counts?.warnings ?? [] as w (w)}
-                  <div class="text-xs text-amber-700 dark:text-amber-400">Warning: {w}</div>
-                {/each}
+                <WarningsBadge warnings={warningsOf(c)} />
               </td>
               <td class={td}>{typeLabel(c.type)}</td>
               <td class={td}>
-                <span class="rounded px-2 py-0.5 text-xs {statusClass(c.status)}">
+                <span class={statusClass(c.status)}>
                   {statusLabel(c.status)}
                 </span>
               </td>
-              <td class={td}>{fmtDate(c.last_success_at)}</td>
-              <td class="{td} max-w-xs text-xs break-words text-red-600 dark:text-red-400">
+              <td class={td}>
+                {fmtDate(c.last_success_at)}
+                <div class="text-xs text-muted">Took {fmtDuration(c.last_duration_ms)}</div>
+              </td>
+              <td class="{td} max-w-xs text-xs break-words text-bad">
                 {c.last_error || '-'}
               </td>
-              <td class={td}>{fmtDuration(c.last_duration_ms)}</td>
-              <td class={td}>{c.counts?.networks ?? 0}</td>
-              <td class={td}>{c.counts?.observations ?? 0}</td>
-              <td class={td}>{c.counts?.alerts ?? 0}</td>
-              <td class="{td} text-right whitespace-nowrap">
-                <button class={btn} onclick={() => (history = history === c.id ? null : c.id)}>
-                  History
-                </button>
-                {#if canWrite}
-                  <button class={btn} disabled={busyId === c.id} onclick={() => test(c)}
-                    >Test</button
-                  >
-                  <button
-                    class={btn}
-                    disabled={busyId === c.id || !c.enabled}
-                    onclick={() => sync(c)}
-                  >
-                    Sync now
+              <td class="{td} whitespace-nowrap">
+                {c.counts?.networks ?? 0} networks
+                <div class="text-xs text-muted">
+                  {c.counts?.observations ?? 0} obs. · {c.counts?.alerts ?? 0} alerts
+                </div>
+              </td>
+              <td class="{td} text-right">
+                <RowActions label="Actions for {c.name}">
+                  <button class={btn} onclick={() => (history = history === c.id ? null : c.id)}>
+                    History
                   </button>
-                  <button class={btn} onclick={() => (editing = c)}>Edit</button>
-                  <button class={btnDanger} onclick={() => (deleting = c)}>Delete</button>
-                {/if}
+                  {#if canWrite}
+                    <button class={btn} disabled={busyId === c.id} onclick={() => test(c)}
+                      >Test</button
+                    >
+                    <button
+                      class={btn}
+                      disabled={busyId === c.id || !c.enabled}
+                      onclick={() => sync(c)}
+                    >
+                      Sync now
+                    </button>
+                    <button class={btn} onclick={() => (editing = c)}>Edit</button>
+                    <button class={btnDanger} onclick={() => (deleting = c)}>Delete</button>
+                  {/if}
+                </RowActions>
               </td>
             </tr>
             {#if history === c.id && session.slug}
               <tr>
-                <td colspan="10" class="bg-surface-2 p-3">
+                <td colspan="7" class="bg-surface-2 p-3">
                   <SyncHistory ws={session.slug} id={c.id} />
                 </td>
               </tr>

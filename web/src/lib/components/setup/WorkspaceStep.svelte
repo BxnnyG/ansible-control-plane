@@ -53,7 +53,7 @@
   <button
     type="submit"
     disabled={busy}
-    class="rounded-md bg-accent px-4 py-2 text-accent-fg disabled:opacity-60"
+    class="bg-brand min-h-11 rounded-lg px-4 py-2 font-medium disabled:opacity-60"
   >
     {busy ? 'Saving...' : 'Save and continue'}
   </button>

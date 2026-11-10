@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
+  import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { goto } from '$app/navigation';
   import { api, type Template } from '$lib/api';
   import { describeError } from '$lib/errors';
@@ -34,7 +36,8 @@
   }
 
   $effect(() => {
-    if (session.slug && canRead) void load(session.slug);
+    const ws = session.slug;
+    if (ws && canRead) untrack(() => void load(ws));
     else loading = false;
   });
 
@@ -44,9 +47,11 @@
 
 <svelte:head><title>Templates - Ansible Control Plane</title></svelte:head>
 
-<header class="mb-6 flex items-start justify-between gap-4">
+<header
+  class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
+>
   <div>
-    <h1 class="text-2xl font-semibold">Templates</h1>
+    <h1 class="text-xl font-semibold">Templates</h1>
     <p class="mt-1 text-muted">Reusable playbook run definitions.</p>
   </div>
   {#if canWrite && !creating}
@@ -71,13 +76,11 @@
   {/if}
 
   {#if loading}
-    <p class="text-muted">Loading...</p>
+    <ListSkeleton />
   {:else if items.length === 0}
-    <div class="rounded-lg border border-dashed border-border p-8 text-center text-muted">
-      No templates yet.
-    </div>
+    <div class="empty">No templates yet.</div>
   {:else}
-    <div class="overflow-x-auto rounded-lg border border-border">
+    <div class="tbl-wrap">
       <table class="w-full">
         <thead class="bg-surface-2">
           <tr>
@@ -90,7 +93,10 @@
           {#each items as t (t.id)}
             <tr>
               <td class={td}>
-                <a class="text-accent hover:underline" href="/templates/{t.id}">{t.name}</a>
+                <a
+                  class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+                  href="/templates/{t.id}">{t.name}</a
+                >
                 {#if t.description}<div class="text-xs text-muted">{t.description}</div>{/if}
               </td>
               <td class="{td} font-mono text-xs">{t.playbook}</td>
@@ -98,8 +104,9 @@
               <td class={td}>{inventoryName(t.inventory_id)}</td>
               {#if canRun}
                 <td class={td}>
-                  <button class="text-accent hover:underline" onclick={() => (running = t)}
-                    >Run</button
+                  <button
+                    class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+                    onclick={() => (running = t)}>Run</button
                   >
                 </td>
               {/if}

@@ -5,8 +5,10 @@
 
   let open = $state(false);
   let busy = $state(false);
+  let root: HTMLElement | undefined = $state();
 
   const label = $derived(session.me?.display_name || session.me?.email || 'Account');
+  const initial = $derived(label.trim().charAt(0).toUpperCase() || '?');
 
   async function logout() {
     busy = true;
@@ -26,27 +28,35 @@
   }
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && (open = false)} />
+<svelte:window
+  onkeydown={(e) => e.key === 'Escape' && (open = false)}
+  onclick={(e) => open && !root?.contains(e.target as Node) && (open = false)}
+/>
 
-<div class="relative">
+<div class="relative" bind:this={root}>
   <button
     type="button"
-    class="rounded-full border border-border bg-surface-2 px-3 py-1.5 text-sm"
+    class="flex h-11 items-center gap-2 rounded-md border border-border py-1 pr-1 pl-1 text-sm hover:bg-surface-2 sm:pr-2.5 lg:h-8"
     aria-haspopup="menu"
     aria-expanded={open}
     onclick={() => (open = !open)}
   >
-    {label}
+    <span
+      class="bg-brand inline-flex h-8 w-8 items-center justify-center rounded text-xs font-semibold lg:h-6 lg:w-6"
+      aria-hidden="true">{initial}</span
+    >
+    <span class="hidden max-w-40 truncate sm:inline">{label}</span>
+    <span class="sr-only sm:hidden">{label}</span>
   </button>
   {#if open}
     <ul
       role="menu"
-      class="absolute right-0 z-40 mt-1 w-44 rounded-md border border-border bg-surface p-1 shadow-lg"
+      class="absolute right-0 z-40 mt-2 w-48 rounded-xl border border-border-strong bg-surface p-1 shadow-2xl"
     >
       <li role="none">
         <a
           role="menuitem"
-          class="block rounded px-3 py-2 text-sm hover:bg-surface-2"
+          class="block rounded-lg px-3 py-2.5 max-lg:min-h-11 lg:py-1.5 text-sm hover:bg-surface-2"
           href="/settings"
           onclick={() => (open = false)}>Settings</a
         >
@@ -56,7 +66,7 @@
           type="button"
           role="menuitem"
           disabled={busy}
-          class="block w-full rounded px-3 py-2 text-left text-sm hover:bg-surface-2"
+          class="block w-full rounded-lg px-3 py-2.5 max-lg:min-h-11 lg:py-1.5 text-left text-sm hover:bg-surface-2"
           onclick={logout}>Sign out</button
         >
       </li>

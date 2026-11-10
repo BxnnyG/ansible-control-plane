@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NAV_ITEMS, filterNav, visibleNav } from './nav';
+import { NAV_ITEMS, filterNav, groupNav, isCurrent, visibleNav } from './nav';
 
 describe('filterNav', () => {
   it('returns all entries for an empty query', () => {
@@ -27,5 +27,25 @@ describe('visibleNav', () => {
     const labels = visibleNav(NAV_ITEMS, (p) => p === 'connector.read').map((i) => i.label);
     expect(labels).toContain('Connectors');
     expect(labels).not.toContain('Fleet');
+  });
+});
+
+describe('isCurrent', () => {
+  const [dash, runs] = [NAV_ITEMS[0], NAV_ITEMS.find((i) => i.label === 'Runs')!];
+  it('matches the dashboard only on the root path', () => {
+    expect(isCurrent(dash, '/')).toBe(true);
+    expect(isCurrent(dash, '/runs')).toBe(false);
+  });
+  it('matches nested paths without prefix collisions', () => {
+    expect(isCurrent(runs, '/runs/abc')).toBe(true);
+    expect(isCurrent(runs, '/runsx')).toBe(false);
+  });
+});
+
+describe('groupNav', () => {
+  it('groups by section in order and keeps every entry', () => {
+    const g = groupNav(NAV_ITEMS);
+    expect(g.map((x) => x.section)).toEqual(['Operate', 'Configure', 'Security', '']);
+    expect(g.flatMap((x) => x.items)).toHaveLength(NAV_ITEMS.length);
   });
 });

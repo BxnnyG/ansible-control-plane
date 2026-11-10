@@ -181,7 +181,11 @@ func (ntfySender) Send(ctx context.Context, ch Channel, cred []byte, msg Message
 		req.Header.Set("Click", msg.URL)
 	}
 	if len(cred) > 0 {
-		req.Header.Set("Authorization", "Bearer "+string(cred))
+		if c.Auth == "basic" {
+			req.SetBasicAuth(c.Username, string(cred))
+		} else {
+			req.Header.Set("Authorization", "Bearer "+string(cred))
+		}
 	}
 	return do(ch, req)
 }

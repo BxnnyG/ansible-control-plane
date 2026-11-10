@@ -7,10 +7,10 @@
 </script>
 
 <section class="space-y-4" aria-labelledby="scan-h">
-  <h2 id="scan-h" class="text-lg font-medium">Latest scan</h2>
+  <h2 id="scan-h" class="text-sm font-semibold">Latest scan</h2>
 
   {#if scan.warnings.length > 0}
-    <ul class="{card} space-y-1 text-sm text-amber-700 dark:text-amber-400">
+    <ul class="{card} space-y-1 text-sm text-warn">
       {#each scan.warnings as w, i (i)}<li><code>{w.path}</code> {w.message}</li>{/each}
     </ul>
   {/if}
@@ -70,7 +70,7 @@
       {#each scan.vars_files as v (v.path)}
         <li>
           <code>{v.path}</code> <span class="text-muted">{v.scope} {v.name}</span>
-          {#if v.vaulted}<span class="text-amber-700 dark:text-amber-400"> (vault)</span>{/if}
+          {#if v.vaulted}<span class="text-warn"> (vault)</span>{/if}
         </li>
       {/each}
     </ul>
@@ -92,25 +92,22 @@
     <ul class="mt-2 text-sm">
       {#each scan.vault_files as v (v.path)}
         <li>
-          <span class="rounded bg-amber-500/15 px-1 text-xs text-amber-700 dark:text-amber-400"
-            >vault</span
-          >
+          <span class="tone-warn">vault</span>
           <code>{v.path}</code>
           <span class="text-muted">{v.version}{v.vault_id ? `, id ${v.vault_id}` : ''}</span>
         </li>
       {/each}
       {#each scan.inline_vault as v (v.file)}
         <li>
-          <span class="rounded bg-amber-500/15 px-1 text-xs text-amber-700 dark:text-amber-400"
-            >inline</span
-          >
+          <span class="tone-warn">inline</span>
           <code>{v.file}</code> <span class="text-muted">{v.paths.join(', ')}</span>
         </li>
       {/each}
     </ul>
     <p class="mt-2 text-xs text-muted">
-      Vault passwords are managed as <a class="text-accent hover:underline" href="/vault"
-        >vault identities</a
+      Vault passwords are managed as <a
+        class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+        href="/vault">vault identities</a
       >. Decrypt, encrypt and rekey are available in the vault panel above.
     </p>
   </details>

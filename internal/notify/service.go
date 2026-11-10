@@ -404,3 +404,78 @@ func (s *Service) ListWorkspaceDeliveries(ctx context.Context, ws uuid.UUID, cha
 	}
 	return out, nil
 }
+
+// DraftInput describes an unsaved channel for TestDraft. SecretValue is used
+// only in memory and zeroed before TestDraft returns.
+type DraftInput struct {
+	Type          string
+	Config        json.RawMessage
+	SecretID      *uuid.UUID
+	SecretValue   []byte
+	TLSCAPEM      string
+	TLSSkipVerify bool
+	ChannelID     *uuid.UUID // existing channel whose stored secret is used when no secret is given
+}
+
+// TestDraft sends a sample message through an unsaved channel definition. The
+// config is validated like on create. Credential precedence: SecretValue,
+// SecretID, then the stored secret of ChannelID. Nothing is persisted.
+func (s *Service) TestDraft(ctx context.Context, ws uuid.UUID, in DraftInput) error {
+	defer func() {
+		for i := range in.SecretValue {
+			in.SecretValue[i] = 0
+		}
+	}()
+	cfg := in.Config
+	if len(cfg) == 0 {
+		cfg = json.RawMessage("{}")
+	}
+	secretID := in.SecretID
+	if len(in.SecretValue) == 0 && secretID == nil && in.ChannelID != nil {
+		row, err := s.q.GetNotificationChannel(ctx, dbgen.GetNotificationChannelParams{ID: *in.ChannelID, WorkspaceID: ws})
+		if err != nil {
+			return fmt.Errorf("get channel: %w", mapErr(err))
+		}
+		secretID = uuidPtr(row.SecretID)
+	}
+	if len(in.SecretValue) > 0 {
+		secretID = nil
+	}
+	if secretID != nil {
+		if s.secrets == nil {
+			return invalid("secret store unavailable")
+		}
+		if _, err := s.secrets.Get(ctx, ws, *secretID); err != nil {
+			return invalid("secret_id does not reference a secret of this workspace")
+		}
+	}
+	if err := ValidateConfig(in.Type, cfg, secretID != nil || len(in.SecretValue) > 0); err != nil {
+		return err
+	}
+	if in.TLSCAPEM != "" {
+		if _, err := tlsConfig(Channel{TLSCAPEM: in.TLSCAPEM}, ""); err != nil {
+			return invalid("%v", err)
+		}
+	}
+	snd, err := s.senders(in.Type)
+	if err != nil {
+		return err
+	}
+	cred := in.SecretValue
+	if secretID != nil {
+		r, err := s.secrets.Resolve(ctx, ws, *secretID)
+		if err != nil {
+			return fmt.Errorf("resolve channel secret: %s", sanitize(err.Error(), nil))
+		}
+		defer r.Value.Zero()
+		cred = r.Value.Reveal()
+	}
+	name, err := s.q.GetNotificationWorkspaceName(ctx, ws)
+	if err != nil {
+		return fmt.Errorf("load workspace: %w", err)
+	}
+	msg := SampleMessage(name, s.publicURL)
+	msg.URL = s.publicURL
+	ch := Channel{Type: in.Type, Config: cfg, TLSCAPEM: in.TLSCAPEM, TLSSkipVerify: in.TLSSkipVerify}
+	return sendCred(ctx, snd, ch, cred, msg)
+}

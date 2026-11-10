@@ -1237,6 +1237,50 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /**
+         * Bulk-change which networks the fleet tracks
+         * @description Either set `tracked` on `ids`, or give `track_only` to track exactly those networks and untrack all others.
+         */
+        patch: operations["trackFleetNetworks"];
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace}/networks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Track or untrack one network */
+        patch: operations["trackFleetNetwork"];
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace}/fleet/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        get: operations["getFleetSettings"];
+        put: operations["setFleetSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
         patch?: never;
         trace?: never;
     };
@@ -1656,6 +1700,29 @@ export interface paths {
         get: operations["listNotificationChannels"];
         put?: never;
         post: operations["createNotificationChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace}/notifications/channels/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a test message through an unsaved channel definition.
+         * @description The config is validated like on create. `secret_value` is used only in memory and is never stored, logged, audited or returned. Without any secret and with `channel_id`, the stored secret of that channel is used. Rate limited per user.
+         */
+        post: operations["testNotificationChannelDraft"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2564,6 +2631,8 @@ export interface components {
             interface: string;
             description: string;
             source: string;
+            /** @description Untracked networks are hidden from host lists */
+            tracked: boolean;
             /** Format: date-time */
             first_seen: string;
             /** Format: date-time */
@@ -2571,6 +2640,22 @@ export interface components {
             host_count: number;
             /** @description Status counters of the visible hosts in the network. */
             counts: components["schemas"]["FleetNetworkCounts"];
+        };
+        FleetNetworkTrackInput: {
+            tracked: boolean;
+        };
+        FleetNetworksTrackInput: {
+            ids?: string[];
+            tracked?: boolean;
+            /** @description Track exactly these networks */
+            track_only?: string[];
+        };
+        FleetTrackResult: {
+            updated: number;
+        };
+        FleetSettings: {
+            /** @description Whether newly discovered networks start tracked. */
+            new_networks_tracked: boolean;
         };
         /** @description An inventory host linked to a fleet host. */
         FleetAnsibleLink: {
@@ -2997,6 +3082,24 @@ export interface components {
             tls_ca_pem?: string;
             tls_skip_verify?: boolean;
             enabled?: boolean;
+        };
+        NotificationChannelDraft: {
+            /** @enum {string} */
+            type: "webhook" | "matrix" | "smtp" | "gotify" | "ntfy";
+            config: {
+                [key: string]: unknown;
+            };
+            /** Format: uuid */
+            secret_id?: string | null;
+            /** @description Unsaved credential; used in memory only. */
+            secret_value?: string;
+            tls_ca_pem?: string;
+            tls_skip_verify?: boolean;
+            /**
+             * Format: uuid
+             * @description Existing channel whose stored secret is used when no secret is given.
+             */
+            channel_id?: string | null;
         };
         NotificationTestResult: {
             ok: boolean;
@@ -5497,6 +5600,115 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    trackFleetNetworks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FleetNetworksTrackInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FleetTrackResult"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    trackFleetNetwork: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FleetNetworkTrackInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FleetTrackResult"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getFleetSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FleetSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setFleetSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FleetSettings"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FleetSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     listFleetHosts: {
         parameters: {
             query?: {
@@ -5506,6 +5718,8 @@ export interface operations {
                 alerts?: boolean;
                 /** @description false lists hosts not linked to any inventory host. */
                 managed?: boolean;
+                /** @description true also returns hosts whose only networks are untracked. */
+                include_untracked?: boolean;
             };
             header?: never;
             path: {
@@ -5591,6 +5805,8 @@ export interface operations {
                 state?: "open" | "resolved";
                 host_id?: string;
                 connector?: string;
+                /** @description true also returns hosts whose only networks are untracked. */
+                include_untracked?: boolean;
             };
             header?: never;
             path: {
@@ -6321,6 +6537,41 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["NotificationChannel"];
                 };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    testNotificationChannelDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationChannelDraft"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTestResult"];
+                };
+            };
+            /** @description Rate limited. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Error"];
         };

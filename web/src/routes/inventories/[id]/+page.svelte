@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
+  import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import {
@@ -94,14 +96,14 @@
 
 <svelte:head><title>{inv?.name ?? 'Inventory'} - Ansible Control Plane</title></svelte:head>
 
-<p class="mb-2 text-sm">
-  <a class="text-accent hover:underline" href="/inventories">Inventories</a>
-</p>
+<Breadcrumbs trail={[{ label: 'Inventories', href: '/inventories' }]} />
 
 {#if inv && ws}
-  <header class="mb-6 flex flex-wrap items-start justify-between gap-4">
+  <header
+    class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
+  >
     <div>
-      <h1 class="text-2xl font-semibold">{inv.name}</h1>
+      <h1 class="text-xl font-semibold">{inv.name}</h1>
       <p class="mt-1 text-sm text-muted">
         Mode: {inv.mode}{inv.mode === 'git' ? ` (${inv.path})` : ''} - version {inv.version} - last import
         {fmtDate(inv.last_import_at)}
@@ -127,8 +129,8 @@
 
   <ErrorBox {error} />
 
-  <div class="grid gap-6 lg:grid-cols-2">
-    <GroupsPanel {groups} {canWrite} save={saveGroup} remove={removeGroup} />
+  <div class="space-y-6">
+    <GroupsPanel {groups} {hosts} {canWrite} save={saveGroup} remove={removeGroup} />
     <HostsPanel {hosts} {groups} {canWrite} save={saveHost} remove={removeHost} />
   </div>
 
@@ -144,5 +146,5 @@
 {:else if error}
   <ErrorBox {error} />
 {:else}
-  <p class="text-muted">Loading...</p>
+  <ListSkeleton />
 {/if}

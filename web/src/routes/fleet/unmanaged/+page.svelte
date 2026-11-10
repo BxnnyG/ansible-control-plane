@@ -1,4 +1,6 @@
 <script lang="ts">
+  import ListSkeleton from '$lib/components/ListSkeleton.svelte';
+  import PageHeader from '$lib/components/PageHeader.svelte';
   import { api, type FleetHost, type Inventory } from '$lib/api';
   import { describeError } from '$lib/errors';
   import { session } from '$lib/session.svelte';
@@ -55,13 +57,10 @@
 
 <svelte:head><title>Unmanaged hosts - Ansible Control Plane</title></svelte:head>
 
-<header class="mb-4">
-  <h1 class="text-2xl font-semibold">Fleet</h1>
-  <p class="mt-1 text-muted">Hosts that no inventory of this workspace manages yet.</p>
-</header>
+<PageHeader title="Fleet" description="Hosts that no inventory of this workspace manages yet." />
 <FleetTabs />
 <FormError id="unmanaged-error" message={error} />
-{#if notice}<p role="status" class="mb-3 text-sm text-green-700 dark:text-green-400">
+{#if notice}<p role="status" class="mb-3 text-sm text-ok">
     {notice}
   </p>{/if}
 
@@ -78,13 +77,11 @@
     />
   </div>
   {#if loading}
-    <p class="text-muted">Loading...</p>
+    <ListSkeleton />
   {:else if hosts.length === 0}
-    <div class="rounded-lg border border-dashed border-border p-8 text-center text-muted">
-      Every host is linked to an inventory host.
-    </div>
+    <div class="empty">Every host is linked to an inventory host.</div>
   {:else}
-    <div class="overflow-x-auto rounded-lg border border-border">
+    <div class="tbl-wrap">
       <table class="w-full">
         <thead class="bg-surface-2">
           <tr>
@@ -97,7 +94,9 @@
           {#each hosts as h (h.id)}
             <tr>
               <td class={td}
-                ><a class="text-accent underline" href="/fleet/hosts/{h.id}">{h.name || h.id}</a
+                ><a
+                  class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+                  href="/fleet/hosts/{h.id}">{h.name || h.id}</a
                 ></td
               >
               <td class={td}>{h.kind || '-'}</td>

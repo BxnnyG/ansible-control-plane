@@ -224,7 +224,9 @@ type AlertFilter struct {
 	HostID      *uuid.UUID
 	ConnectorID *uuid.UUID
 	ID          *uuid.UUID // a single alert
-	Limit       int
+	// ExcludeUntracked hides alerts of hosts whose only networks are untracked.
+	ExcludeUntracked bool
+	Limit            int
 }
 
 // Alerts lists stored alerts, open ones first and worst severity first.
@@ -253,6 +255,12 @@ func (s *Store) Alerts(ctx context.Context, ws uuid.UUID, f AlertFilter, visible
 	if err != nil {
 		return nil, err
 	}
+	var hidden func([]string) bool
+	if f.ExcludeUntracked {
+		if hidden, err = s.untrackedFilter(ctx, ws); err != nil {
+			return nil, err
+		}
+	}
 	out := make([]AlertView, 0, len(rows))
 	for _, r := range rows {
 		v := AlertView{ID: r.ID, ConnectorID: r.ConnectorID, Connector: r.ConnectorName, ConnectorType: r.ConnectorType,
@@ -266,7 +274,7 @@ func (s *Store) Alerts(ctx context.Context, ws uuid.UUID, f AlertFilter, visible
 		if r.HostID.Valid {
 			id := uuid.UUID(r.HostID.Bytes)
 			info, ok := infos[id]
-			if !ok || !visible.ok(info.ips) {
+			if !ok || !visible.ok(info.ips) || (hidden != nil && hidden(info.ips)) {
 				continue
 			}
 			v.HostID, v.Host = &id, info.name

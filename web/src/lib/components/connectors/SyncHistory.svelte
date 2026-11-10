@@ -28,7 +28,7 @@
 {:else if syncs.length === 0}
   <p class="text-sm text-muted">No syncs yet.</p>
 {:else}
-  <div class="overflow-x-auto rounded-lg border border-border">
+  <div class="tbl-wrap">
     <table class="w-full">
       <caption class="sr-only">Sync history</caption>
       <thead class="bg-surface-2">
@@ -47,7 +47,7 @@
             <td class={td}>{fmtDuration(s.duration_ms)}</td>
             <td class={td}>{s.counts?.networks ?? 0}</td>
             <td class={td}>{s.counts?.observations ?? 0}</td>
-            <td class="{td} text-red-600 dark:text-red-400">{s.error}</td>
+            <td class="{td} text-bad">{s.error}</td>
           </tr>
         {/each}
       </tbody>

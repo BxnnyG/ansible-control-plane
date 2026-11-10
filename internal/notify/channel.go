@@ -82,6 +82,8 @@ type gotifyConfig struct {
 
 type ntfyConfig struct {
 	URL      string `json:"url"`
+	Auth     string `json:"auth,omitempty"` // token (default) or basic
+	Username string `json:"username,omitempty"`
 	Topic    string `json:"topic"`
 	Priority int    `json:"priority,omitempty"`
 }
@@ -174,6 +176,18 @@ func ValidateConfig(typ string, raw []byte, hasSecret bool) error {
 		}
 		if c.Topic == "" || strings.ContainsAny(c.Topic, "/?# ") {
 			return invalid("topic must be a single path segment")
+		}
+		switch c.Auth {
+		case "", "token":
+			if c.Username != "" {
+				return invalid("username is only used with auth basic")
+			}
+		case "basic":
+			if hasSecret && c.Username == "" {
+				return invalid("username is required for basic auth with a password secret")
+			}
+		default:
+			return invalid("auth must be token or basic")
 		}
 	}
 	return nil

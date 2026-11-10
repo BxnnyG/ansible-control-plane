@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
+  import ListSkeleton from '$lib/components/ListSkeleton.svelte';
+  import PageHeader from '$lib/components/PageHeader.svelte';
   import {
     api,
     type NotificationChannel,
@@ -49,34 +52,36 @@
   }
 
   $effect(() => {
-    if (session.slug && canRead) void load(session.slug);
+    const ws = session.slug;
+    if (ws && canRead) untrack(() => void load(ws));
     else loading = false;
   });
 </script>
 
 <svelte:head><title>Notifications - Ansible Control Plane</title></svelte:head>
 
-<header class="mb-6">
-  <h1 class="text-2xl font-semibold">Notifications</h1>
-  <p class="mt-1 text-muted">
-    Send run results (failed, recovered, drift) to webhooks, Matrix, e-mail, Gotify or ntfy.
-  </p>
-</header>
+<PageHeader
+  title="Notifications"
+  description="Send run results (failed, recovered, drift) to webhooks, Matrix, e-mail, Gotify or ntfy."
+/>
 
 <FormError id="notifications-error" message={error} />
 
 {#if !canRead}
   <p class="text-muted">You do not have permission to view notifications in this workspace.</p>
 {:else if loading}
-  <p class="text-muted">Loading...</p>
+  <ListSkeleton />
 {:else if session.slug}
-  <div role="tablist" class="mb-4 flex gap-2 border-b border-border">
+  <div
+    role="tablist"
+    class="mb-4 flex gap-1 overflow-x-auto border-b border-border whitespace-nowrap"
+  >
     {#each TABS as t (t.id)}
       <button
         role="tab"
         aria-selected={tab === t.id}
-        class="-mb-px border-b-2 px-3 py-2 text-sm {tab === t.id
-          ? 'border-accent font-medium'
+        class="-mb-px min-h-11 border-b-2 px-4 py-2 text-sm {tab === t.id
+          ? 'border-accent font-semibold text-accent'
           : 'border-transparent text-muted'}"
         onclick={() => (tab = t.id)}>{t.label}</button
       >
@@ -86,8 +91,10 @@
     <ChannelsTab
       ws={session.slug}
       {channels}
+      {rules}
       {secrets}
       {canManage}
+      onrules={() => (tab = 'rules')}
       reload={() => load(session.slug as string)}
     />
   {:else if tab === 'rules'}

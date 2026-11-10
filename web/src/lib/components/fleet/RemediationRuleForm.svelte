@@ -111,7 +111,7 @@
     <label class={label} for="rr-name">Name</label>
     <input id="rr-name" class={input} bind:value={name} required />
   </div>
-  <fieldset class="space-y-3 rounded-md border border-border p-3">
+  <fieldset class="space-y-3 rounded-xl border border-border p-3">
     <legend class="px-1 text-sm font-medium">Applies to open alerts that match</legend>
     <div>
       <label class={label} for="rr-conn">Connector type (empty: any)</label>
@@ -164,7 +164,7 @@
       {#each templates as t (t.id)}<option value={t.id}>{t.name}</option>{/each}
     </select>
     {#if template && !template.allow_limit_override}
-      <p class="mt-1 text-xs text-red-600 dark:text-red-400">
+      <p class="mt-1 text-xs text-bad">
         This template does not allow limit overrides; enable that first.
       </p>
     {/if}
@@ -186,9 +186,7 @@
     afterwards)
   </label>
   {#if checkFirst && template && !template.allow_check_override}
-    <p class="text-xs text-red-600 dark:text-red-400">
-      This template does not allow check mode overrides.
-    </p>
+    <p class="text-xs text-bad">This template does not allow check mode overrides.</p>
   {/if}
   <label class="flex items-center gap-2 text-sm">
     <input type="checkbox" bind:checked={enabled} /> Enabled

@@ -105,10 +105,12 @@
 
 <section class="{card} space-y-4" aria-labelledby="vault-h">
   <div>
-    <h2 id="vault-h" class="text-lg font-medium">Vault</h2>
+    <h2 id="vault-h" class="text-sm font-semibold">Vault</h2>
     <p class="text-sm text-muted">
-      Passwords come from <a class="text-accent hover:underline" href="/vault">vault identities</a>.
-      Encrypt and rekey commit to a separate branch of the project.
+      Passwords come from <a
+        class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+        href="/vault">vault identities</a
+      >. Encrypt and rekey commit to a separate branch of the project.
     </p>
   </div>
   <ErrorBox error={loadError} />
@@ -218,7 +220,7 @@
         </div>
         <button class={btnPrimary} disabled={busy}>Encrypt and commit</button>
         {#if encResult}
-          <p role="status" class="text-sm text-green-700 dark:text-green-400">
+          <p role="status" class="text-sm text-ok">
             {describeResult(encResult)}
           </p>
         {/if}
@@ -268,7 +270,7 @@
           Rekey and commit
         </button>
         {#if rekResult}
-          <p role="status" class="text-sm text-green-700 dark:text-green-400">
+          <p role="status" class="text-sm text-ok">
             {describeResult(rekResult)}
           </p>
         {/if}

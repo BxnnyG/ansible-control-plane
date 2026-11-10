@@ -4,9 +4,9 @@
   let { status }: { status: ProjectSyncStatus } = $props();
 
   const styles: Record<ProjectSyncStatus, string> = {
-    ok: 'bg-green-600/15 text-green-700 dark:text-green-400',
-    error: 'bg-red-600/15 text-red-700 dark:text-red-400',
-    never: 'bg-surface-2 text-muted',
+    ok: 'tone-ok',
+    error: 'tone-bad',
+    never: 'tone-neutral',
   };
 </script>
 

@@ -63,7 +63,7 @@
   aria-label="Command palette"
   onclose={() => (open = false)}
   onclick={onbackdrop}
-  class="m-auto mt-[15vh] w-[min(32rem,calc(100vw-2rem))] rounded-xl border border-border bg-surface p-0 text-fg shadow-xl backdrop:bg-(--overlay)"
+  class="m-auto mt-[15vh] w-[min(32rem,calc(100vw-2rem))] rounded-xl border border-border bg-surface p-0 text-fg shadow-2xl backdrop:bg-(--overlay)"
 >
   <input
     bind:this={input}

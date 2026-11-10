@@ -18,7 +18,7 @@
   {#if plan.add.length}
     <ul aria-label="Additions" class="font-mono text-xs">
       {#each plan.add as a (a.fleet_host_id)}
-        <li class="text-green-700 dark:text-green-400">
+        <li class="text-ok">
           + {a.name}{a.create_host
             ? ` (new host${a.ansible_host ? `, ansible_host ${a.ansible_host}` : ''})`
             : ''}
@@ -29,7 +29,7 @@
   {#if plan.remove.length}
     <ul aria-label="Removals" class="font-mono text-xs">
       {#each plan.remove as r (r)}
-        <li class="text-red-600 dark:text-red-400">- {r}</li>
+        <li class="text-bad">- {r}</li>
       {/each}
     </ul>
   {/if}

@@ -74,13 +74,13 @@ export function statusLabel(s: ConnectorStatus): string {
 export function statusClass(s: ConnectorStatus): string {
   switch (s) {
     case 'ok':
-      return 'bg-green-600/15 text-green-700 dark:text-green-400';
+      return 'tone-ok';
     case 'error':
-      return 'bg-red-600/15 text-red-700 dark:text-red-400';
+      return 'tone-bad';
     case 'pending':
-      return 'bg-amber-500/15 text-amber-700 dark:text-amber-400';
+      return 'tone-warn';
     default:
-      return 'bg-surface-2 text-muted';
+      return 'tone-neutral';
   }
 }
 

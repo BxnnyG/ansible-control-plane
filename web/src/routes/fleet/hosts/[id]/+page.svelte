@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
+  import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { page } from '$app/state';
   import { api, type FleetAlert, type FleetHostDetail, type RemediationRef } from '$lib/api';
   import { describeError } from '$lib/errors';
@@ -49,7 +51,9 @@
         applicable = {};
         if (h.open_alerts > 0) {
           // Alerts and fix suggestions are extras: failing here keeps the page usable.
-          alerts = await api.fleet.alerts(ws, { state: 'open', host_id: h.id }).catch(() => []);
+          alerts = await api.fleet
+            .alerts(ws, { state: 'open', host_id: h.id, includeUntracked: true })
+            .catch(() => []);
           if (canFix) applicable = await api.remediation.applicable(ws).catch(() => ({}));
         }
       })
@@ -60,16 +64,16 @@
 
 <svelte:head><title>{host?.name ?? 'Host'} - Ansible Control Plane</title></svelte:head>
 
-<p class="mb-2 text-sm"><a class="text-accent underline" href="/fleet">Back to fleet</a></p>
+<Breadcrumbs trail={[{ label: 'Fleet', href: '/fleet' }]} />
 <FormError id="host-error" message={error} />
 
 {#if !canRead}
   <p class="text-muted">You do not have permission to view the fleet in this workspace.</p>
 {:else if loading}
-  <p class="text-muted">Loading...</p>
+  <ListSkeleton />
 {:else if host}
   <header class="mb-6">
-    <h1 class="text-2xl font-semibold">{host.name}</h1>
+    <h1 class="text-xl font-semibold">{host.name}</h1>
     <p class="mt-1 text-muted">
       First seen {fmtDate(host.first_seen)}, last seen {fmtDate(host.last_seen)}
     </p>
@@ -85,7 +89,7 @@
   </header>
 
   <section aria-labelledby="status-h" class="mb-8">
-    <h2 id="status-h" class="mb-2 text-lg font-medium">Status</h2>
+    <h2 id="status-h" class="mb-2 text-sm font-semibold">Status</h2>
     <dl class="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[max-content_1fr]">
       <dt class="text-muted">Online</dt>
       <dd>
@@ -97,16 +101,18 @@
       <dd>
         <span class="rounded px-2 py-0.5 text-xs {ansibleClass(host)}">{ansibleLabel(host)}</span>
         {#each host.ansible as l (l.host_id)}
-          <a class="ml-2 text-accent underline" href="/inventories/{l.inventory_id}"
-            >{l.host} in {l.inventory}</a
+          <a
+            class="ml-2 underline decoration-border-strong underline-offset-2 hover:decoration-current"
+            href="/inventories/{l.inventory_id}">{l.host} in {l.inventory}</a
           >
         {/each}
       </dd>
       {#if host.last_run}
         <dt class="text-muted">Last run</dt>
         <dd>
-          <a class="text-accent underline" href="/runs/{host.last_run.run_id}"
-            >{host.last_run.template}</a
+          <a
+            class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+            href="/runs/{host.last_run.run_id}">{host.last_run.template}</a
           >
           - {host.last_run.result}{host.last_run.check ? ' (check)' : ''},
           {fmtDate(host.last_run.finished_at)}
@@ -117,7 +123,10 @@
       {#if host.drift}
         <dt class="text-muted">Drift</dt>
         <dd>
-          <a class="text-accent underline" href="/runs/{host.drift.run_id}">{driftLabel(host)}</a>
+          <a
+            class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+            href="/runs/{host.drift.run_id}">{driftLabel(host)}</a
+          >
           in check run of {host.drift.template}, {fmtDate(host.drift.finished_at)}
         </dd>
       {/if}
@@ -126,7 +135,7 @@
 
   {#if alerts.length > 0}
     <section aria-labelledby="alerts-h" class="mb-8">
-      <h2 id="alerts-h" class="mb-2 text-lg font-medium">Open alerts</h2>
+      <h2 id="alerts-h" class="mb-2 text-sm font-semibold">Open alerts</h2>
       <ul class="space-y-2">
         {#each alerts as a (a.id)}
           <li class="rounded-lg border border-border p-3 text-sm">
@@ -144,8 +153,8 @@
   {/if}
 
   <section aria-labelledby="fields-h" class="mb-8">
-    <h2 id="fields-h" class="mb-2 text-lg font-medium">Merged fields</h2>
-    <div class="overflow-x-auto rounded-lg border border-border">
+    <h2 id="fields-h" class="mb-2 text-sm font-semibold">Merged fields</h2>
+    <div class="tbl-wrap">
       <table class="w-full">
         <thead class="bg-surface-2">
           <tr><th class={th}>Field</th><th class={th}>Value</th><th class={th}>Source</th></tr>
@@ -167,7 +176,7 @@
 
   {#if host.conflicts?.length}
     <section aria-labelledby="hc-h" class="mb-8">
-      <h2 id="hc-h" class="mb-2 text-lg font-medium">Conflicts</h2>
+      <h2 id="hc-h" class="mb-2 text-sm font-semibold">Conflicts</h2>
       <ul class="space-y-2">
         {#each host.conflicts as c (c.id)}
           <li class="rounded-lg border border-border p-3 text-sm">
@@ -182,8 +191,8 @@
   {/if}
 
   <section aria-labelledby="obs-h">
-    <h2 id="obs-h" class="mb-2 text-lg font-medium">Observations</h2>
-    <div class="overflow-x-auto rounded-lg border border-border">
+    <h2 id="obs-h" class="mb-2 text-sm font-semibold">Observations</h2>
+    <div class="tbl-wrap">
       <table class="w-full">
         <thead class="bg-surface-2">
           <tr>

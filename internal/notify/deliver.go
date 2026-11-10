@@ -39,6 +39,12 @@ func sendVia(ctx context.Context, res SecretResolver, senders func(string) (Send
 		cred = r.Value.Reveal()
 	}
 	ch := Channel{Type: row.Type, Config: row.Config, TLSCAPEM: row.TlsCaPem, TLSSkipVerify: row.TlsSkipVerify}
+	return sendCred(ctx, snd, ch, cred, msg)
+}
+
+// sendCred sends msg with an already resolved credential and returns a
+// sanitized error. The caller owns (and zeroes) cred.
+func sendCred(ctx context.Context, snd Sender, ch Channel, cred []byte, msg Message) error {
 	if err := snd.Send(ctx, ch, cred, msg); err != nil {
 		return fmt.Errorf("%s", sanitize(err.Error(), cred))
 	}

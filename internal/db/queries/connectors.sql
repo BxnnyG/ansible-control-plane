@@ -64,8 +64,9 @@ DELETE FROM connector_syncs cs WHERE cs.connector_id = $1 AND cs.id NOT IN (
 );
 
 -- name: UpsertNetwork :exec
-INSERT INTO networks (workspace_id, connector_id, external_key, cidr, vlan, interface, description, source, first_seen, last_seen)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
+INSERT INTO networks (workspace_id, connector_id, external_key, cidr, vlan, interface, description, source, first_seen, last_seen, tracked)
+-- New networks start with the workspace default; the update branch keeps the user's choice.
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9, (SELECT w.fleet_new_networks_tracked FROM workspaces w WHERE w.id = $1))
 ON CONFLICT (connector_id, external_key) DO UPDATE
 SET cidr = EXCLUDED.cidr, vlan = EXCLUDED.vlan, interface = EXCLUDED.interface,
     description = EXCLUDED.description, source = EXCLUDED.source, last_seen = EXCLUDED.last_seen;
@@ -75,6 +76,18 @@ DELETE FROM networks WHERE connector_id = $1 AND last_seen < $2;
 
 -- name: ListNetworks :many
 SELECT * FROM networks WHERE workspace_id = $1 ORDER BY cidr, external_key;
+
+-- name: SetNetworksTracked :execrows
+UPDATE networks SET tracked = $3 WHERE workspace_id = $1 AND id = ANY($2::uuid[]);
+
+-- name: SetNetworksTrackedOnly :execrows
+UPDATE networks SET tracked = (id = ANY($2::uuid[])) WHERE workspace_id = $1;
+
+-- name: GetFleetNewNetworksTracked :one
+SELECT fleet_new_networks_tracked FROM workspaces WHERE id = $1;
+
+-- name: SetFleetNewNetworksTracked :exec
+UPDATE workspaces SET fleet_new_networks_tracked = $2, updated_at = now() WHERE id = $1;
 
 -- name: UpsertObservation :exec
 INSERT INTO host_observations (workspace_id, connector_id, external_key, kind, fields, first_seen, last_seen)

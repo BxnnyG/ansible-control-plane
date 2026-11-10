@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { api, type NotificationChannel, type SecretMeta } from '$lib/api';
+  import { api, type NotificationChannel, type NotificationRule, type SecretMeta } from '$lib/api';
   import { describeError } from '$lib/errors';
-  import { typeLabel } from '$lib/notifications';
+  import { channelsWithoutRules, typeLabel } from '$lib/notifications';
   import { btn, btnDanger, btnPrimary, card, td, th } from '$lib/ui';
   import FormError from '$lib/components/FormError.svelte';
   import ChannelForm from './ChannelForm.svelte';
@@ -9,15 +9,20 @@
   let {
     ws,
     channels,
+    rules,
     secrets,
     canManage,
     reload,
+    onrules,
   }: {
     ws: string;
     channels: NotificationChannel[];
+    rules: NotificationRule[];
     secrets: SecretMeta[];
     canManage: boolean;
     reload: () => Promise<void>;
+    /** Switches to the rules tab. */
+    onrules: () => void;
   } = $props();
 
   let editing = $state<NotificationChannel | 'new' | null>(null);
@@ -57,6 +62,8 @@
     await reload();
   }
 
+  const unused = $derived(channelsWithoutRules(channels, rules));
+
   function secretName(id: string | null): string {
     return id ? (secrets.find((s) => s.id === id)?.name ?? 'unknown secret') : '-';
   }
@@ -69,6 +76,13 @@
 {/if}
 <FormError id="channels-error" message={error} />
 {#if notice}<p role="status" class="mb-3 text-sm">{notice}</p>{/if}
+{#if canManage && editing === null && unused.length > 0}
+  <p role="status" class="mb-3 rounded border border-border bg-surface-2 p-3 text-sm">
+    {unused.map((c) => c.name).join(', ')}
+    {unused.length === 1 ? 'has' : 'have'} no rule yet and will not send anything automatically.
+    <button type="button" class="underline" onclick={onrules}>Create a rule</button>
+  </p>
+{/if}
 
 {#if editing !== null}
   <div class="{card} mb-6 max-w-xl">
@@ -97,11 +111,9 @@
 {/if}
 
 {#if channels.length === 0}
-  <div class="rounded-lg border border-dashed border-border p-8 text-center text-muted">
-    No channels yet.
-  </div>
+  <div class="empty">No channels yet.</div>
 {:else}
-  <div class="overflow-x-auto rounded-lg border border-border">
+  <div class="tbl-wrap">
     <table class="w-full">
       <thead class="bg-surface-2">
         <tr>

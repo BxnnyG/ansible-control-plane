@@ -220,7 +220,7 @@
     </div>
   </div>
 
-  <fieldset class="rounded-md border border-border p-3">
+  <fieldset class="rounded-xl border border-border p-3">
     <legend class="px-1 text-sm font-medium">Credentials</legend>
     <div class="grid gap-3 sm:grid-cols-2">
       <div>
@@ -275,7 +275,7 @@
     </div>
   </fieldset>
 
-  <fieldset class="rounded-md border border-border p-3">
+  <fieldset class="rounded-xl border border-border p-3">
     <legend class="px-1 text-sm font-medium">Defaults</legend>
     <div class="grid gap-3 sm:grid-cols-3">
       <div>
@@ -303,7 +303,7 @@
     </div>
   </fieldset>
 
-  <fieldset class="rounded-md border border-border p-3">
+  <fieldset class="rounded-xl border border-border p-3">
     <legend class="px-1 text-sm font-medium">Allow overrides at run time</legend>
     <div class="grid gap-2 sm:grid-cols-3">
       <label class="flex items-center gap-2 text-sm"

@@ -2,13 +2,17 @@ package notify
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"mime"
 	"net"
+	"net/mail"
 	"net/smtp"
+	"net/textproto"
 	"strconv"
 	"strings"
 	"time"
@@ -29,6 +33,61 @@ func (a plainAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
 		return "", nil, errors.New("refusing to send credentials over an unencrypted connection")
 	}
 	return "PLAIN", []byte("\x00" + a.user + "\x00" + a.pass), nil
+}
+
+// loginAuth implements the legacy LOGIN mechanism for servers that do not
+// advertise PLAIN.
+type loginAuth struct {
+	user, pass string
+	allowPlain bool
+}
+
+func (a loginAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
+	if !server.TLS && !a.allowPlain {
+		return "", nil, errors.New("refusing to send credentials over an unencrypted connection")
+	}
+	return "LOGIN", nil, nil
+}
+
+func (a loginAuth) Next(challenge []byte, more bool) ([]byte, error) {
+	if !more {
+		return nil, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(string(challenge))) {
+	case "username:", "user name:", "username":
+		return []byte(a.user), nil
+	case "password:", "password":
+		return []byte(a.pass), nil
+	}
+	return nil, errors.New("unexpected server challenge")
+}
+
+// smtpAuthFor picks PLAIN when advertised (or when no AUTH list is
+// available), otherwise LOGIN if the server offers it.
+func smtpAuthFor(advertised string, user, pass string, allowPlain bool) smtp.Auth {
+	mechs := strings.Fields(strings.ToUpper(advertised))
+	has := func(m string) bool {
+		for _, x := range mechs {
+			if x == m {
+				return true
+			}
+		}
+		return false
+	}
+	if !has("PLAIN") && has("LOGIN") {
+		return loginAuth{user: user, pass: pass, allowPlain: allowPlain}
+	}
+	return plainAuth{user: user, pass: pass, allowPlain: allowPlain}
+}
+
+// smtpAuthError describes a failed AUTH with the server reply but never the
+// credential.
+func smtpAuthError(err error) error {
+	var te *textproto.Error
+	if errors.As(err, &te) {
+		return fmt.Errorf("smtp authentication failed: %d %s", te.Code, te.Msg)
+	}
+	return fmt.Errorf("smtp authentication failed: %w", err)
 }
 
 func (plainAuth) Next(_ []byte, more bool) ([]byte, error) {
@@ -82,6 +141,10 @@ func (smtpSender) Send(ctx context.Context, ch Channel, cred []byte, msg Message
 		return fmt.Errorf("smtp greeting: %w", err)
 	}
 	defer func() { _ = cl.Close() }()
+	// Greet with a real domain: the default "localhost" is a spam signal.
+	if err := cl.Hello(mailDomain(c.From)); err != nil {
+		return fmt.Errorf("smtp hello: %w", err)
+	}
 	if sec == SecStartTLS {
 		if ok, _ := cl.Extension("STARTTLS"); !ok {
 			return errors.New("server does not offer STARTTLS")
@@ -91,8 +154,9 @@ func (smtpSender) Send(ctx context.Context, ch Channel, cred []byte, msg Message
 		}
 	}
 	if len(cred) > 0 {
-		if err := cl.Auth(plainAuth{user: c.Username, pass: string(cred), allowPlain: sec == SecNone}); err != nil {
-			return errors.New("smtp authentication failed")
+		_, advertised := cl.Extension("AUTH")
+		if err := cl.Auth(smtpAuthFor(advertised, c.Username, string(cred), sec == SecNone)); err != nil {
+			return smtpAuthError(err)
 		}
 	}
 	if err := cl.Mail(c.From); err != nil {
@@ -122,7 +186,26 @@ func buildMail(c smtpConfig, msg Message) []byte {
 	b.WriteString("To: " + strings.Join(c.To, ", ") + "\r\n")
 	b.WriteString("Subject: " + mime.QEncoding.Encode("utf-8", msg.Title()) + "\r\n")
 	b.WriteString("Date: " + time.Now().UTC().Format(time.RFC1123Z) + "\r\n")
+	b.WriteString("Message-ID: <" + messageID() + "@" + mailDomain(c.From) + ">\r\n")
 	b.WriteString("MIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n")
 	b.WriteString(strings.ReplaceAll(strings.ReplaceAll(msg.Text(), "\r\n", "\n"), "\n", "\r\n"))
 	return []byte(b.String())
+}
+
+// mailDomain returns the domain of an address (optionally "Name <a@b>"),
+// used for EHLO and Message-ID; falls back to "localhost.localdomain".
+func mailDomain(addr string) string {
+	if a, err := mail.ParseAddress(addr); err == nil {
+		addr = a.Address
+	}
+	if i := strings.LastIndexByte(addr, '@'); i >= 0 && i < len(addr)-1 {
+		return strings.ToLower(strings.TrimSpace(addr[i+1:]))
+	}
+	return "localhost.localdomain"
+}
+
+func messageID() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:])
+	return hex.EncodeToString(b[:])
 }

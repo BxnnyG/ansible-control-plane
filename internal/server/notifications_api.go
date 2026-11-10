@@ -35,6 +35,7 @@ type NotificationsAPI interface {
 	DeleteRule(ctx context.Context, ws, id uuid.UUID) error
 	ListWorkspaceDeliveries(ctx context.Context, ws uuid.UUID, channelID *uuid.UUID, status string, limit int) ([]notify.DeliveryView, error)
 	SendTest(ctx context.Context, ws, id uuid.UUID) error
+	TestDraft(ctx context.Context, ws uuid.UUID, in notify.DraftInput) error
 }
 
 // WithNotifications mounts the notification API. It requires WithPolicy.
@@ -64,6 +65,19 @@ type channelPatchBody struct {
 func (b channelPatchBody) empty() bool {
 	return b.Name == nil && len(b.Config) == 0 && !b.SecretID.Set && b.TLSCAPEM == nil && b.TLSSkipVerify == nil && b.Enabled == nil
 }
+
+type channelDraftBody struct {
+	Type          string          `json:"type"`
+	Config        json.RawMessage `json:"config"`
+	SecretID      *uuid.UUID      `json:"secret_id"`
+	SecretValue   string          `json:"secret_value"`
+	TLSCAPEM      string          `json:"tls_ca_pem"`
+	TLSSkipVerify bool            `json:"tls_skip_verify"`
+	ChannelID     *uuid.UUID      `json:"channel_id"`
+}
+
+// draftTestsPerMinute limits unsaved-draft tests per user (they make outbound requests).
+const draftTestsPerMinute = 10
 
 type ruleCreateBody struct {
 	ChannelID  uuid.UUID  `json:"channel_id"`
@@ -143,6 +157,7 @@ func notificationRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc
 		return true
 	}
 	actor := func(req *http.Request) uuid.UUID { return auth.FromContext(req.Context()).User.ID }
+	draftLim := newHookLimiter(draftTestsPerMinute, time.Minute)
 
 	// Channels.
 	az.Handle(r, http.MethodGet, base+"/channels", policy.NotificationRead, func(w http.ResponseWriter, req *http.Request) {
@@ -175,6 +190,36 @@ func notificationRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc
 		}
 		audit(req, d, "notification.channel.create", "notification_channel", c.ID, map[string]any{"name": c.Name, "type": c.Type})
 		policy.WriteJSON(w, http.StatusCreated, c)
+	})
+	az.Handle(r, http.MethodPost, base+"/channels/test", policy.NotificationManage, func(w http.ResponseWriter, req *http.Request) {
+		d, _, ok := target(w, req)
+		if !ok {
+			return
+		}
+		var b channelDraftBody
+		if !decode(w, req, &b) {
+			return
+		}
+		if !draftLim.allow(actor(req).String(), time.Now()) {
+			policy.WriteJSON(w, http.StatusTooManyRequests, apiError{Error: "too many test requests", Code: "rate_limited"})
+			return
+		}
+		in := notify.DraftInput{Type: b.Type, Config: b.Config, SecretID: b.SecretID, SecretValue: []byte(b.SecretValue),
+			TLSCAPEM: b.TLSCAPEM, TLSSkipVerify: b.TLSSkipVerify, ChannelID: b.ChannelID}
+		b.SecretValue = ""
+		res := struct {
+			OK    bool   `json:"ok"`
+			Error string `json:"error"`
+		}{OK: true}
+		if err := svc.TestDraft(req.Context(), d.Workspace.ID, in); err != nil {
+			if errors.Is(err, notify.ErrInvalid) || errors.Is(err, notify.ErrNotFound) {
+				fail(w, "test notification draft", err)
+				return
+			}
+			res.OK, res.Error = false, err.Error()
+		}
+		audit(req, d, "notification.channel.test_draft", "notification_channel", uuid.Nil, map[string]any{"type": b.Type, "ok": res.OK})
+		policy.WriteJSON(w, http.StatusOK, res)
 	})
 	az.Handle(r, http.MethodGet, base+"/channels/{id}", policy.NotificationRead, func(w http.ResponseWriter, req *http.Request) {
 		d, id, ok := target(w, req)

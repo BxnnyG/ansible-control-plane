@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
+  import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { api, ApiError, type Project, type ProjectRevision, type SecretMeta } from '$lib/api';
@@ -94,12 +96,14 @@
 
 <svelte:head><title>{project?.name ?? 'Project'} - Ansible Control Plane</title></svelte:head>
 
-<p class="mb-2 text-sm"><a class="text-accent hover:underline" href="/projects">Projects</a></p>
+<Breadcrumbs trail={[{ label: 'Projects', href: '/projects' }]} />
 
 {#if project && ws}
-  <header class="mb-6 flex flex-wrap items-start justify-between gap-4">
+  <header
+    class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
+  >
     <div>
-      <h1 class="text-2xl font-semibold">{project.name}</h1>
+      <h1 class="text-xl font-semibold">{project.name}</h1>
       <p class="mt-1 text-sm break-all text-muted">{project.url}</p>
       <p class="mt-1 text-sm">
         <SyncBadge status={project.last_sync_status} />
@@ -108,7 +112,7 @@
           >{/if}
       </p>
       {#if project.last_sync_status === 'error' && project.last_sync_error}
-        <p class="mt-1 text-sm text-red-600 dark:text-red-400">{project.last_sync_error}</p>
+        <p class="mt-1 text-sm text-bad">{project.last_sync_error}</p>
       {/if}
     </div>
     <div class="flex flex-wrap gap-2">
@@ -128,7 +132,7 @@
     </div>
   </header>
 
-  {#if notice}<p role="status" class="mb-3 text-sm text-green-700 dark:text-green-400">
+  {#if notice}<p role="status" class="mb-3 text-sm text-ok">
       {notice}
     </p>{/if}
   <FormError id="project-detail-error" message={error} />
@@ -145,7 +149,7 @@
 
   <div class="grid gap-6 lg:grid-cols-2">
     <section class={card} aria-labelledby="settings-h">
-      <h2 id="settings-h" class="mb-3 text-lg font-medium">Settings</h2>
+      <h2 id="settings-h" class="mb-3 text-sm font-semibold">Settings</h2>
       {#if canWrite}
         {#key project.updated_at}
           <ProjectForm
@@ -172,11 +176,11 @@
   </div>
 
   <section class="mt-6" aria-labelledby="rev-h">
-    <h2 id="rev-h" class="mb-2 text-lg font-medium">Revisions</h2>
+    <h2 id="rev-h" class="mb-2 text-sm font-semibold">Revisions</h2>
     {#if revisions.length === 0}
       <p class="text-sm text-muted">No revisions yet. Run a sync.</p>
     {:else}
-      <div class="overflow-x-auto rounded-lg border border-border">
+      <div class="tbl-wrap">
         <table class="w-full">
           <thead class="bg-surface-2">
             <tr><th class={th}>Commit</th><th class={th}>Synced</th><th class={th}>Warnings</th></tr
@@ -211,7 +215,7 @@
     <div class="mt-6"><ScanView scan={normalizeScan(latest.scan)} /></div>
   {/if}
 {:else if !error}
-  <p class="text-muted">Loading...</p>
+  <ListSkeleton />
 {:else}
   <FormError id="project-detail-error" message={error} />
 {/if}

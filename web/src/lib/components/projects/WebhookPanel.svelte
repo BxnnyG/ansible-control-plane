@@ -64,7 +64,7 @@
 </script>
 
 <section class={card} aria-labelledby="webhook-h">
-  <h2 id="webhook-h" class="mb-2 text-lg font-medium">Webhook</h2>
+  <h2 id="webhook-h" class="mb-2 text-sm font-semibold">Webhook</h2>
   {#if hook}
     <p class="text-sm text-muted">
       {hook.enabled ? 'Enabled: pushes trigger a sync.' : 'Disabled.'}
@@ -112,10 +112,7 @@
     {/if}
 
     {#if revealed}
-      <div
-        role="alert"
-        class="mt-3 rounded-md border border-amber-500/60 bg-amber-500/10 p-3 text-sm"
-      >
+      <div role="alert" class="mt-3 rounded-xl border border-warn/40 bg-warn/10 p-3 text-sm">
         <p class="font-medium">Webhook secret - shown only once</p>
         <p class="text-muted">
           Copy it now and store it in your Git provider. It cannot be shown again.

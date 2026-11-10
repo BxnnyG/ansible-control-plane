@@ -91,7 +91,7 @@
     <button type="button" class={btn} onclick={() => (creating = true)}>New secret</button>
   {/if}
   {#if creating}
-    <fieldset class="space-y-2 rounded-md border border-border p-3">
+    <fieldset class="space-y-2 rounded-xl border border-border p-3">
       <legend class="px-1 text-sm">New secret</legend>
       {#if ctype.secret_types.length > 1}
         <select aria-label="Secret type" class={input} bind:value={newType}>

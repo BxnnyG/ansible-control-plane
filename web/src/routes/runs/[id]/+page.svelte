@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
   import { page } from '$app/state';
   import { api, type RunDetail, type RunStatusEvent } from '$lib/api';
   import { describeError } from '$lib/errors';
@@ -15,6 +16,7 @@
   const canCancel = $derived(session.can('run.cancel'));
 
   let run = $state<RunDetail | null>(null);
+  const runId = $derived(run?.id ?? '');
   let error = $state<string | null>(null);
   let now = $state(Date.now());
   let busy = $state(false);
@@ -63,13 +65,15 @@
 
 <svelte:head><title>Run - Ansible Control Plane</title></svelte:head>
 
-<p class="mb-2 text-sm"><a class="text-accent hover:underline" href="/runs">Runs</a></p>
+<Breadcrumbs trail={[{ label: 'Runs', href: '/runs' }]} />
 <FormError id="run-page-error" message={error} />
 
 {#if run && ws}
-  <header class="mb-4 flex flex-wrap items-start justify-between gap-4">
+  <header
+    class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
+  >
     <div>
-      <h1 class="flex items-center gap-3 text-2xl font-semibold">
+      <h1 class="flex items-center gap-3 text-xl font-semibold">
         {#if run.template_id}
           <a class="hover:underline" href="/templates/{run.template_id}">{run.template_name}</a>
         {:else}{run.template_name}{/if}
@@ -85,7 +89,7 @@
   </header>
 
   <section class="{card} mb-6" aria-label="Run details">
-    <dl class="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-3 lg:grid-cols-6">
+    <dl class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3 lg:grid-cols-6">
       <div>
         <dt class="text-muted">Trigger</dt>
         <dd>{run.trigger}</dd>
@@ -141,12 +145,12 @@
   </section>
 
   <section class="mb-6" aria-labelledby="log-h">
-    <h2 id="log-h" class="mb-2 text-lg font-medium">Log</h2>
-    <LogViewer {ws} runId={run.id} onstatus={applyStatus} />
+    <h2 id="log-h" class="mb-2 text-sm font-semibold">Log</h2>
+    <LogViewer {ws} {runId} onstatus={applyStatus} />
   </section>
 
   <section aria-labelledby="hosts-h">
-    <h2 id="hosts-h" class="mb-2 text-lg font-medium">Hosts</h2>
+    <h2 id="hosts-h" class="mb-2 text-sm font-semibold">Hosts</h2>
     <HostResults results={run.host_results} />
   </section>
 {/if}

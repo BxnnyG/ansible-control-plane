@@ -71,15 +71,15 @@
 <svelte:window onkeydown={(e) => e.key === 'Escape' && onclose()} />
 
 <div
-  class="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-[var(--overlay)] p-4"
+  class="dlg-overlay fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-(--overlay) p-4"
 >
   <div
     role="dialog"
     aria-modal="true"
     aria-labelledby="run-dialog-h"
-    class="mt-8 w-full max-w-xl rounded-lg border border-border bg-surface p-5 shadow-lg"
+    class="dlg mt-8 w-full max-w-xl rounded-2xl border border-border bg-surface p-5"
   >
-    <h2 id="run-dialog-h" class="text-lg font-semibold">Run {template.name}</h2>
+    <h2 id="run-dialog-h" class="text-base font-semibold">Run {template.name}</h2>
     <p class="text-sm text-muted">
       <code>{template.playbook}</code>
       {#if !template.allow_limit_override && template.default_limit}
@@ -110,7 +110,7 @@
             </p>
           {/if}
         {:else if preview.kind === 'error'}
-          <p class="text-red-600 dark:text-red-400">{preview.message}</p>
+          <p class="text-bad">{preview.message}</p>
         {/if}
       </div>
       <OverrideFields {template} {fields} bind:form />
@@ -120,7 +120,7 @@
       {/if}
 
       {#if errors.length > 0}
-        <ul role="alert" class="list-disc pl-5 text-sm text-red-600 dark:text-red-400">
+        <ul role="alert" class="list-disc pl-5 text-sm text-bad">
           {#each errors as m (m)}<li>{m}</li>{/each}
         </ul>
       {/if}

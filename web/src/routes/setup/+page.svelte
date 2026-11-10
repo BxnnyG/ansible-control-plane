@@ -6,6 +6,7 @@
   import { SETUP_STEPS, clampStep } from '$lib/setup/steps';
   import { SETUP_WORKSPACE } from '$lib/workspace';
   import ConnectorsStep from '$lib/components/setup/ConnectorsStep.svelte';
+  import NetworksStep from '$lib/components/setup/NetworksStep.svelte';
   import AuthStep from '$lib/components/setup/AuthStep.svelte';
   import Stepper from '$lib/components/setup/Stepper.svelte';
   import SummaryStep from '$lib/components/setup/SummaryStep.svelte';
@@ -44,7 +45,7 @@
 
 <div class="max-w-3xl space-y-6">
   <header>
-    <h1 class="text-2xl font-semibold">Welcome</h1>
+    <h1 class="text-xl font-semibold">Welcome</h1>
     <p class="mt-1 text-muted">A few steps to get this workspace ready.</p>
   </header>
 
@@ -54,8 +55,11 @@
     <p role="alert">Could not load the setup status. Reload the page.</p>
   {:else if status}
     <Stepper steps={SETUP_STEPS} current={step} />
-    <section aria-labelledby="step-heading" class="rounded-lg border border-border bg-surface p-5">
-      <h2 id="step-heading" tabindex="-1" bind:this={heading} class="mb-4 text-lg font-semibold">
+    <section
+      aria-labelledby="step-heading"
+      class="rounded-2xl border border-border bg-surface p-6 shadow-card"
+    >
+      <h2 id="step-heading" tabindex="-1" bind:this={heading} class="mb-4 text-base font-semibold">
         {SETUP_STEPS[step].title}
       </h2>
       {#if SETUP_STEPS[step].id === 'workspace'}
@@ -73,6 +77,8 @@
         <AuthStep {status} onnext={() => go(step + 1)} />
       {:else if SETUP_STEPS[step].id === 'connectors'}
         <ConnectorsStep slug={SETUP_WORKSPACE} onnext={() => go(step + 1)} />
+      {:else if SETUP_STEPS[step].id === 'networks'}
+        <NetworksStep slug={SETUP_WORKSPACE} onnext={() => go(step + 1)} />
       {:else if SETUP_STEPS[step].id === 'summary'}
         <SummaryStep slug={SETUP_WORKSPACE} {status} ondone={done} />
       {/if}

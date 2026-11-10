@@ -36,7 +36,7 @@
   }
 </script>
 
-<fieldset class="space-y-2 rounded-md border border-border p-3">
+<fieldset class="space-y-2 rounded-xl border border-border p-3">
   <legend class="px-1 text-sm font-medium">Survey</legend>
   <div class="flex justify-end">
     <button
@@ -48,7 +48,7 @@
       {raw ? 'Use form' : 'Advanced: raw JSON'}
     </button>
   </div>
-  {#if note}<p class="text-xs text-red-600 dark:text-red-400" role="alert">{note}</p>{/if}
+  {#if note}<p class="text-xs text-bad" role="alert">{note}</p>{/if}
   {#if raw}
     <label class={label} for="sv-raw">Survey values (JSON object)</label>
     <textarea id="sv-raw" class="{input} font-mono" rows="5" bind:value={form.surveyRaw}></textarea>

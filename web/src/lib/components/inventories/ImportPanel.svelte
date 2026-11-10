@@ -69,7 +69,7 @@
 </script>
 
 <section class={card} aria-labelledby="import-h">
-  <h2 id="import-h" class="mb-2 text-lg font-medium">Import from project</h2>
+  <h2 id="import-h" class="mb-2 text-sm font-semibold">Import from project</h2>
   <p class="mb-3 text-sm text-muted">
     Replaces hosts and groups with the content of an inventory file from a synced project.
   </p>
@@ -117,12 +117,12 @@
     {/if}
   </div>
   {#if result}
-    <p role="status" class="mt-3 text-sm text-green-700 dark:text-green-400">
+    <p role="status" class="mt-3 text-sm text-ok">
       Imported {result.hosts} hosts and {result.groups} groups from
       <code>{result.sha.slice(0, 8)}</code>.
     </p>
     {#if result.warnings.length > 0}
-      <ul class="mt-1 list-inside list-disc text-sm text-amber-700 dark:text-amber-400">
+      <ul class="mt-1 list-inside list-disc text-sm text-warn">
         {#each result.warnings as w, i (i)}<li>{w}</li>{/each}
       </ul>
     {/if}

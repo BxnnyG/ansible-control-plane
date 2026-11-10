@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { InventoryGroup, InventoryHost, InventoryHostInput } from '$lib/api';
-  import { btn, btnPrimary, card, input, label, td, th } from '$lib/ui';
+  import { btn, btnPrimary, input, label, td, th } from '$lib/ui';
   import VarsEditor from './VarsEditor.svelte';
 
   let {
@@ -38,9 +38,9 @@
   }
 </script>
 
-<section class={card} aria-labelledby="hosts-h">
+<section aria-labelledby="hosts-h">
   <div class="mb-2 flex items-center justify-between">
-    <h2 id="hosts-h" class="text-lg font-medium">Hosts ({hosts.length})</h2>
+    <h2 id="hosts-h" class="text-sm font-semibold">Hosts ({hosts.length})</h2>
     {#if canWrite && editing === null}
       <button class={btn} onclick={() => open('new')}>Add host</button>
     {/if}
@@ -49,7 +49,7 @@
   {#if hosts.length === 0}
     <p class="text-sm text-muted">No hosts.</p>
   {:else}
-    <div class="overflow-x-auto">
+    <div class="tbl-wrap">
       <table class="w-full">
         <thead>
           <tr>
@@ -57,10 +57,10 @@
             <th class={th}><span class="sr-only">Actions</span></th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-border">
+        <tbody>
           {#each hosts as h (h.id)}
             <tr>
-              <td class={td}>{h.name}</td>
+              <td class="{td} font-mono">{h.name}</td>
               <td class={td}>{h.group_ids.map((g) => groupName.get(g) ?? '?').join(', ') || '-'}</td
               >
               <td class={td}
@@ -68,11 +68,14 @@
               >
               <td class="{td} text-right whitespace-nowrap">
                 {#if canWrite}
-                  <button class="text-xs text-accent hover:underline" onclick={() => open(h)}>
+                  <button
+                    class="text-xs text-muted hover:text-fg hover:underline max-md:min-h-11 max-md:pr-4"
+                    onclick={() => open(h)}
+                  >
                     edit
                   </button>
                   <button
-                    class="text-xs text-red-600 hover:underline dark:text-red-400"
+                    class="text-xs text-bad hover:underline max-md:min-h-11 max-md:pr-4"
                     onclick={() => remove(h)}
                   >
                     delete

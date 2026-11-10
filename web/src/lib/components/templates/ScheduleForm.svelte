@@ -120,7 +120,7 @@
     <div>
       <label class={label} for="s-name">Name</label>
       <input id="s-name" class={input} bind:value={form.name} />
-      {#if fieldErrors.name}<p class="text-xs text-red-600 dark:text-red-400">
+      {#if fieldErrors.name}<p class="text-xs text-bad">
           {fieldErrors.name}
         </p>{/if}
     </div>
@@ -134,14 +134,14 @@
     <div>
       <label class={label} for="s-cron">Cron expression</label>
       <input id="s-cron" class="{input} font-mono" bind:value={form.cron} />
-      {#if fieldErrors.cron}<p class="text-xs text-red-600 dark:text-red-400">
+      {#if fieldErrors.cron}<p class="text-xs text-bad">
           {fieldErrors.cron}
         </p>{/if}
     </div>
     <div>
       <label class={label} for="s-tz">Time zone</label>
       <input id="s-tz" class={input} bind:value={form.timezone} />
-      {#if fieldErrors.timezone}<p class="text-xs text-red-600 dark:text-red-400">
+      {#if fieldErrors.timezone}<p class="text-xs text-bad">
           {fieldErrors.timezone}
         </p>{/if}
     </div>
@@ -150,7 +150,7 @@
     <input type="checkbox" bind:checked={form.enabled} /> Enabled
   </label>
   {#if hasOverrides}
-    <fieldset class="space-y-3 rounded-md border border-border p-3">
+    <fieldset class="space-y-3 rounded-xl border border-border p-3">
       <legend class="px-1 text-sm font-medium">Run overrides</legend>
       <p class="text-xs text-muted">
         Applied to every scheduled run; values equal to the template defaults are not stored.
@@ -164,7 +164,7 @@
       <OverrideFields {template} {fields} bind:form={ovForm} idPrefix="so" />
     </fieldset>
     {#if ovErrors.length > 0}
-      <ul role="alert" class="list-disc pl-5 text-sm text-red-600 dark:text-red-400">
+      <ul role="alert" class="list-disc pl-5 text-sm text-bad">
         {#each ovErrors as m (m)}<li>{m}</li>{/each}
       </ul>
     {/if}

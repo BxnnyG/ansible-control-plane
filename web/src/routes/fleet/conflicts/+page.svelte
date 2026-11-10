@@ -1,4 +1,6 @@
 <script lang="ts">
+  import ListSkeleton from '$lib/components/ListSkeleton.svelte';
+  import PageHeader from '$lib/components/PageHeader.svelte';
   import { api, type FleetConflict } from '$lib/api';
   import { describeError } from '$lib/errors';
   import {
@@ -56,10 +58,10 @@
 
 <svelte:head><title>Conflicts - Ansible Control Plane</title></svelte:head>
 
-<header class="mb-4">
-  <h1 class="text-2xl font-semibold">Conflicts</h1>
-  <p class="mt-1 text-muted">Inconsistencies between connectors, such as duplicate addresses.</p>
-</header>
+<PageHeader
+  title="Conflicts"
+  description="Inconsistencies between connectors, such as duplicate addresses."
+/>
 <FleetTabs />
 <FormError id="conflicts-error" message={error} />
 
@@ -75,13 +77,11 @@
     </select>
   </div>
   {#if loading}
-    <p class="text-muted">Loading...</p>
+    <ListSkeleton />
   {:else if items.length === 0}
-    <div class="rounded-lg border border-dashed border-border p-8 text-center text-muted">
-      No conflicts.
-    </div>
+    <div class="empty">No conflicts.</div>
   {:else}
-    <div class="overflow-x-auto rounded-lg border border-border">
+    <div class="tbl-wrap">
       <table class="w-full">
         <thead class="bg-surface-2">
           <tr>
@@ -99,7 +99,10 @@
               </td>
               <td class={td}>
                 {#each conflictHosts(c) as h (h.id)}
-                  <a class="mr-2 text-accent underline" href="/fleet/hosts/{h.id}">{h.label}</a>
+                  <a
+                    class="mr-2 underline decoration-border-strong underline-offset-2 hover:decoration-current"
+                    href="/fleet/hosts/{h.id}">{h.label}</a
+                  >
                 {/each}
               </td>
               <td class={td}>

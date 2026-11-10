@@ -100,13 +100,13 @@ export function severityLabel(s: string): string {
 export function severityClass(s: string): string {
   switch (s) {
     case 'critical':
-      return 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300';
+      return 'tone-bad';
     case 'warning':
-      return 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300';
+      return 'tone-warn';
     case 'unknown':
-      return 'bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300';
+      return 'tone-warn';
     default:
-      return 'bg-surface-2 text-muted';
+      return 'tone-neutral';
   }
 }
 
@@ -143,11 +143,11 @@ export function onlineLabel(o: string): string {
 export function onlineClass(o: string): string {
   switch (o) {
     case 'online':
-      return 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300';
+      return 'tone-ok';
     case 'offline':
-      return 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300';
+      return 'tone-bad';
     default:
-      return 'bg-surface-2 text-muted';
+      return 'tone-neutral';
   }
 }
 
@@ -162,12 +162,12 @@ export function ansibleLabel(h: Pick<FleetHost, 'managed' | 'last_run'>): string
 export function ansibleClass(h: Pick<FleetHost, 'managed' | 'last_run'>): string {
   const r = h.last_run?.result;
   if (r === 'failed' || r === 'unreachable') {
-    return 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300';
+    return 'tone-bad';
   }
   if (r === 'ok' || r === 'changed') {
-    return 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300';
+    return 'tone-ok';
   }
-  return 'bg-surface-2 text-muted';
+  return 'tone-neutral';
 }
 
 /** Text of the drift badge; empty without drift. */
@@ -180,4 +180,29 @@ export function driftLabel(h: Pick<FleetHost, 'drift'>): string {
 export function networkCountsLabel(c: FleetNetworkCounts | undefined): string {
   if (!c) return '';
   return `${c.online} online, ${c.ansible_ok} ok, ${c.failed} failed, ${c.never_managed} never managed`;
+}
+
+/** Networks to list: untracked ones only when showHidden is on. */
+export function listedNetworks<T extends { tracked: boolean }>(
+  networks: readonly T[],
+  showHidden: boolean,
+): T[] {
+  return showHidden ? [...networks] : networks.filter((n) => n.tracked);
+}
+
+/** Number of networks the fleet does not track. */
+export function hiddenNetworkCount(networks: readonly { tracked: boolean }[]): number {
+  return networks.filter((n) => !n.tracked).length;
+}
+
+/** Tracked flags as a selection map keyed by network id. */
+export function trackedSelection(
+  networks: readonly { id: string; tracked: boolean }[],
+): Record<string, boolean> {
+  return Object.fromEntries(networks.map((n) => [n.id, n.tracked]));
+}
+
+/** Ids marked true in a selection map. */
+export function selectedIds(selection: Record<string, boolean>): string[] {
+  return Object.keys(selection).filter((id) => selection[id]);
 }

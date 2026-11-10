@@ -11,14 +11,17 @@
   ];
 </script>
 
-<nav aria-label="Fleet sections" class="mb-6 flex gap-1 border-b border-border">
+<nav
+  aria-label="Fleet sections"
+  class="mb-6 flex gap-1 overflow-x-auto border-b border-border whitespace-nowrap"
+>
   {#each TABS as t (t.href)}
     {@const current = t.exact ? page.url.pathname === t.href : page.url.pathname.startsWith(t.href)}
     <a
       href={t.href}
       aria-current={current ? 'page' : undefined}
-      class="-mb-px border-b-2 px-3 py-2 text-sm {current
-        ? 'border-accent font-medium text-accent'
+      class="-mb-px inline-flex min-h-11 items-center border-b-2 px-4 py-2 text-sm {current
+        ? 'border-accent font-semibold text-accent'
         : 'border-transparent text-muted hover:text-fg'}">{t.label}</a
     >
   {/each}
