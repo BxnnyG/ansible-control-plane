@@ -6,7 +6,7 @@
 </script>
 
 <div class="space-y-4">
-  <NetworkTrackingPanel ws={slug} saveLabel="Save and continue" onsaved={onnext} />
+  <NetworkTrackingPanel ws={slug} saveLabel="Save and continue" allowUnchanged onsaved={onnext} />
   <div>
     <button type="button" class={btn} onclick={onnext}>Skip</button>
   </div>

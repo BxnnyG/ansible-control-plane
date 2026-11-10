@@ -11,16 +11,14 @@
     ansibleLabel,
     driftLabel,
     hiddenNetworkCount,
-    listedNetworks,
-    selectedIds,
-    networkCountsLabel,
     onlineClass,
     onlineLabel,
     severityClass,
   } from '$lib/fleet';
-  import { btn, btnPrimary, card, fmtDate, input, td, th } from '$lib/ui';
+  import { btnPrimary, card, fmtDate, input, td, th } from '$lib/ui';
   import BulkRunDialog from '$lib/components/fleet/BulkRunDialog.svelte';
   import FleetTabs from '$lib/components/fleet/FleetTabs.svelte';
+  import NetworkTrackingPanel from '$lib/components/fleet/NetworkTrackingPanel.svelte';
   import FormError from '$lib/components/FormError.svelte';
 
   let networks = $state<FleetNetwork[]>([]);
@@ -33,12 +31,9 @@
   let conflictsOnly = $state(false);
   let alertsOnly = $state(false);
   let showHidden = $state(false);
-  let pick = $state(false); // "track only selected" mode
-  let picked = $state<Record<string, boolean>>({});
-  let trackBusy = $state(false);
+  let networksOpen = $state(false);
 
-  const canManage = $derived(session.can('fleet.manage'));
-  const shownNetworks = $derived(listedNetworks(networks, showHidden));
+  const trackedCount = $derived(networks.filter((n) => n.tracked).length);
   const hidden = $derived(hiddenNetworkCount(networks));
 
   const canRead = $derived(session.can('fleet.read'));
@@ -73,54 +68,19 @@
     }
   }
 
-  async function setTracked(n: FleetNetwork, tracked: boolean) {
-    if (!session.slug || trackBusy) return;
-    trackBusy = true;
-    error = null;
-    try {
-      await api.fleet.trackNetwork(session.slug, n.id, tracked);
-      n.tracked = tracked;
-      if (!tracked && !showHidden && network === n.id) network = '';
-      void loadHosts(session.slug, {
-        network,
-        q,
-        conflicts: conflictsOnly,
-        alerts: alertsOnly,
-        showHidden,
-      });
-    } catch (e) {
-      error = describeError(e);
-    } finally {
-      trackBusy = false;
-    }
-  }
-
-  function startPick() {
-    picked = Object.fromEntries(networks.filter((n) => n.tracked).map((n) => [n.id, true]));
-    pick = true;
-  }
-
-  async function applyPick() {
-    if (!session.slug || trackBusy) return;
-    trackBusy = true;
-    error = null;
-    try {
-      await api.fleet.trackOnly(session.slug, selectedIds(picked));
-      pick = false;
-      await loadNetworks(session.slug);
-      if (network && !networks.find((n) => n.id === network)?.tracked && !showHidden) network = '';
-      await loadHosts(session.slug, {
-        network,
-        q,
-        conflicts: conflictsOnly,
-        alerts: alertsOnly,
-        showHidden,
-      });
-    } catch (e) {
-      error = describeError(e);
-    } finally {
-      trackBusy = false;
-    }
+  /** After the tracking panel saved: refresh networks and the host list. */
+  async function onTrackingSaved() {
+    const ws = session.slug;
+    if (!ws) return;
+    await loadNetworks(ws);
+    if (network && !networks.find((n) => n.id === network)?.tracked && !showHidden) network = '';
+    await loadHosts(ws, {
+      network,
+      q: qDebounced,
+      conflicts: conflictsOnly,
+      alerts: alertsOnly,
+      showHidden,
+    });
   }
 
   let hostSeq = 0;
@@ -190,80 +150,32 @@
 {#if !canRead}
   <p class="text-muted">You do not have permission to view the fleet in this workspace.</p>
 {:else}
-  <section aria-labelledby="networks-h" class="mb-8">
-    <div class="mb-2 flex flex-wrap items-center gap-3">
-      <h2 id="networks-h" class="text-sm font-semibold">Networks</h2>
-      {#if networks.length > 0}
-        <label class="flex items-center gap-2 text-sm">
-          <input type="checkbox" bind:checked={showHidden} /> Show hidden networks{hidden > 0
-            ? ` (${hidden})`
-            : ''}
-        </label>
-        {#if canManage && !pick}
-          <button type="button" class={btn} onclick={startPick}>Track only selected...</button>
+  <section aria-labelledby="networks-h" class="mb-6">
+    <details
+      class="{card} !p-0"
+      ontoggle={(e) => (networksOpen = (e.currentTarget as HTMLDetailsElement).open)}
+    >
+      <summary class="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3">
+        <h2 id="networks-h" class="text-sm font-semibold">Networks</h2>
+        <span class="text-sm text-muted">
+          {trackedCount} of {networks.length} tracked{hidden > 0 ? `, ${hidden} hidden` : ''}
+        </span>
+      </summary>
+      <div class="border-t border-border px-4 py-4">
+        {#if networksOpen && session.slug}
+          <NetworkTrackingPanel
+            ws={session.slug}
+            {networks}
+            saveLabel="Save tracking"
+            onsaved={onTrackingSaved}
+          />
         {/if}
-        {#if pick}
-          <button type="button" class={btnPrimary} disabled={trackBusy} onclick={applyPick}
-            >Track only the {selectedIds(picked).length} selected</button
-          >
-          <button type="button" class={btn} onclick={() => (pick = false)}>Cancel</button>
-        {/if}
-      {/if}
-    </div>
-    {#if networks.length === 0}
-      <p class="text-sm text-muted">No networks discovered yet.</p>
-    {:else if shownNetworks.length === 0}
-      <p class="text-sm text-muted">All networks are hidden. Turn on "Show hidden networks".</p>
-    {:else}
-      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {#each shownNetworks as n (n.id)}
-          <div
-            class="{card} {n.tracked ? '' : 'opacity-60'} {network === n.id
-              ? 'ring-2 ring-accent'
-              : ''}"
-          >
-            <button
-              type="button"
-              class="block w-full text-left"
-              aria-pressed={network === n.id}
-              onclick={() => (network = network === n.id ? '' : n.id)}
-            >
-              <div class="font-mono text-sm font-medium">{n.cidr}</div>
-              <div class="text-xs text-muted">
-                {n.description || n.interface || '-'}{n.vlan ? ` - VLAN ${n.vlan}` : ''}
-              </div>
-              <div class="mt-2 text-sm">
-                {n.host_count} host{n.host_count === 1 ? '' : 's'}
-                <span class="text-xs text-muted">via {n.connector}</span>
-              </div>
-              <div class="text-xs text-muted">
-                {networkCountsLabel(n.counts)}{n.counts?.open_alerts
-                  ? `, ${n.counts.open_alerts} alert${n.counts.open_alerts === 1 ? '' : 's'}`
-                  : ''}
-              </div>
-            </button>
-            {#if pick}
-              <label class="mt-2 flex items-center gap-2 text-sm">
-                <input type="checkbox" bind:checked={picked[n.id]} aria-label="Select {n.cidr}" />
-                Select
-              </label>
-            {:else if canManage}
-              <label class="mt-2 flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={n.tracked}
-                  disabled={trackBusy}
-                  aria-label="Tracked {n.cidr}"
-                  onchange={(e) => setTracked(n, e.currentTarget.checked)}
-                />
-                Tracked
-              </label>
-            {:else if !n.tracked}
-              <p class="mt-2 text-xs text-muted">Not tracked</p>
-            {/if}
-          </div>
-        {/each}
       </div>
+    </details>
+    {#if networks.length > 0}
+      <label class="mt-2 flex items-center gap-2 text-sm">
+        <input type="checkbox" bind:checked={showHidden} /> Show hosts of untracked networks
+      </label>
     {/if}
   </section>
 
