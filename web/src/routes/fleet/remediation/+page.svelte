@@ -57,7 +57,7 @@
   }
 </script>
 
-<svelte:head><title>Remediation - Ansible Control Plane</title></svelte:head>
+<svelte:head><title>Remediation - Hosts - Ansible Control Plane</title></svelte:head>
 
 <header
   class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"

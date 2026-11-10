@@ -28,7 +28,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     section: 'Operate',
   },
   {
-    label: 'Fleet',
+    label: 'Hosts',
     href: '/fleet',
     icon: 'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01',
     permission: 'fleet.read',

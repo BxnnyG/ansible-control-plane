@@ -13,6 +13,8 @@
   } from '$lib/fleet';
   import { session } from '$lib/session.svelte';
   import { btn, fmtDate, input, td, th } from '$lib/ui';
+  import EmptyState from '$lib/components/EmptyState.svelte';
+  import AddConnectorLink from '$lib/components/fleet/AddConnectorLink.svelte';
   import FleetTabs from '$lib/components/fleet/FleetTabs.svelte';
   import FormError from '$lib/components/FormError.svelte';
 
@@ -56,7 +58,7 @@
   }
 </script>
 
-<svelte:head><title>Conflicts - Ansible Control Plane</title></svelte:head>
+<svelte:head><title>Conflicts - Hosts - Ansible Control Plane</title></svelte:head>
 
 <PageHeader
   title="Conflicts"
@@ -66,7 +68,7 @@
 <FormError id="conflicts-error" message={error} />
 
 {#if !canRead}
-  <p class="text-muted">You do not have permission to view the fleet in this workspace.</p>
+  <p class="text-muted">You do not have permission to view hosts in this workspace.</p>
 {:else}
   <div class="mb-3">
     <select aria-label="State" class="{input} max-w-xs" bind:value={filter}>
@@ -79,7 +81,12 @@
   {#if loading}
     <ListSkeleton />
   {:else if items.length === 0}
-    <div class="empty">No conflicts.</div>
+    <EmptyState
+      title="No conflicts"
+      hint="Conflicts show where connectors disagree about a host, for example duplicate addresses."
+    >
+      <AddConnectorLink />
+    </EmptyState>
   {:else}
     <div class="tbl-wrap">
       <table class="w-full">

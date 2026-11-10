@@ -109,7 +109,7 @@
   }
 </script>
 
-<svelte:head><title>Group rules - Ansible Control Plane</title></svelte:head>
+<svelte:head><title>Group rules - Hosts - Ansible Control Plane</title></svelte:head>
 
 <header
   class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
@@ -127,7 +127,7 @@
 {#if notice}<p role="status" class="mb-3 text-sm">{notice}</p>{/if}
 
 {#if !canRead}
-  <p class="text-muted">You do not have permission to view the fleet in this workspace.</p>
+  <p class="text-muted">You do not have permission to view hosts in this workspace.</p>
 {:else}
   {#if editing !== null && session.slug}
     <div class="{card} mb-6 max-w-xl">

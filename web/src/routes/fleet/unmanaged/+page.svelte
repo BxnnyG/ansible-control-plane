@@ -65,9 +65,12 @@
   });
 </script>
 
-<svelte:head><title>Unmanaged hosts - Ansible Control Plane</title></svelte:head>
+<svelte:head><title>Unmanaged hosts - Hosts - Ansible Control Plane</title></svelte:head>
 
-<PageHeader title="Fleet" description="Hosts that no inventory of this workspace manages yet." />
+<PageHeader
+  title="Unmanaged hosts"
+  description="Hosts that no inventory of this workspace manages yet."
+/>
 <FleetTabs />
 <FormError id="unmanaged-error" message={error} />
 {#if notice}<p role="status" class="mb-3 text-sm text-ok">
@@ -75,7 +78,7 @@
   </p>{/if}
 
 {#if !canRead}
-  <p class="text-muted">You do not have permission to view the fleet in this workspace.</p>
+  <p class="text-muted">You do not have permission to view hosts in this workspace.</p>
 {:else}
   <div class="mb-3">
     <input

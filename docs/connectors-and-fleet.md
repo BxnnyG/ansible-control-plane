@@ -6,6 +6,10 @@ rationale: ADR-0018 (connectors, fleet, scopes, group rules), ADR-0009
 (connector interface), ADR-0010 (host merge), ADR-0007 (scopes). Status: implemented,
 live verification against real systems is still pending.
 
+In the web UI the fleet view is labelled **Hosts** (route `/fleet`; API paths and permission names
+stay `fleet.*`). Its sections are All hosts, Alerts, Unmanaged, Conflicts, Group rules and
+Remediation; every section page uses the section name as its title.
+
 All objects belong to a workspace. Permissions: `connector.read` and
 `connector.write` (admin and above, workspace-wide) manage connectors;
 `fleet.read` (viewer and above, filtered by network scopes) reads networks, hosts,
@@ -311,9 +315,12 @@ views). Merge and connector syncs also keep collecting untracked networks.
   `{"ids": [...], "tracked": bool}` or `{"track_only": [...]}` (tracks exactly those, untracks
   all others). `GET`/`PUT /fleet/settings` read and set `new_networks_tracked`.
   Changing needs `fleet.manage`; network-scoped memberships may not change it. Changes are audited.
-- UI: the **Fleet** page has a Tracked toggle per network, "Track only selected..." and
-  "Show hidden networks" (hidden networks are dimmed, hosts of hidden networks appear then);
-  the setup wizard has a **Networks** step and **Settings** shows the same panel.
+- UI: the **Hosts** page has a collapsible **Networks** section with the shared network picker:
+  a filter box (CIDR, description, VLAN, connector), groups per connector with a tri-state group
+  checkbox, Select all / none / invert acting on the filtered set, an "n of m selected" counter and
+  a Save button that stays disabled until something changed. "Show hosts of untracked networks"
+  adds hosts of hidden networks to the list. The setup wizard has a **Networks** step and
+  **Settings** shows the same picker.
 - CLI: `acp admin fleet network list|track|untrack --workspace SLUG [--network NAME|ID]`;
   `--network` takes the id, or a unique external key, description or CIDR.
 

@@ -17,6 +17,8 @@
   } from '$lib/fleet';
   import { btnPrimary, card, fmtDate, input, td, th } from '$lib/ui';
   import BulkRunDialog from '$lib/components/fleet/BulkRunDialog.svelte';
+  import EmptyState from '$lib/components/EmptyState.svelte';
+  import AddConnectorLink from '$lib/components/fleet/AddConnectorLink.svelte';
   import FleetTabs from '$lib/components/fleet/FleetTabs.svelte';
   import NetworkTrackingPanel from '$lib/components/fleet/NetworkTrackingPanel.svelte';
   import FormError from '$lib/components/FormError.svelte';
@@ -28,6 +30,7 @@
 
   let network = $state('');
   let q = $state('');
+  let qDebounced = $state('');
   let conflictsOnly = $state(false);
   let alertsOnly = $state(false);
   let showHidden = $state(false);
@@ -83,6 +86,7 @@
     });
   }
 
+  const filtersActive = $derived(!!(network || qDebounced.trim() || conflictsOnly || alertsOnly));
   let hostSeq = 0;
   async function loadHosts(
     ws: string,
@@ -122,7 +126,6 @@
   });
 
   // Only the search text is debounced; every other filter loads immediately.
-  let qDebounced = $state('');
   $effect(() => {
     const v = q;
     if (v === untrack(() => qDebounced)) return;
@@ -141,14 +144,17 @@
   });
 </script>
 
-<svelte:head><title>Fleet - Ansible Control Plane</title></svelte:head>
+<svelte:head><title>Hosts - Ansible Control Plane</title></svelte:head>
 
-<PageHeader title="Fleet" description="Hosts and networks merged from all connectors." />
+<PageHeader
+  title="Hosts"
+  description="Every machine your connectors have seen, merged into one list, with online, Ansible and alert status."
+/>
 <FleetTabs />
 <FormError id="fleet-error" message={error} />
 
 {#if !canRead}
-  <p class="text-muted">You do not have permission to view the fleet in this workspace.</p>
+  <p class="text-muted">You do not have permission to view hosts in this workspace.</p>
 {:else}
   <section aria-labelledby="networks-h" class="mb-6">
     <details
@@ -216,7 +222,16 @@
     {#if loading}
       <ListSkeleton />
     {:else if hosts.length === 0}
-      <div class="empty">No hosts match.</div>
+      {#if filtersActive}
+        <div class="empty">No hosts match the filters.</div>
+      {:else}
+        <EmptyState
+          title="No hosts yet"
+          hint="Hosts appear after a connector (OPNsense, Proxmox, NetBox, Checkmk) has synced."
+        >
+          <AddConnectorLink />
+        </EmptyState>
+      {/if}
     {:else}
       <div class="tbl-wrap">
         <table class="w-full">

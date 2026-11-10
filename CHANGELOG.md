@@ -16,6 +16,7 @@ All notable changes are documented here. The format follows
 - **Fleet pages:** host lists load immediately on mount and on every filter change; only the search text is debounced (250 ms). Out-of-order responses are ignored.
 - **List skeleton:** `ListSkeleton` now renders table-shaped placeholder rows; it was an empty file, so list pages showed nothing while loading. Small panels use it instead of plain "Loading..." text.
 - **Network picker:** one shared picker (fleet page, Settings, setup wizard) with a filter box (CIDR, description, VLAN, connector), groups per connector with tri-state group checkboxes, select all / none / invert on the filtered set, an "n of m selected" counter and Save disabled until something changed. On the Fleet page the network card grid became a collapsible compact section.
+- **Hosts wording:** the sidebar entry "Fleet" is now "Hosts" (route, API and permissions unchanged), with an explanatory subtitle, one title scheme for all sub-pages and empty states with an "Add connector" action.
 
 ### Added
 

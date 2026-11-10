@@ -2,7 +2,7 @@
   import { page } from '$app/state';
 
   const TABS = [
-    { href: '/fleet', label: 'Overview', exact: true },
+    { href: '/fleet', label: 'All hosts', exact: true },
     { href: '/fleet/alerts', label: 'Alerts', exact: false },
     { href: '/fleet/unmanaged', label: 'Unmanaged', exact: false },
     { href: '/fleet/conflicts', label: 'Conflicts', exact: false },
@@ -12,7 +12,7 @@
 </script>
 
 <nav
-  aria-label="Fleet sections"
+  aria-label="Host sections"
   class="mb-6 flex gap-1 overflow-x-auto border-b border-border whitespace-nowrap"
 >
   {#each TABS as t (t.href)}

@@ -64,11 +64,11 @@
 
 <svelte:head><title>{host?.name ?? 'Host'} - Ansible Control Plane</title></svelte:head>
 
-<Breadcrumbs trail={[{ label: 'Fleet', href: '/fleet' }]} />
+<Breadcrumbs trail={[{ label: 'Hosts', href: '/fleet' }]} />
 <FormError id="host-error" message={error} />
 
 {#if !canRead}
-  <p class="text-muted">You do not have permission to view the fleet in this workspace.</p>
+  <p class="text-muted">You do not have permission to view hosts in this workspace.</p>
 {:else if loading}
   <ListSkeleton />
 {:else if host}
