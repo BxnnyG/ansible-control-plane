@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { api, type FleetNetwork } from '$lib/api';
   import { describeError } from '$lib/errors';
   import { selectedIds, trackedSelection } from '$lib/fleet';
@@ -8,9 +9,16 @@
 
   let {
     ws,
+    networks: given,
     saveLabel = 'Save',
     onsaved,
-  }: { ws: string; saveLabel?: string; onsaved?: () => void } = $props();
+  }: {
+    ws: string;
+    /** Already loaded networks; the panel fetches them itself when omitted. */
+    networks?: FleetNetwork[];
+    saveLabel?: string;
+    onsaved?: () => void;
+  } = $props();
 
   let networks = $state<FleetNetwork[]>([]);
   let selection = $state<Record<string, boolean>>({});
@@ -23,15 +31,22 @@
   const canManage = $derived(session.can('fleet.manage'));
 
   $effect(() => {
-    loading = true;
-    Promise.all([api.fleet.networks(ws), api.fleet.settings(ws)])
-      .then(([n, s]) => {
-        networks = n ?? [];
-        selection = trackedSelection(networks);
-        newTracked = s.new_networks_tracked;
-      })
-      .catch((e) => (error = describeError(e)))
-      .finally(() => (loading = false));
+    const slug = ws;
+    const list = given;
+    untrack(() => {
+      loading = true;
+      Promise.all([
+        list ? Promise.resolve(list) : api.fleet.networks(slug),
+        api.fleet.settings(slug),
+      ])
+        .then(([n, s]) => {
+          networks = n ?? [];
+          selection = trackedSelection(networks);
+          newTracked = s.new_networks_tracked;
+        })
+        .catch((e) => (error = describeError(e)))
+        .finally(() => (loading = false));
+    });
   });
 
   async function save() {

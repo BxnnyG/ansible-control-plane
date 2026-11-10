@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import PageHeader from '$lib/components/PageHeader.svelte';
   import { api, type FleetHost, type Inventory } from '$lib/api';
@@ -34,15 +35,24 @@
     }
   }
 
+  // Only the search text is debounced.
+  let qDebounced = $state('');
+  $effect(() => {
+    const v = q;
+    if (v === untrack(() => qDebounced)) return;
+    const t = setTimeout(() => (qDebounced = v), 250);
+    return () => clearTimeout(t);
+  });
+
   $effect(() => {
     const ws = session.slug;
+    const query = qDebounced;
     void reload;
     if (!ws || !canRead) {
       loading = false;
       return;
     }
-    const t = setTimeout(() => void load(ws, q), 250);
-    return () => clearTimeout(t);
+    untrack(() => void load(ws, query));
   });
 
   $effect(() => {

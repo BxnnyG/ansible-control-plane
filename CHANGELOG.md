@@ -13,6 +13,7 @@ All notable changes are documented here. The format follows
 - **Faster sign-in:** the session bootstrap fetches the stored workspace in parallel with `me` and no longer waits for the setup status; the setup redirect may happen a moment after the shell is ready.
 - **Template detail:** template, references and recent runs load in one parallel batch, with a skeleton while loading and a Retry button on errors.
 - **Templates list:** secrets and vault identities are fetched only when the template form opens, saving two requests per page view.
+- **Fleet pages:** host lists load immediately on mount and on every filter change; only the search text is debounced (250 ms). Out-of-order responses are ignored.
 
 ### Added
 

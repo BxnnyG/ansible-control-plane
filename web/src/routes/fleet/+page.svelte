@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import PageHeader from '$lib/components/PageHeader.svelte';
   import { api, type FleetHost, type FleetNetwork, type Template } from '$lib/api';
@@ -122,6 +123,7 @@
     }
   }
 
+  let hostSeq = 0;
   async function loadHosts(
     ws: string,
     f: {
@@ -134,37 +136,48 @@
   ) {
     loading = true;
     error = null;
+    const seq = ++hostSeq;
     try {
-      hosts = await api.fleet.hosts(ws, {
+      const list = await api.fleet.hosts(ws, {
         network: f.network || undefined,
         q: f.q.trim() || undefined,
         conflicts: f.conflicts,
         alerts: f.alerts,
         includeUntracked: f.showHidden,
       });
+      if (seq !== hostSeq) return; // a newer request superseded this one
+      hosts = list;
       // Keep the selection to hosts still listed.
       selected = Object.fromEntries(hosts.filter((h) => selected[h.id]).map((h) => [h.id, true]));
     } catch (e) {
-      error = describeError(e);
+      if (seq === hostSeq) error = describeError(e);
     } finally {
-      loading = false;
+      if (seq === hostSeq) loading = false;
     }
   }
 
   $effect(() => {
-    if (session.slug && canRead) void loadNetworks(session.slug);
+    const ws = session.slug;
+    if (ws && canRead) untrack(() => void loadNetworks(ws));
   });
 
-  // Debounce the search so typing does not fire a request per key.
+  // Only the search text is debounced; every other filter loads immediately.
+  let qDebounced = $state('');
   $effect(() => {
-    const f = { network, q, conflicts: conflictsOnly, alerts: alertsOnly, showHidden };
+    const v = q;
+    if (v === untrack(() => qDebounced)) return;
+    const t = setTimeout(() => (qDebounced = v), 250);
+    return () => clearTimeout(t);
+  });
+
+  $effect(() => {
+    const f = { network, q: qDebounced, conflicts: conflictsOnly, alerts: alertsOnly, showHidden };
     const ws = session.slug;
     if (!ws || !canRead) {
       loading = false;
       return;
     }
-    const t = setTimeout(() => void loadHosts(ws, f), 250);
-    return () => clearTimeout(t);
+    untrack(() => void loadHosts(ws, f));
   });
 </script>
 
