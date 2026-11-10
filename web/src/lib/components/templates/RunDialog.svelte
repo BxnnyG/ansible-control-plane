@@ -31,6 +31,11 @@
   const fields = surveyToFormFields(surveyFields(template.survey));
   // svelte-ignore state_referenced_locally
   let form = $state(startFormFromOverrides(template, fields, prefill));
+  let dialog: HTMLDialogElement | undefined = $state();
+  // Rendered only while open: show as modal on mount (focus moves to the first field).
+  $effect(() => {
+    if (dialog && !dialog.open) dialog.showModal();
+  });
   let errors = $state<string[]>([]);
   let error = $state<string | null>(null);
   let busy = $state(false);
@@ -82,17 +87,19 @@
   }
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && onclose()} />
-
-<div
-  class="dlg-overlay fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-(--overlay) p-4"
+<dialog
+  bind:this={dialog}
+  aria-labelledby="run-dialog-h"
+  class="dlg m-auto w-full max-w-xl rounded-2xl border border-border bg-surface p-5 text-fg backdrop:bg-(--overlay)"
+  oncancel={(e) => {
+    e.preventDefault();
+    onclose();
+  }}
+  onclick={(e) => {
+    if (e.target === dialog) onclose();
+  }}
 >
-  <div
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="run-dialog-h"
-    class="dlg mt-8 w-full max-w-xl rounded-2xl border border-border bg-surface p-5"
-  >
+  <div>
     <h2 id="run-dialog-h" class="text-base font-semibold">Run {template.name}</h2>
     <p class="text-sm text-muted">
       <code>{template.playbook}</code>
@@ -153,4 +160,4 @@
       </div>
     </form>
   </div>
-</div>
+</dialog>

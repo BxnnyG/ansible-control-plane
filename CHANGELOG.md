@@ -24,6 +24,7 @@ All notable changes are documented here. The format follows
 - **Schedules API:** `GET /api/v1/workspaces/{workspace}/schedules` lists all schedules of a workspace (permission `schedule.read`, not available to scoped memberships); the templates list uses it instead of one call per template.
 - **Toasts:** global toast notifications (success auto-dismisses after 4 s, errors stay until closed, announced via `role="status"` / `role="alert"`, stacked above the bottom edge on phones) replace the page-top status texts on connectors, projects, notification channels, group rules and unmanaged hosts, and confirm deletes of secrets, connectors, projects, templates, inventories, vault identities, rules and schedules.
 - **Confirm dialogs:** one shared `ConfirmDialog` (native `<dialog>`, focus on Cancel, Esc and backdrop click cancel, bottom sheet on phones) replaces the inline confirmation cards on 11 pages; deleting an inventory host now asks for confirmation.
+- **Run dialogs:** the run dialog and the bulk run dialog on the Hosts page are native modal dialogs (focus on open, Esc and backdrop click close, bottom sheet on phones).
 
 ### Added
 
