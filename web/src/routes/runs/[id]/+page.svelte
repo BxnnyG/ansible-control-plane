@@ -2,19 +2,11 @@
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
   import { untrack } from 'svelte';
   import { page } from '$app/state';
-  import {
-    api,
-    type RunDetail,
-    type RunOverrides,
-    type RunStatusEvent,
-    type Template,
-  } from '$lib/api';
+  import { api, type RunDetail, type RunStatusEvent } from '$lib/api';
   import { describeError } from '$lib/errors';
   import { formatDuration, isFinal, triggeredByLabel } from '$lib/runs';
   import { session } from '$lib/session.svelte';
-  import { overridesFromRun } from '$lib/runStart';
-  import { surveyToFormFields } from '$lib/survey';
-  import { surveyFields } from '$lib/templates';
+  import { prepareRunAgain, type RunAgain } from '$lib/runAgain';
   import { btn, btnDanger, card, fmtDate } from '$lib/ui';
   import Skeleton from '$lib/components/Skeleton.svelte';
   import RunDialog from '$lib/components/templates/RunDialog.svelte';
@@ -33,9 +25,7 @@
   let error = $state<string | null>(null);
   let now = $state(Date.now());
   let busy = $state(false);
-  let again = $state<{ template: Template; prefill: RunOverrides; notCarried: string[] } | null>(
-    null,
-  );
+  let again = $state<RunAgain | null>(null);
   let againBusy = $state(false);
 
   async function runAgain() {
@@ -43,10 +33,7 @@
     againBusy = true;
     error = null;
     try {
-      const t = await api.templates.get(ws, run.template_id);
-      const fields = surveyToFormFields(surveyFields(t.survey));
-      const { overrides, notCarried } = overridesFromRun(t, fields, run.params);
-      again = { template: t, prefill: overrides, notCarried };
+      again = await prepareRunAgain(ws, run);
     } catch (e) {
       error = describeError(e);
     } finally {

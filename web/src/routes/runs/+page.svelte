@@ -1,21 +1,25 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import PageHeader from '$lib/components/PageHeader.svelte';
   import { page } from '$app/state';
   import { api, runStreamUrl, type Run, type RunFilter, type Template } from '$lib/api';
+  import { prepareRunAgain, type RunAgain } from '$lib/runAgain';
+  import RunDialog from '$lib/components/templates/RunDialog.svelte';
   import { describeError } from '$lib/errors';
   import { parseJsonEvent } from '$lib/runlog';
   import {
     applyRunUpdate,
     buildRunQuery,
+    canCancelRun,
+    collectUsers,
     formatDuration,
-    isUuid,
+    userOptions,
     RUN_STATUSES,
     RUN_TRIGGERS,
   } from '$lib/runs';
   import { session } from '$lib/session.svelte';
-  import { btn, btnPrimary, fmtDate, input, label, td, th } from '$lib/ui';
+  import { btn, btnDanger, fmtDate, input, label, td, th } from '$lib/ui';
   import FormError from '$lib/components/FormError.svelte';
   import StatusBadge from '$lib/components/runs/StatusBadge.svelte';
 
@@ -37,7 +41,13 @@
   let fHost = $state(page.url.searchParams.get('host') ?? '');
   let applied = $state<RunFilter>({});
 
-  const userInvalid = $derived(fUser.trim() !== '' && !isUuid(fUser));
+  // There is no endpoint that lists users: the choices come from the runs loaded so far.
+  let knownUsers = $state<Record<string, string>>({});
+  const userChoices = $derived(userOptions(knownUsers, session.me ?? undefined, fUser));
+  const canCancel = $derived(session.can('run.cancel'));
+  const canRun = $derived(session.can('run.execute'));
+  let again = $state<RunAgain | null>(null);
+  let rowBusy = $state<string | null>(null);
 
   function formFilter(): RunFilter {
     return {
@@ -49,7 +59,9 @@
     };
   }
 
+  let loadSeq = 0;
   async function load(ws: string, f: RunFilter, more = false) {
+    const seq = ++loadSeq;
     loading = true;
     error = null;
     try {
@@ -57,27 +69,80 @@
         ws,
         buildRunQuery({ ...f, limit: PAGE_SIZE, cursor: more ? nextCursor : '' }),
       );
+      if (seq !== loadSeq) return; // a newer request superseded this one
       items = more ? [...items, ...(res.items ?? [])] : (res.items ?? []);
       nextCursor = res.next_cursor;
+      knownUsers = collectUsers(knownUsers, res.items ?? []);
     } catch (e) {
-      error = describeError(e);
+      if (seq === loadSeq) error = describeError(e);
     } finally {
-      loading = false;
+      if (seq === loadSeq) loading = false;
     }
   }
 
+  /** Applies the form as filter, updates the URL and reloads; no-op when nothing changed. */
   function apply(e?: SubmitEvent) {
     e?.preventDefault();
-    if (userInvalid || !session.slug) return;
-    applied = formFilter();
+    clearTimeout(hostTimer);
+    if (!session.slug) return;
+    const next = formFilter();
+    if (buildRunQuery(next) === buildRunQuery(applied)) return;
+    applied = next;
     const q = buildRunQuery(applied);
     history.replaceState(history.state, '', q ? `?${q}` : location.pathname);
     void load(session.slug, applied);
   }
 
+  // Selects apply immediately, the host text after a short pause.
+  let hostTimer: ReturnType<typeof setTimeout> | undefined;
+  function hostInput() {
+    clearTimeout(hostTimer);
+    hostTimer = setTimeout(() => apply(), 300);
+  }
+  onDestroy(() => clearTimeout(hostTimer));
+  const selectKey = $derived([fTemplate, fStatus, fTrigger, fUser].join('|'));
+  let firstKey = true;
+  $effect(() => {
+    void selectKey;
+    if (firstKey) {
+      firstKey = false; // the initial load is done by the workspace effect below
+      return;
+    }
+    untrack(() => apply());
+  });
+
   function reset() {
     fTemplate = fStatus = fTrigger = fUser = fHost = '';
     apply();
+  }
+
+  async function cancelRun(r: Run) {
+    const ws = session.slug;
+    if (!ws) return;
+    rowBusy = r.id;
+    error = null;
+    try {
+      const updated = await api.runs.cancel(ws, r.id);
+      items = applyRunUpdate(items, updated, applied);
+    } catch (e) {
+      error = describeError(e);
+    } finally {
+      rowBusy = null;
+    }
+  }
+
+  async function runAgain(r: Run) {
+    const ws = session.slug;
+    if (!ws) return;
+    rowBusy = r.id;
+    error = null;
+    try {
+      again = await prepareRunAgain(ws, r);
+    } catch (e) {
+      error = describeError(e);
+    } finally {
+      rowBusy = null;
+    }
   }
 
   $effect(() => {
@@ -149,30 +214,24 @@
       </select>
     </div>
     <div>
-      <label class={label} for="f-user">User id</label>
-      <div class="flex gap-1">
-        <input
-          id="f-user"
-          class={input}
-          bind:value={fUser}
-          placeholder="uuid"
-          aria-invalid={userInvalid}
-        />
-        {#if session.me}
-          <button type="button" class={btn} onclick={() => (fUser = session.me?.id ?? '')}
-            >Me</button
-          >
-        {/if}
-      </div>
+      <label class={label} for="f-user">User</label>
+      <select id="f-user" class={input} bind:value={fUser}>
+        <option value="">All</option>
+        {#each userChoices as u (u.id)}<option value={u.id}>{u.label}</option>{/each}
+      </select>
     </div>
     <div>
       <label class={label} for="f-host">Host</label>
-      <input id="f-host" class={input} bind:value={fHost} placeholder="exact name" />
+      <input
+        id="f-host"
+        class={input}
+        bind:value={fHost}
+        oninput={hostInput}
+        placeholder="exact name"
+      />
     </div>
-    <button class={btnPrimary} disabled={userInvalid}>Filter</button>
     <button type="button" class={btn} onclick={reset}>Reset</button>
   </form>
-  {#if userInvalid}<p class="mb-2 text-xs text-bad">The user filter must be a UUID.</p>{/if}
 
   <FormError id="runs-error" message={error} />
 
@@ -187,6 +246,7 @@
           <tr>
             <th class={th}>Status</th><th class={th}>Template</th><th class={th}>Trigger</th>
             <th class={th}>Hosts</th><th class={th}>Created</th><th class={th}>Duration</th>
+            {#if canCancel || canRun}<th class={th}></th>{/if}
           </tr>
         </thead>
         <tbody class="divide-y divide-border">
@@ -216,6 +276,24 @@
               </td>
               <td class={td}>{fmtDate(r.created_at)}</td>
               <td class={td}>{formatDuration(r.started_at, r.finished_at, now)}</td>
+              {#if canCancel || canRun}
+                <td class="{td} whitespace-nowrap">
+                  <div class="flex gap-2">
+                    {#if canCancelRun(r, canCancel)}
+                      <button
+                        class={btnDanger}
+                        disabled={rowBusy === r.id}
+                        onclick={() => cancelRun(r)}>Cancel</button
+                      >
+                    {/if}
+                    {#if canRun && r.template_id}
+                      <button class={btn} disabled={rowBusy === r.id} onclick={() => runAgain(r)}
+                        >Run again</button
+                      >
+                    {/if}
+                  </div>
+                </td>
+              {/if}
             </tr>
           {/each}
         </tbody>
@@ -233,4 +311,14 @@
       </div>
     {/if}
   {/if}
+{/if}
+
+{#if again && session.slug}
+  <RunDialog
+    ws={session.slug}
+    template={again.template}
+    prefill={again.prefill}
+    notCarried={again.notCarried}
+    onclose={() => (again = null)}
+  />
 {/if}

@@ -102,3 +102,53 @@ export function triggeredByLabel(run: Run, meId: string | undefined): string {
   if (run.triggered_by === meId) return 'you';
   return run.triggered_by_name ?? 'unknown user';
 }
+
+export interface UserOption {
+  id: string;
+  label: string;
+}
+
+/** Adds the users seen in `runs` to a known id -> display name map (names are never overwritten by null). */
+export function collectUsers(
+  known: Readonly<Record<string, string>>,
+  runs: readonly Run[],
+): Record<string, string> {
+  const out = { ...known };
+  for (const r of runs) {
+    if (r.triggered_by && (r.triggered_by_name || !(r.triggered_by in out)))
+      out[r.triggered_by] = r.triggered_by_name ?? out[r.triggered_by] ?? '';
+  }
+  return out;
+}
+
+/**
+ * Choices for the user filter, built from the users seen in loaded runs (there is
+ * no endpoint that lists users). The signed-in user and the currently selected id
+ * are always present, so the select never loses its value.
+ */
+export function userOptions(
+  known: Readonly<Record<string, string>>,
+  me: { id: string; name?: string } | undefined,
+  selected: string,
+): UserOption[] {
+  const byId = new Map<string, string>();
+  for (const [id, name] of Object.entries(known)) byId.set(id, name || 'unknown user');
+  if (me) byId.set(me.id, 'you');
+  if (selected && !byId.has(selected)) byId.set(selected, 'selected user');
+  return [...byId.entries()]
+    .map(([id, label]) => ({ id, label }))
+    .sort((a, b) => {
+      if (a.id === me?.id) return -1;
+      if (b.id === me?.id) return 1;
+      return a.label.localeCompare(b.label);
+    });
+}
+
+/** Whether the cancel action applies: run still active, no cancel pending, permission held. */
+export function canCancelRun(run: Run, hasPermission: boolean): boolean {
+  return (
+    hasPermission &&
+    (run.status === 'queued' || run.status === 'running') &&
+    !run.cancel_requested_at
+  );
+}
