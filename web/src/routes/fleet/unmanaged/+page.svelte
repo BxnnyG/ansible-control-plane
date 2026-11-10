@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { toasts } from '$lib/toasts.svelte';
   import { untrack } from 'svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import PageHeader from '$lib/components/PageHeader.svelte';
@@ -15,7 +16,6 @@
   let inventories = $state<Inventory[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let notice = $state<string | null>(null);
   let q = $state('');
   let adding = $state<FleetHost | null>(null);
   let reload = $state(0);
@@ -73,9 +73,6 @@
 />
 <FleetTabs />
 <FormError id="unmanaged-error" message={error} />
-{#if notice}<p role="status" class="mb-3 text-sm text-ok">
-    {notice}
-  </p>{/if}
 
 {#if !canRead}
   <p class="text-muted">You do not have permission to view hosts in this workspace.</p>
@@ -152,7 +149,7 @@
     {inventories}
     onclose={() => (adding = null)}
     ondone={(m) => {
-      notice = m;
+      toasts.success(m);
       adding = null;
       reload++;
     }}

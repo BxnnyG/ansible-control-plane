@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { toasts } from '$lib/toasts.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { goto } from '$app/navigation';
@@ -86,6 +87,7 @@
     if (!ws) return;
     try {
       await api.inventories.remove(ws, id);
+      toasts.success('Inventory deleted.');
       await goto('/inventories');
     } catch (e) {
       error = e;

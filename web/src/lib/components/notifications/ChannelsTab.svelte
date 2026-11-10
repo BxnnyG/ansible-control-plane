@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { toasts } from '$lib/toasts.svelte';
   import { api, type NotificationChannel, type NotificationRule, type SecretMeta } from '$lib/api';
   import { describeError } from '$lib/errors';
   import { channelsWithoutRules, typeLabel } from '$lib/notifications';
@@ -29,15 +30,14 @@
   let deleting = $state<NotificationChannel | null>(null);
   let busyId = $state<string | null>(null);
   let error = $state<string | null>(null);
-  let notice = $state<string | null>(null);
 
   async function test(c: NotificationChannel) {
     busyId = c.id;
-    notice = null;
     error = null;
     try {
       const r = await api.notifications.channels.test(ws, c.id);
-      notice = r.ok ? `${c.name}: test message sent.` : `${c.name}: test failed: ${r.error}`;
+      if (r.ok) toasts.success(`${c.name}: test message sent.`);
+      else toasts.error(`${c.name}: test failed: ${r.error}`);
     } catch (e) {
       error = describeError(e);
     } finally {
@@ -49,6 +49,7 @@
     if (!deleting) return;
     try {
       await api.notifications.channels.remove(ws, deleting.id);
+      toasts.success('Notification channel deleted.');
       deleting = null;
       await reload();
     } catch (e) {
@@ -75,7 +76,6 @@
   </div>
 {/if}
 <FormError id="channels-error" message={error} />
-{#if notice}<p role="status" class="mb-3 text-sm">{notice}</p>{/if}
 {#if canManage && editing === null && unused.length > 0}
   <p role="status" class="mb-3 rounded border border-border bg-surface-2 p-3 text-sm">
     {unused.map((c) => c.name).join(', ')}

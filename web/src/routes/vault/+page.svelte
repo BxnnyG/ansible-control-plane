@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { toasts } from '$lib/toasts.svelte';
   import { untrack } from 'svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { api, type SecretMeta, type VaultIdentity } from '$lib/api';
@@ -46,6 +47,7 @@
     if (!deleting || !session.slug) return;
     try {
       await api.vaultIdentities.remove(session.slug, deleting.id);
+      toasts.success('Vault identity deleted.');
       deleting = null;
       await load(session.slug);
     } catch (e) {

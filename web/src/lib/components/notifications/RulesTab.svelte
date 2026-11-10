@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { toasts } from '$lib/toasts.svelte';
   import { api, type NotificationChannel, type NotificationRule, type Template } from '$lib/api';
   import { describeError } from '$lib/errors';
   import { eventLabel } from '$lib/notifications';
@@ -34,6 +35,7 @@
     if (!deleting) return;
     try {
       await api.notifications.rules.remove(ws, deleting.id);
+      toasts.success('Notification rule deleted.');
       deleting = null;
       await reload();
     } catch (e) {

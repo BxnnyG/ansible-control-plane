@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { toasts } from '$lib/toasts.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { goto } from '$app/navigation';
@@ -26,7 +27,6 @@
   let revisions = $state<ProjectRevision[]>([]);
   let latest = $state<ProjectRevision | null>(null);
   let error = $state<string | null>(null);
-  let notice = $state<string | null>(null);
   let busy = $state(false);
   let confirmDelete = $state(false);
 
@@ -60,10 +60,9 @@
     if (!ws) return;
     busy = true;
     error = null;
-    notice = null;
     try {
       await fn();
-      notice = label;
+      toasts.success(label);
       project = await api.projects.get(ws, id);
       await loadRevisions(ws, id);
     } catch (e) {
@@ -86,6 +85,7 @@
     if (!ws) return;
     try {
       await api.projects.remove(ws, id);
+      toasts.success('Project deleted.');
       await goto('/projects');
     } catch (e) {
       error = describeError(e);
@@ -132,9 +132,6 @@
     </div>
   </header>
 
-  {#if notice}<p role="status" class="mb-3 text-sm text-ok">
-      {notice}
-    </p>{/if}
   <FormError id="project-detail-error" message={error} />
 
   {#if confirmDelete}
@@ -158,7 +155,7 @@
             {secrets}
             ondone={(p) => {
               project = p;
-              notice = 'Saved.';
+              toasts.success('Saved.');
             }}
           />
         {/key}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { toasts } from '$lib/toasts.svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { api, type Schedule, type Template } from '$lib/api';
   import { describeError } from '$lib/errors';
@@ -117,7 +118,11 @@
                       {#if deleting === s.id}
                         <button
                           class={btnDanger}
-                          onclick={() => act(() => api.schedules.remove(ws, s.id))}>Confirm</button
+                          onclick={() =>
+                            act(async () => {
+                              await api.schedules.remove(ws, s.id);
+                              toasts.success('Schedule deleted.');
+                            })}>Confirm</button
                         >
                         <button class={btn} onclick={() => (deleting = null)}>No</button>
                       {:else}

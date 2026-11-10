@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { toasts } from '$lib/toasts.svelte';
   import { untrack } from 'svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { api, type Connector, type ConnectorCreated, type ConnectorType } from '$lib/api';
@@ -17,7 +18,6 @@
   let types = $state<ConnectorType[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let notice = $state<string | null>(null);
   let editing = $state<Connector | 'new' | null>(null);
   let deleting = $state<Connector | null>(null);
   let history = $state<string | null>(null);
@@ -51,11 +51,11 @@
   async function test(c: Connector) {
     if (!session.slug) return;
     busyId = c.id;
-    notice = null;
     error = null;
     try {
       const r = await api.connectors.test(session.slug, c.id);
-      notice = r.ok ? `${c.name}: connection OK.` : `${c.name}: connection failed: ${r.error}`;
+      if (r.ok) toasts.success(`${c.name}: connection OK.`);
+      else toasts.error(`${c.name}: connection failed: ${r.error}`);
     } catch (e) {
       error = describeError(e);
     } finally {
@@ -66,11 +66,10 @@
   async function sync(c: Connector) {
     if (!session.slug) return;
     busyId = c.id;
-    notice = null;
     error = null;
     try {
       await api.connectors.sync(session.slug, c.id);
-      notice = `${c.name}: sync requested. Refresh in a moment to see the result.`;
+      toasts.success(`${c.name}: sync requested. Refresh in a moment to see the result.`);
       await load(session.slug);
     } catch (e) {
       error = describeError(e);
@@ -83,6 +82,7 @@
     if (!deleting || !session.slug) return;
     try {
       await api.connectors.remove(session.slug, deleting.id);
+      toasts.success('Connector deleted.');
       deleting = null;
       await load(session.slug);
     } catch (e) {
@@ -118,7 +118,6 @@
 </header>
 
 <FormError id="connectors-error" message={error} />
-{#if notice}<p role="status" class="mb-3 text-sm">{notice}</p>{/if}
 {#if created}
   <div role="status" class="{card} mb-6 max-w-2xl">
     <p>

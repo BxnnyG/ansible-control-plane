@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { toasts } from '$lib/toasts.svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { api, type RemediationRule, type Template } from '$lib/api';
   import { describeError } from '$lib/errors';
@@ -43,6 +44,7 @@
     if (!deleting || !session.slug) return;
     try {
       await api.remediation.remove(session.slug, deleting.id);
+      toasts.success('Remediation rule deleted.');
       deleting = null;
       await load(session.slug);
     } catch (e) {

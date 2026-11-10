@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { toasts } from '$lib/toasts.svelte';
   import { untrack } from 'svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { api, type GroupRule, type GroupRulePreview, type Inventory } from '$lib/api';
@@ -15,7 +16,6 @@
   let inventories = $state<Inventory[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let notice = $state<string | null>(null);
   let editing = $state<GroupRule | 'new' | null>(null);
   let deleting = $state<GroupRule | null>(null);
   let preview = $state<GroupRulePreview | null>(null);
@@ -59,7 +59,6 @@
     if (!session.slug) return;
     busy = true;
     error = null;
-    notice = null;
     confirmApply = false;
     try {
       preview = await api.groupRules.preview(session.slug, r.id);
@@ -78,7 +77,9 @@
     try {
       const res = await api.groupRules.apply(session.slug, preview.rule.id);
       const r = res.result;
-      notice = `Applied "${res.rule.name}": ${(r.added ?? []).length} added, ${(r.removed ?? []).length} removed, ${(r.hosts_created ?? []).length} host(s) created${r.commit ? ' (committed to Git)' : ''}.`;
+      toasts.success(
+        `Applied "${res.rule.name}": ${(r.added ?? []).length} added, ${(r.removed ?? []).length} removed, ${(r.hosts_created ?? []).length} host(s) created${r.commit ? ' (committed to Git)' : ''}.`,
+      );
       preview = null;
       confirmApply = false;
       await load(session.slug);
@@ -94,6 +95,7 @@
     if (!deleting || !session.slug) return;
     try {
       await api.groupRules.remove(session.slug, deleting.id);
+      toasts.success('Group rule deleted.');
       if (preview?.rule.id === deleting.id) preview = null;
       deleting = null;
       await load(session.slug);
@@ -124,7 +126,6 @@
 </header>
 <FleetTabs />
 <FormError id="rules-error" message={error} />
-{#if notice}<p role="status" class="mb-3 text-sm">{notice}</p>{/if}
 
 {#if !canRead}
   <p class="text-muted">You do not have permission to view hosts in this workspace.</p>
