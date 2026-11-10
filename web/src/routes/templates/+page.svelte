@@ -5,7 +5,7 @@
   import { api, type Template } from '$lib/api';
   import { describeError } from '$lib/errors';
   import { session } from '$lib/session.svelte';
-  import { loadTemplateRefs, type TemplateRefs } from '$lib/templateData';
+  import { loadTemplateCredentials, loadTemplateNames, type TemplateRefs } from '$lib/templateData';
   import { btnPrimary, card, td, th } from '$lib/ui';
   import FormError from '$lib/components/FormError.svelte';
   import TemplateForm from '$lib/components/templates/TemplateForm.svelte';
@@ -26,12 +26,28 @@
     loading = true;
     error = null;
     try {
-      [items, refs] = await Promise.all([api.templates.list(ws), loadTemplateRefs(ws)]);
-      items = items ?? [];
+      const [list, names] = await Promise.all([api.templates.list(ws), loadTemplateNames(ws)]);
+      items = list ?? [];
+      refs = { ...refs, ...names };
     } catch (e) {
       error = describeError(e);
     } finally {
       loading = false;
+    }
+  }
+
+  let credsFor = '';
+  /** Secrets and vault identities are only needed by the form: fetch them on first open. */
+  async function openForm() {
+    creating = true;
+    const ws = session.slug;
+    if (!ws || credsFor === ws) return;
+    credsFor = ws;
+    try {
+      refs = { ...refs, ...(await loadTemplateCredentials(ws)) };
+    } catch (e) {
+      credsFor = '';
+      error = describeError(e);
     }
   }
 
@@ -55,7 +71,7 @@
     <p class="mt-1 text-muted">Reusable playbook run definitions.</p>
   </div>
   {#if canWrite && !creating}
-    <button class={btnPrimary} onclick={() => (creating = true)}>New template</button>
+    <button class={btnPrimary} onclick={openForm}>New template</button>
   {/if}
 </header>
 
