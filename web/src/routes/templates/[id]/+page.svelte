@@ -1,5 +1,6 @@
 <script lang="ts">
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
+  import { untrack } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { api, type Run, type Template } from '$lib/api';
@@ -8,6 +9,7 @@
   import { session } from '$lib/session.svelte';
   import { loadTemplateRefs, type TemplateRefs } from '$lib/templateData';
   import { btn, btnDanger, btnPrimary, card, fmtDate, td, th } from '$lib/ui';
+  import Skeleton from '$lib/components/Skeleton.svelte';
   import FormError from '$lib/components/FormError.svelte';
   import StatusBadge from '$lib/components/runs/StatusBadge.svelte';
   import RunDialog from '$lib/components/templates/RunDialog.svelte';
@@ -24,26 +26,35 @@
   let refs = $state<TemplateRefs>({ projects: [], inventories: [], secrets: [], identities: [] });
   let recent = $state<Run[]>([]);
   let error = $state<string | null>(null);
+  let loading = $state(true);
   let editing = $state(false);
   let confirmDelete = $state(false);
   let running = $state(false);
 
   async function load(slug: string, tid: string) {
     error = null;
+    loading = true;
+    const wantRuns = untrack(() => session.can('run.read'));
     try {
-      template = await api.templates.get(slug, tid);
-      refs = await loadTemplateRefs(slug);
-      if (session.can('run.read')) {
-        recent =
-          (await api.runs.list(slug, buildRunQuery({ template: tid, limit: 5 }))).items ?? [];
-      }
+      const [t, r, rr] = await Promise.all([
+        api.templates.get(slug, tid),
+        loadTemplateRefs(slug),
+        wantRuns ? api.runs.list(slug, buildRunQuery({ template: tid, limit: 5 })) : null,
+      ]);
+      template = t;
+      refs = r;
+      recent = rr?.items ?? [];
     } catch (e) {
       error = describeError(e);
+    } finally {
+      loading = false;
     }
   }
 
   $effect(() => {
-    if (ws && id) void load(ws, id);
+    const slug = ws;
+    const tid = id;
+    if (slug && tid) untrack(() => void load(slug, tid));
   });
 
   async function remove() {
@@ -68,7 +79,27 @@
 <svelte:head><title>{template?.name ?? 'Template'} - Ansible Control Plane</title></svelte:head>
 
 <Breadcrumbs trail={[{ label: 'Templates', href: '/templates' }]} />
-<FormError id="template-page-error" message={error} />
+{#if !template}
+  <FormError id="template-page-error" message={error} />
+  {#if loading}
+    <div class="space-y-4" aria-busy="true" aria-label="Loading template">
+      <Skeleton class="h-7 w-64" />
+      <div class="{card} space-y-3">
+        <Skeleton class="h-4 w-full" />
+        <Skeleton class="h-4 w-3/4" />
+        <Skeleton class="h-4 w-1/2" />
+      </div>
+      <div class="{card} space-y-3">
+        <Skeleton class="h-4 w-full" />
+        <Skeleton class="h-4 w-2/3" />
+      </div>
+    </div>
+  {:else if error}
+    <button class={btn} onclick={() => ws && load(ws, id)}>Retry</button>
+  {/if}
+{:else}
+  <FormError id="template-page-error" message={error} />
+{/if}
 
 {#if template && ws}
   <header
