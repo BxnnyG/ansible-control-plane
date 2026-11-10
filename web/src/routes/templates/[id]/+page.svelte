@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { toasts } from '$lib/toasts.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
   import { untrack } from 'svelte';
   import { goto } from '$app/navigation';
@@ -61,6 +62,7 @@
     if (!ws || !template) return;
     try {
       await api.templates.remove(ws, template.id);
+      toasts.success('Template deleted.');
       await goto('/templates');
     } catch (e) {
       error = describeError(e);

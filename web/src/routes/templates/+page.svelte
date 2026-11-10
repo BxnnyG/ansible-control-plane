@@ -6,7 +6,12 @@
   import { relativeTime } from '$lib/dashboard';
   import { describeError } from '$lib/errors';
   import { buildRunQuery } from '$lib/runs';
-  import { filterTemplates, groupSchedules, lastRunByTemplate, scheduleLabel } from '$lib/templateList';
+  import {
+    filterTemplates,
+    groupSchedules,
+    lastRunByTemplate,
+    scheduleLabel,
+  } from '$lib/templateList';
   import { session } from '$lib/session.svelte';
   import { loadTemplateCredentials, loadTemplateNames, type TemplateRefs } from '$lib/templateData';
   import { btn, btnPrimary, card, input, td, th } from '$lib/ui';
@@ -42,7 +47,7 @@
       items = list ?? [];
       refs = { ...refs, ...names };
       loading = false;
-      void loadExtras(ws, items);
+      void loadExtras(ws);
     } catch (e) {
       error = describeError(e);
       loading = false;
@@ -50,7 +55,7 @@
   }
 
   /** Last-run badges and schedule hints fill in after the list is already visible. */
-  async function loadExtras(ws: string, list: Template[]) {
+  async function loadExtras(ws: string) {
     now = Date.now();
     if (session.can('run.read')) {
       try {
