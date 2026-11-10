@@ -14,6 +14,7 @@ All notable changes are documented here. The format follows
 - **Template detail:** template, references and recent runs load in one parallel batch, with a skeleton while loading and a Retry button on errors.
 - **Templates list:** secrets and vault identities are fetched only when the template form opens, saving two requests per page view.
 - **Fleet pages:** host lists load immediately on mount and on every filter change; only the search text is debounced (250 ms). Out-of-order responses are ignored.
+- **List skeleton:** `ListSkeleton` now renders table-shaped placeholder rows; it was an empty file, so list pages showed nothing while loading. Small panels use it instead of plain "Loading..." text.
 
 ### Added
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { api, type Connector, type ConnectorType } from '$lib/api';
   import { describeError } from '$lib/errors';
   import { session } from '$lib/session.svelte';
@@ -37,7 +38,7 @@
     </ul>
   {/if}
   {#if loading}
-    <p class="text-muted">Loading...</p>
+    <ListSkeleton rows={2} cols={3} />
   {:else if !allowed}
     <p class="text-sm">You are not allowed to manage connectors. Skip this step.</p>
   {:else if adding && types.length > 0}
