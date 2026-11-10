@@ -347,3 +347,39 @@ func TestRunListSSE(t *testing.T) {
 		}
 	}
 }
+
+// TestRunLogSSENotCompressed proves that a client advertising gzip still gets an
+// uncompressed stream and receives each event as soon as it is written.
+func TestRunLogSSENotCompressed(t *testing.T) {
+	e := newStreamEnv(policy.RoleViewer, false)
+	srv := httptest.NewServer(e.h)
+	defer srv.Close()
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+e.path("/log"), nil)
+	req.Header.Set("Accept-Encoding", "gzip, deflate")
+	resp, err := http.DefaultTransport.RoundTrip(req) //nolint:bodyclose // closed below
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if ce := resp.Header.Get("Content-Encoding"); ce != "" {
+		t.Fatalf("Content-Encoding = %q, want none", ce)
+	}
+	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/event-stream") {
+		t.Fatalf("Content-Type = %q", ct)
+	}
+	got := make(chan string, 1)
+	go func() {
+		sc := bufio.NewScanner(resp.Body)
+		for sc.Scan() {
+			if strings.HasPrefix(sc.Text(), "event: status") {
+				got <- sc.Text()
+				return
+			}
+		}
+	}()
+	select {
+	case <-got: // first event arrived while the stream is still open
+	case <-time.After(3 * time.Second):
+		t.Fatal("first event was not flushed")
+	}
+}

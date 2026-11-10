@@ -1,7 +1,9 @@
 package server
 
 import (
+	"context"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"testing/fstest"
 )
@@ -31,5 +33,27 @@ func TestStaticCacheHeaders(t *testing.T) {
 				t.Errorf("Cache-Control = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestStaticCompression(t *testing.T) {
+	big := make([]byte, 4096)
+	for i := range big {
+		big[i] = 'a'
+	}
+	fsys := fstest.MapFS{
+		"index.html":      {Data: []byte("<!doctype html><title>x</title>")},
+		"_app/app.js":     {Data: big},
+		"_app/font.woff2": {Data: big},
+	}
+	h := Router(quiet, fakePing{}, fsys)
+	for path, want := range map[string]string{"/_app/app.js": "gzip", "/_app/font.woff2": ""} {
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, path, nil)
+		req.Header.Set("Accept-Encoding", "gzip")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if got := rec.Header().Get("Content-Encoding"); got != want {
+			t.Errorf("%s: Content-Encoding = %q, want %q", path, got, want)
+		}
 	}
 }

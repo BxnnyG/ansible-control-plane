@@ -9,6 +9,7 @@ All notable changes are documented here. The format follows
 ### v1.3 load times and UX polish
 
 - **Cache headers:** `/_app/immutable/*` is served with `public, max-age=31536000, immutable`; `index.html` and SPA fallbacks with `no-cache`.
+- **Compression:** HTML, CSS, JS, JSON and SVG responses are gzip/deflate compressed; SSE streams stay uncompressed and flush per event (covered by a test).
 
 ### Added
 
