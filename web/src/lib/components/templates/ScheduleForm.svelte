@@ -2,7 +2,10 @@
   import { api, type Schedule, type Template } from '$lib/api';
   import { describeError } from '$lib/errors';
   import {
+    CRON_PRESETS,
     emptyScheduleForm,
+    presetFor,
+    timeZoneOptions,
     toScheduleInput,
     validateSchedule,
     type ScheduleForm,
@@ -57,6 +60,7 @@
       fields.length > 0 ||
       ovForm.surveyRaw !== null,
   );
+  const zones = timeZoneOptions();
   let fieldErrors = $state<ReturnType<typeof validateSchedule>>({});
   let preview = $state<string[]>([]);
   let previewError = $state<string | null>(null);
@@ -134,13 +138,30 @@
     <div>
       <label class={label} for="s-cron">Cron expression</label>
       <input id="s-cron" class="{input} font-mono" bind:value={form.cron} />
+      <div class="mt-1.5 flex flex-wrap gap-1.5" role="group" aria-label="Cron presets">
+        {#each CRON_PRESETS as p (p.id)}
+          <button
+            type="button"
+            class="rounded-full border px-2.5 py-0.5 text-xs hover:bg-surface-2 {presetFor(
+              form.cron,
+            ) === p.id
+              ? 'border-border-strong bg-surface-2 font-medium'
+              : 'border-border text-muted'}"
+            aria-pressed={presetFor(form.cron) === p.id}
+            onclick={() => (form.cron = p.cron)}>{p.label}</button
+          >
+        {/each}
+      </div>
       {#if fieldErrors.cron}<p class="text-xs text-bad">
           {fieldErrors.cron}
         </p>{/if}
     </div>
     <div>
       <label class={label} for="s-tz">Time zone</label>
-      <input id="s-tz" class={input} bind:value={form.timezone} />
+      <input id="s-tz" class={input} bind:value={form.timezone} list="s-tz-list" />
+      <datalist id="s-tz-list">
+        {#each zones as z (z)}<option value={z}></option>{/each}
+      </datalist>
       {#if fieldErrors.timezone}<p class="text-xs text-bad">
           {fieldErrors.timezone}
         </p>{/if}

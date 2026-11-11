@@ -75,3 +75,39 @@ export function toScheduleInput(f: ScheduleForm): ScheduleInput {
     missed_policy: f.missedPolicy,
   };
 }
+
+export interface CronPreset {
+  id: string;
+  label: string;
+  cron: string;
+}
+
+/** Quick picks for the cron field; the expression stays freely editable. */
+export const CRON_PRESETS: readonly CronPreset[] = [
+  { id: 'hourly', label: 'Hourly', cron: '0 * * * *' },
+  { id: 'daily', label: 'Daily at 03:00', cron: '0 3 * * *' },
+  { id: 'weekly', label: 'Weekly (Monday 03:00)', cron: '0 3 * * 1' },
+];
+
+/** Id of the preset matching `cron` (whitespace-insensitive), or '' for a custom expression. */
+export function presetFor(cron: string): string {
+  const norm = cron.trim().split(/\s+/).join(' ');
+  return CRON_PRESETS.find((p) => p.cron === norm)?.id ?? '';
+}
+
+/** IANA time zones for the datalist: Intl list when supported, otherwise a short fallback. */
+export function timeZoneOptions(current: string = browserTimezone()): string[] {
+  let zones: string[] = [];
+  try {
+    const fn = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] })
+      .supportedValuesOf;
+    zones = fn ? fn('timeZone') : [];
+  } catch {
+    zones = [];
+  }
+  if (zones.length === 0) zones = ['UTC', 'Europe/Berlin', 'Europe/London', 'America/New_York'];
+  const set = new Set(zones);
+  set.add('UTC');
+  if (current) set.add(current);
+  return [...set].sort();
+}

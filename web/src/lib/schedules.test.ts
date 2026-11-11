@@ -40,3 +40,25 @@ describe('validateSchedule', () => {
     expect(isValidTimezone('UTC')).toBe(true);
   });
 });
+
+import { CRON_PRESETS, presetFor, timeZoneOptions } from './schedules';
+
+describe('cron presets', () => {
+  it('are valid cron expressions', () => {
+    for (const p of CRON_PRESETS) expect(validateCron(p.cron)).toBeNull();
+  });
+  it('detects the active preset', () => {
+    expect(presetFor('0  3 * * *')).toBe('daily');
+    expect(presetFor('5 3 * * *')).toBe('');
+  });
+});
+
+describe('timeZoneOptions', () => {
+  it('always offers UTC and the current zone, sorted and unique', () => {
+    const z = timeZoneOptions('Mars/Olympus');
+    expect(z).toContain('UTC');
+    expect(z).toContain('Mars/Olympus');
+    expect(new Set(z).size).toBe(z.length);
+    expect([...z].sort()).toEqual(z);
+  });
+});

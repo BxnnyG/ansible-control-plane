@@ -31,6 +31,7 @@ All notable changes are documented here. The format follows
 - **Dashboard polling:** the dashboard refreshes every 60 s instead of 30 s, not at all while the tab is hidden, and once when the tab becomes visible again (if the data is older than 30 s). No backend change: the host list is still needed for the host figures.
 - **Consistency:** secrets, inventories, vault identities, projects, connectors, group rules and remediation use the shared page header; empty lists show a hint and a create action; failed list loads offer a Retry button; creating an inventory disables the button while saving; the template form asks before discarding unsaved edits (in-app navigation, reload, closing the tab) and stays silent after a successful save.
 - **Connector sync:** Sync now waits for the result (polls every 2 s for up to 60 s until the sync time changes) and reports success or failure; a new Sync all button starts every enabled connector and reports a summary.
+- **Schedule form:** cron presets (hourly, daily at 03:00, weekly on Monday 03:00) fill the expression, which stays editable, and the time zone field suggests all IANA zones from the browser.
 
 ### Added
 
