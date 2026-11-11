@@ -1,7 +1,10 @@
 <script lang="ts">
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import PageHeader from '$lib/components/PageHeader.svelte';
+  import { untrack } from 'svelte';
   import { page } from '$app/state';
+  import { enumParam } from '$lib/urlState';
+  import { syncUrl } from '$lib/urlSync';
   import { api, type FleetAlert, type RemediationRef } from '$lib/api';
   import { describeError } from '$lib/errors';
   import { alertHost, alertLabels, severityClass, severityLabel } from '$lib/fleet';
@@ -18,7 +21,10 @@
 
   let items = $state<FleetAlert[]>([]);
   let applicable = $state<Record<string, RemediationRef[]>>({});
-  let filter = $state<StateFilter>('open');
+  const STATES = ['open', 'resolved', 'all'] as const;
+  let filter = $state<StateFilter>(
+    untrack(() => enumParam(page.url.searchParams, 'state', STATES, 'open')),
+  );
   let loading = $state(true);
   let error = $state<string | null>(null);
 
@@ -43,6 +49,11 @@
       loading = false;
     }
   }
+
+  $effect(() => {
+    const f = filter;
+    untrack(() => syncUrl({ state: f === 'open' ? '' : f }));
+  });
 
   $effect(() => {
     if (session.slug && canRead) void load(session.slug, filter, hostId);

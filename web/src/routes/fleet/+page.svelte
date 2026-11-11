@@ -4,7 +4,10 @@
   import PageHeader from '$lib/components/PageHeader.svelte';
   import { api, type FleetHost, type FleetNetwork, type Template } from '$lib/api';
   import { describeError } from '$lib/errors';
+  import { page } from '$app/state';
   import { session } from '$lib/session.svelte';
+  import { fleetFiltersFromParams, fleetFiltersToUpdates } from '$lib/urlState';
+  import { syncUrl } from '$lib/urlSync';
   import {
     alertBadge,
     ansibleClass,
@@ -28,12 +31,14 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
 
-  let network = $state('');
-  let q = $state('');
-  let qDebounced = $state('');
-  let conflictsOnly = $state(false);
-  let alertsOnly = $state(false);
-  let showHidden = $state(false);
+  // Filters live in the URL so a reload or shared link keeps them.
+  const initial = untrack(() => fleetFiltersFromParams(page.url.searchParams));
+  let network = $state(initial.network);
+  let q = $state(initial.q);
+  let qDebounced = $state(initial.q);
+  let conflictsOnly = $state(initial.conflicts);
+  let alertsOnly = $state(initial.alerts);
+  let showHidden = $state(initial.hidden);
   let networksOpen = $state(false);
 
   const trackedCount = $derived(networks.filter((n) => n.tracked).length);
@@ -131,6 +136,17 @@
     if (v === untrack(() => qDebounced)) return;
     const t = setTimeout(() => (qDebounced = v), 250);
     return () => clearTimeout(t);
+  });
+
+  $effect(() => {
+    const u = fleetFiltersToUpdates({
+      network,
+      q: qDebounced,
+      conflicts: conflictsOnly,
+      alerts: alertsOnly,
+      hidden: showHidden,
+    });
+    untrack(() => syncUrl(u));
   });
 
   $effect(() => {

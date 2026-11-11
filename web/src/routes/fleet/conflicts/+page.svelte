@@ -1,4 +1,8 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
+  import { page } from '$app/state';
+  import { enumParam } from '$lib/urlState';
+  import { syncUrl } from '$lib/urlSync';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import PageHeader from '$lib/components/PageHeader.svelte';
   import { api, type FleetConflict } from '$lib/api';
@@ -19,7 +23,10 @@
   import FormError from '$lib/components/FormError.svelte';
 
   let items = $state<FleetConflict[]>([]);
-  let filter = $state<ConflictFilter>('open');
+  const STATES = ['open', 'acknowledged', 'resolved', 'all'] as const;
+  let filter = $state<ConflictFilter>(
+    untrack(() => enumParam(page.url.searchParams, 'state', STATES, 'open')),
+  );
   let loading = $state(true);
   let error = $state<string | null>(null);
   let busyId = $state<string | null>(null);
@@ -38,6 +45,11 @@
       loading = false;
     }
   }
+
+  $effect(() => {
+    const f = filter;
+    untrack(() => syncUrl({ state: f === 'open' ? '' : f }));
+  });
 
   $effect(() => {
     if (session.slug && canRead) void load(session.slug, filter);

@@ -26,6 +26,7 @@ All notable changes are documented here. The format follows
 - **Confirm dialogs:** one shared `ConfirmDialog` (native `<dialog>`, focus on Cancel, Esc and backdrop click cancel, bottom sheet on phones) replaces the inline confirmation cards on 11 pages; deleting an inventory host now asks for confirmation.
 - **Run dialogs:** the run dialog and the bulk run dialog on the Hosts page are native modal dialogs (focus on open, Esc and backdrop click close, bottom sheet on phones).
 - **List cache:** list GETs of secrets (metadata), vault identities, projects, templates, inventories, connectors and schedules use an in-memory stale-while-revalidate cache keyed by workspace and URL. Returning to a list page shows the cached data at once and updates it when the background refresh differs. Any mutation drops the cached lists of its workspace; logout, sign-in and workspace switch clear everything. Nothing is persisted (no localStorage) and detail endpoints are never cached.
+- **Filters in the URL:** the Hosts page filters (search, network, conflicts, alerts, untracked), the state filter of Alerts and Conflicts and the Notifications tab are kept in the query string (`?q=...&alerts=1`, `?state=resolved`, `?tab=rules`), so reload, back and shared links keep them. Defaults are omitted.
 
 ### Added
 
