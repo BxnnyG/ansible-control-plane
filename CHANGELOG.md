@@ -38,6 +38,9 @@ All notable changes are documented here. The format follows
 - **Search palette:** besides pages, the palette finds templates, hosts, projects and inventories (loaded on first open, only what your role may read, grouped, ranked and capped per group). Enter opens an item; running a template is a separate Ctrl+Enter / Run... action that opens the run dialog.
 - **Schedules page:** new Schedules entry in the sidebar (needs `schedule.read`) lists all schedules of the workspace with template link, cron, time zone, next and last run; users with `schedule.write` can enable or disable them.
 - **Settings:** the subtitle now describes what the page contains (fleet network tracking).
+- **Host detail:** Run template on this host opens the bulk run dialog for the one host (only templates that allow a limit override are offered).
+- **Conflicts:** select several open conflicts and acknowledge them in one action (one call per conflict; internal state only). Alerts keep per-item remediation only, because the API has no acknowledge for them.
+- **Detail pages:** template, run, project, inventory and host pages use the shared page header.
 
 ### Added
 

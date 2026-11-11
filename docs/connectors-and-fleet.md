@@ -254,7 +254,11 @@ States: open, acknowledged, resolved. **Acknowledge** (`fleet.manage`) keeps a
 known, accepted situation out of the open list; the acknowledgement survives
 re-merges because conflicts have a stable fingerprint. A conflict resolves
 itself when the condition ends. Conflict responses list the display names of the
-hosts the caller may see.
+hosts the caller may see. On the Conflicts page, select open conflicts (or the header
+checkbox for all open ones) and choose **Acknowledge N selected**; it calls the per-conflict
+acknowledge endpoint once per item and reports a summary. Acknowledging only marks the conflict
+inside the platform, nothing is written to a connector. Alerts have no acknowledge endpoint, so
+there is no bulk action for them.
 
 ## Host status
 
@@ -391,7 +395,9 @@ API (all under `/api/v1/workspaces/{ws}`): `GET|POST /remediation-rules`,
 
 Select hosts in the fleet host list and choose **Run template on N host(s)**: pick a
 template and whether to run in check mode. ACP ships no hidden playbooks, so
-reachability or fact-gathering runs are simply templates you create for that.
+reachability or fact-gathering runs are simply templates you create for that. The host detail page has
+the same dialog for a single host (**Run template on this host**; needs `run.execute` and
+`template.read`).
 
 - The selected fleet hosts are translated to their linked inventory hosts; one run is
   queued with `--limit` over them.

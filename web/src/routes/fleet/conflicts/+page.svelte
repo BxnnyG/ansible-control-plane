@@ -8,6 +8,7 @@
   import { api, type FleetConflict } from '$lib/api';
   import { describeError } from '$lib/errors';
   import {
+    ackableIds,
     canAck,
     conflictDetails,
     conflictHosts,
@@ -16,6 +17,7 @@
     type ConflictFilter,
   } from '$lib/fleet';
   import { session } from '$lib/session.svelte';
+  import { toasts } from '$lib/toasts.svelte';
   import { btn, fmtDate, input, td, th } from '$lib/ui';
   import EmptyState from '$lib/components/EmptyState.svelte';
   import AddConnectorLink from '$lib/components/fleet/AddConnectorLink.svelte';
@@ -34,11 +36,43 @@
   const canRead = $derived(session.can('fleet.read'));
   const canManage = $derived(session.can('fleet.manage'));
 
+  // Acknowledging only marks the conflict in this platform; nothing is written to connectors.
+  let selected = $state<Record<string, boolean>>({});
+  const ackable = $derived(ackableIds(items));
+  const chosen = $derived(ackable.filter((id) => selected[id]));
+  const allChosen = $derived(ackable.length > 0 && chosen.length === ackable.length);
+
+  function toggleAll(on: boolean) {
+    selected = on ? Object.fromEntries(ackable.map((id) => [id, true])) : {};
+  }
+
+  async function ackSelected() {
+    const ws = session.slug;
+    if (!ws || chosen.length === 0) return;
+    busyId = 'bulk';
+    let done = 0;
+    let failed = 0;
+    for (const id of chosen) {
+      try {
+        await api.fleet.ackConflict(ws, id);
+        done++;
+      } catch {
+        failed++;
+      }
+    }
+    busyId = null;
+    selected = {};
+    if (failed > 0) toasts.error(`Acknowledged ${done}, failed ${failed}.`);
+    else toasts.success(`Acknowledged ${done} conflict(s).`);
+    await load(ws, filter);
+  }
+
   async function load(ws: string, f: ConflictFilter) {
     loading = true;
     error = null;
     try {
       items = await api.fleet.conflicts(ws, stateParam(f));
+      selected = {};
     } catch (e) {
       error = describeError(e);
     } finally {
@@ -82,13 +116,18 @@
 {#if !canRead}
   <p class="text-muted">You do not have permission to view hosts in this workspace.</p>
 {:else}
-  <div class="mb-3">
+  <div class="mb-3 flex flex-wrap items-center gap-2">
     <select aria-label="State" class="{input} max-w-xs" bind:value={filter}>
       <option value="open">Open</option>
       <option value="acknowledged">Acknowledged</option>
       <option value="resolved">Resolved</option>
       <option value="all">All</option>
     </select>
+    {#if canManage && chosen.length > 0}
+      <button class={btn} disabled={busyId === 'bulk'} onclick={ackSelected}
+        >Acknowledge {chosen.length} selected</button
+      >
+    {/if}
   </div>
   {#if loading}
     <ListSkeleton />
@@ -104,6 +143,17 @@
       <table class="w-full">
         <thead class="bg-surface-2">
           <tr>
+            {#if canManage}
+              <th class={th}>
+                <input
+                  type="checkbox"
+                  aria-label="Select all open conflicts"
+                  checked={allChosen}
+                  disabled={ackable.length === 0}
+                  onchange={(e) => toggleAll(e.currentTarget.checked)}
+                />
+              </th>
+            {/if}
             <th class={th}>Type</th><th class={th}>Details</th><th class={th}>Hosts</th>
             <th class={th}>State</th><th class={th}>Last seen</th>
             <th class={th}><span class="sr-only">Actions</span></th>
@@ -112,6 +162,17 @@
         <tbody class="divide-y divide-border">
           {#each items as c (c.id)}
             <tr>
+              {#if canManage}
+                <td class={td}>
+                  {#if canAck(c)}
+                    <input
+                      type="checkbox"
+                      aria-label="Select conflict"
+                      bind:checked={selected[c.id]}
+                    />
+                  {/if}
+                </td>
+              {/if}
               <td class={td}>{conflictLabel(c.type)}</td>
               <td class="{td} font-mono text-xs break-all">
                 {#each conflictDetails(c) as line (line)}<div>{line}</div>{/each}

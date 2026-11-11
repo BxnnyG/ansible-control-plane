@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ackableIds,
   alertBadge,
   alertHost,
   alertLabels,
@@ -162,5 +163,17 @@ describe('network tracking helpers', () => {
   it('round-trips the selection', () => {
     expect(selectedIds(trackedSelection(nets))).toEqual(['a', 'c']);
     expect(selectedIds({ a: false, b: undefined as unknown as boolean })).toEqual([]);
+  });
+});
+
+describe('ackableIds', () => {
+  it('keeps only open conflicts', () => {
+    expect(
+      ackableIds([
+        { id: 'a', state: 'open' },
+        { id: 'b', state: 'acknowledged' },
+        { id: 'c', state: 'resolved' },
+      ]),
+    ).toEqual(['a']);
   });
 });
