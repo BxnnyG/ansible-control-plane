@@ -4,6 +4,7 @@
   import { untrack } from 'svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import { api, type Run, type Schedule, type Template } from '$lib/api';
   import { relativeTime } from '$lib/dashboard';
   import { describeError } from '$lib/errors';
@@ -29,6 +30,7 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
   let creating = $state(false);
+  let cloneOf = $state<Template | null>(null);
   let running = $state<Template | null>(null);
   let query = $state('');
   let lastRuns = $state(new Map<string, Run>());
@@ -116,6 +118,32 @@
     else loading = false;
   });
 
+  // /templates?clone=<id> opens the create form prefilled from that template.
+  const cloneId = $derived(page.url.searchParams.get('clone'));
+  $effect(() => {
+    const ws = session.slug;
+    const id = cloneId;
+    if (!ws || !id || !canWrite) return;
+    untrack(() => {
+      api.templates
+        .get(ws, id)
+        .then(async (src) => {
+          if (session.slug !== ws) return;
+          cloneOf = src;
+          await openForm();
+        })
+        .catch((e) => {
+          error = describeError(e);
+        });
+    });
+  });
+
+  function closeForm() {
+    creating = false;
+    cloneOf = null;
+    if (cloneId) void goto('/templates', { replaceState: true });
+  }
+
   const projectName = (id: string) => refs.projects.find((p) => p.id === id)?.name ?? '-';
   const inventoryName = (id: string) => refs.inventories.find((i) => i.id === id)?.name ?? '-';
 </script>
@@ -137,12 +165,15 @@
 {:else}
   {#if creating && session.slug}
     <div class="{card} mb-6 max-w-4xl">
-      <TemplateForm
-        ws={session.slug}
-        {...refs}
-        ondone={(t) => goto(`/templates/${t.id}`)}
-        oncancel={() => (creating = false)}
-      />
+      {#key cloneOf?.id}
+        <TemplateForm
+          ws={session.slug}
+          clone={cloneOf}
+          {...refs}
+          ondone={(t) => goto(`/templates/${t.id}`)}
+          oncancel={closeForm}
+        />
+      {/key}
     </div>
   {/if}
 

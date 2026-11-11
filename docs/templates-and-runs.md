@@ -277,6 +277,20 @@ Example (generic scheme):
   and webhook (secret shown once). The run dialog offers only the overrides the template allows and renders the
   template survey (secret fields as password inputs). The dialog calls the preview endpoint
   (debounced on limit changes) and shows the effective host count and the first host names.
+- Template form: one form with collapsible sections (Basics, Source, Credentials, Variables, Survey,
+  Options) and a single Save. Required fields are checked on submit; the section with the first problem
+  opens and the field gets focus. The SSH key and become password selects offer "New secret" to create the
+  secret inline (needs `secrets.write`); the new secret is selected right away and its value is never shown
+  again.
+- Survey builder: the Survey section edits fields (name, type, required, secret, description, default,
+  choices) as rows. The stored format is unchanged: a list of fields, or an object with `fields`. Keys the
+  builder does not edit (nested `fields`, `elements`, unknown keys) are kept untouched. "Edit as JSON" shows the
+  raw JSON and "Use field builder" switches back; neither direction loses data, and switching alone does not
+  count as an unsaved change. A switch is refused with a message while the content is invalid.
+- Clone: the Clone button on a template opens `/templates?clone={id}`, the create form prefilled from that
+  template with the name "Copy of ...". Credentials and vault identities are copied as references; secret
+  values are never copied and defaults of secret survey fields are dropped. Environment variables are stored in
+  plain text and are copied as they are.
 - `/runs`: history with filters (template, status, trigger, user id with a "Me" shortcut, host) and the name of the user who started a run, cursor pagination and live
   updates through `runs/events` (reload after a reconnect). `/runs/{id}`: status header, cancel, live log
   (SSE, ANSI rendered as escaped text segments, search, auto-scroll, download) and per-host results.

@@ -32,6 +32,9 @@ All notable changes are documented here. The format follows
 - **Consistency:** secrets, inventories, vault identities, projects, connectors, group rules and remediation use the shared page header; empty lists show a hint and a create action; failed list loads offer a Retry button; creating an inventory disables the button while saving; the template form asks before discarding unsaved edits (in-app navigation, reload, closing the tab) and stays silent after a successful save.
 - **Connector sync:** Sync now waits for the result (polls every 2 s for up to 60 s until the sync time changes) and reports success or failure; a new Sync all button starts every enabled connector and reports a summary.
 - **Schedule form:** cron presets (hourly, daily at 03:00, weekly on Monday 03:00) fill the expression, which stays editable, and the time zone field suggests all IANA zones from the browser.
+- **Template form:** one form in collapsible sections (Basics, Source, Credentials, Variables, Survey, Options) with one Save; a failed validation opens the section with the problem and focuses the field. SSH key and become password have an inline "New secret" (SSH keys take a multi-line private key).
+- **Survey builder:** survey fields are edited as rows (type, required, secret, default, choices); the stored format is unchanged, unknown keys are preserved and raw JSON stays available as an advanced toggle without data loss.
+- **Clone template:** Clone on the template page opens the create form prefilled with the template's settings and a new name; credentials are copied as references only, secret survey defaults are dropped.
 
 ### Added
 

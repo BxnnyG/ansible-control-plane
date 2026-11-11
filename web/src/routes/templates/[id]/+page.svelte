@@ -11,6 +11,7 @@
   import { session } from '$lib/session.svelte';
   import { loadTemplateRefs, type TemplateRefs } from '$lib/templateData';
   import { btn, btnDanger, btnPrimary, card, fmtDate, td, th } from '$lib/ui';
+  import PageHeader from '$lib/components/PageHeader.svelte';
   import Skeleton from '$lib/components/Skeleton.svelte';
   import FormError from '$lib/components/FormError.svelte';
   import StatusBadge from '$lib/components/runs/StatusBadge.svelte';
@@ -105,21 +106,16 @@
 {/if}
 
 {#if template && ws}
-  <header
-    class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
-  >
-    <div>
-      <h1 class="text-xl font-semibold">{template.name}</h1>
-      {#if template.description}<p class="mt-1 text-muted">{template.description}</p>{/if}
-    </div>
-    <div class="flex gap-2">
+  <PageHeader title={template.name} description={template.description}>
+    {#snippet actions()}
       {#if canRun}<button class={btnPrimary} onclick={() => (running = true)}>Run</button>{/if}
       {#if canWrite && !editing}
         <button class={btn} onclick={() => (editing = true)}>Edit</button>
+        <a class={btn} href="/templates?clone={template!.id}">Clone</a>
         <button class={btnDanger} onclick={() => (confirmDelete = true)}>Delete</button>
       {/if}
-    </div>
-  </header>
+    {/snippet}
+  </PageHeader>
 
   {#if confirmDelete}
     <ConfirmDialog
