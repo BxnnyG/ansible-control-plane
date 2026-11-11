@@ -514,6 +514,20 @@ func hostsVisible(ids []uuid.UUID, ips map[uuid.UUID][]string, visible Visible) 
 	return true
 }
 
+// allHidden reports whether every host of a non-empty conflict is hidden by
+// network tracking.
+func allHidden(ids []uuid.UUID, ips map[uuid.UUID][]string, hidden func([]string) bool) bool {
+	if len(ids) == 0 {
+		return false
+	}
+	for _, id := range ids {
+		if !hidden(ips[id]) {
+			return false
+		}
+	}
+	return true
+}
+
 func (s *Store) hostInfos(ctx context.Context, ws uuid.UUID) (map[uuid.UUID]hostInfo, error) {
 	rows, err := s.q.ListHosts(ctx, ws)
 	if err != nil {
@@ -528,8 +542,10 @@ func (s *Store) hostInfos(ctx context.Context, ws uuid.UUID) (map[uuid.UUID]host
 }
 
 // Conflicts lists conflicts; state is "", open, acknowledged or resolved.
-// A conflict is visible when all its hosts are.
-func (s *Store) Conflicts(ctx context.Context, ws uuid.UUID, state string, visible Visible) ([]ConflictView, error) {
+// A conflict is visible when all its hosts are within the caller's scope and,
+// with excludeUntracked, at least one of its hosts is not hidden by network
+// tracking.
+func (s *Store) Conflicts(ctx context.Context, ws uuid.UUID, state string, excludeUntracked bool, visible Visible) ([]ConflictView, error) {
 	rows, err := s.q.ListHostConflicts(ctx, ws)
 	if err != nil {
 		return nil, fmt.Errorf("list conflicts: %w", err)
@@ -542,10 +558,19 @@ func (s *Store) Conflicts(ctx context.Context, ws uuid.UUID, state string, visib
 	for id, h := range info {
 		ips[id] = h.ips
 	}
+	var hidden func([]string) bool
+	if excludeUntracked {
+		if hidden, err = s.untrackedFilter(ctx, ws); err != nil {
+			return nil, err
+		}
+	}
 	out := []ConflictView{}
 	for _, c := range rows {
 		v := conflictView(c)
 		if state != "" && v.State != state {
+			continue
+		}
+		if hidden != nil && allHidden(c.HostIds, ips, hidden) {
 			continue
 		}
 		if hostsVisible(c.HostIds, ips, visible) {

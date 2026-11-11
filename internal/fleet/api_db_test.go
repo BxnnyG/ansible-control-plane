@@ -80,14 +80,14 @@ func TestReadAPI(t *testing.T) {
 		t.Errorf("unknown host: %v", err)
 	}
 
-	open, err := e.store.Conflicts(ctx, e.ws, fleet.StateOpen, nil)
+	open, err := e.store.Conflicts(ctx, e.ws, fleet.StateOpen, false, nil)
 	if err != nil || len(open) != 1 {
 		t.Fatalf("conflicts %+v %v", open, err)
 	}
 	if len(open[0].Hosts) != len(open[0].HostIDs) || (open[0].Hosts[0].Name != "web1" && open[0].Hosts[1].Name != "web1") {
 		t.Errorf("conflict host names: %+v", open[0].Hosts)
 	}
-	if hidden, _ := e.store.Conflicts(ctx, e.ws, "", scoped); len(hidden) != 0 {
+	if hidden, _ := e.store.Conflicts(ctx, e.ws, "", false, scoped); len(hidden) != 0 {
 		t.Error("conflict with invisible hosts must be hidden")
 	}
 	user, err := e.q.UpsertOIDCUser(ctx, dbgen.UpsertOIDCUserParams{OidcIssuer: pgtype.Text{String: "https://idp.example.test", Valid: true},
@@ -102,10 +102,10 @@ func TestReadAPI(t *testing.T) {
 	if err != nil || c.State != fleet.StateAcknowledged || c.AcknowledgedBy == nil || *c.AcknowledgedBy != user.ID {
 		t.Fatalf("ack %+v %v", c, err)
 	}
-	if got, _ := e.store.Conflicts(ctx, e.ws, fleet.StateAcknowledged, nil); len(got) != 1 {
+	if got, _ := e.store.Conflicts(ctx, e.ws, fleet.StateAcknowledged, false, nil); len(got) != 1 {
 		t.Errorf("acknowledged filter: %d", len(got))
 	}
-	if got, _ := e.store.Conflicts(ctx, e.ws, fleet.StateResolved, nil); len(got) != 0 {
+	if got, _ := e.store.Conflicts(ctx, e.ws, fleet.StateResolved, false, nil); len(got) != 0 {
 		t.Errorf("resolved filter: %d", len(got))
 	}
 	if _, err := e.store.Acknowledge(ctx, e.ws, uuid.New(), user.ID, nil); !errors.Is(err, fleet.ErrNotFound) {

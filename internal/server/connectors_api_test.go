@@ -219,7 +219,7 @@ func (f *fakeFleet) visibleConflict(c fleet.ConflictView, v fleet.Visible) bool 
 	return true
 }
 
-func (f *fakeFleet) Conflicts(_ context.Context, _ uuid.UUID, state string, v fleet.Visible) ([]fleet.ConflictView, error) {
+func (f *fakeFleet) Conflicts(_ context.Context, _ uuid.UUID, state string, _ bool, v fleet.Visible) ([]fleet.ConflictView, error) {
 	out := []fleet.ConflictView{}
 	for _, c := range f.conflicts {
 		if (state == "" || c.State == state) && f.visibleConflict(c, v) {

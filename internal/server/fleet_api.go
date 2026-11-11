@@ -27,7 +27,7 @@ type FleetAPI interface {
 	Networks(ctx context.Context, ws uuid.UUID, allow func(id uuid.UUID, cidr netip.Prefix) bool, visible fleet.Visible) ([]fleet.NetworkView, error)
 	Hosts(ctx context.Context, ws uuid.UUID, f fleet.HostFilter, visible fleet.Visible) ([]fleet.HostView, error)
 	Host(ctx context.Context, ws, id uuid.UUID, visible fleet.Visible) (fleet.HostDetail, error)
-	Conflicts(ctx context.Context, ws uuid.UUID, state string, visible fleet.Visible) ([]fleet.ConflictView, error)
+	Conflicts(ctx context.Context, ws uuid.UUID, state string, excludeUntracked bool, visible fleet.Visible) ([]fleet.ConflictView, error)
 	Alerts(ctx context.Context, ws uuid.UUID, f fleet.AlertFilter, visible fleet.Visible) ([]fleet.AlertView, error)
 	Acknowledge(ctx context.Context, ws, id, user uuid.UUID, visible fleet.Visible) (fleet.ConflictView, error)
 	SetTracked(ctx context.Context, ws uuid.UUID, ids []uuid.UUID, tracked bool) (int, error)
@@ -341,7 +341,7 @@ func fleetRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc FleetA
 		}
 		if vis != nil { // conflicts may reference hosts outside the scope
 			kept := h.Conflicts[:0]
-			hosts, herr := svc.Conflicts(req.Context(), d.Workspace.ID, "", vis)
+			hosts, herr := svc.Conflicts(req.Context(), d.Workspace.ID, "", false, vis)
 			if herr != nil {
 				fail(w, "list conflicts", herr)
 				return
@@ -410,7 +410,11 @@ func fleetRoutes(r chi.Router, az *policy.Authorizer, store APIStore, svc FleetA
 			policy.WriteJSON(w, http.StatusBadRequest, apiError{Error: "state must be open, acknowledged or resolved", Code: "bad_request"})
 			return
 		}
-		list, err := svc.Conflicts(req.Context(), d.Workspace.ID, state, vis)
+		inc, ok := includeUntracked(w, req)
+		if !ok {
+			return
+		}
+		list, err := svc.Conflicts(req.Context(), d.Workspace.ID, state, !inc, vis)
 		if err != nil {
 			fail(w, "list conflicts", err)
 			return

@@ -1116,6 +1116,7 @@ paths:
       x-acp-permission: fleet.read
       parameters:
         - {name: state, in: query, required: false, schema: {$ref: '#/components/schemas/ConflictState'}}
+        - {name: include_untracked, in: query, required: false, schema: {type: boolean}, description: true also returns conflicts whose hosts all lie only in untracked networks.}
       responses:
         '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/FleetConflict'}}}}}
         default: {$ref: '#/components/responses/Error'}
