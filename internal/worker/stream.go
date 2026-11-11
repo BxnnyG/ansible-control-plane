@@ -38,6 +38,7 @@ type streamer struct {
 	buf      []byte
 	bufSince time.Time
 	events   []json.RawMessage
+	held     []json.RawMessage // tailed this tick; released on the next so the log they belong to ships first
 	chunks   []runproto.Chunk
 	seq      int64
 
@@ -129,16 +130,33 @@ func (s *streamer) tail() {
 	for _, l := range lines {
 		l = []byte(s.masker.Mask(string(l)))
 		if json.Valid(l) {
-			s.events = append(s.events, json.RawMessage(l))
+			s.held = append(s.held, json.RawMessage(l))
 		}
 	}
 }
 
+// release makes the held events sendable.
+func (s *streamer) release() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.events = append(s.events, s.held...)
+	s.held = nil
+}
+
 // Flush ships everything that is ready. With final, incomplete lines and the
 // remaining events are included too.
+//
+// Callback events are held back by one flush: Ansible prints a task result
+// before the callback writes its event, but the process output reaches the
+// buffer through a pipe and can lag. Shipping events one tick later keeps a
+// host from appearing in the run before its log output.
 func (s *streamer) Flush(ctx context.Context, final bool) error {
+	s.release()
 	s.tail()
 	s.cut(final)
+	if final {
+		s.release()
+	}
 	s.sendMu.Lock()
 	defer s.sendMu.Unlock()
 	for {

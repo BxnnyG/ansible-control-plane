@@ -138,20 +138,26 @@ WHERE status = 'running' AND template_id IS NULL AND cancel_requested_at IS NULL
 RETURNING id;
 
 -- name: MarkRunHostEvent :exec
--- Idempotent progress marker from a callback event; the final counters come
--- from SetRunHostStats. kind is one of ok, changed, failed, unreachable.
-INSERT INTO run_host_results (run_id, host, changed, failed, unreachable, changed_tasks)
+-- Live per-host counters from a callback event: every event adds one to its
+-- counter (changed also counts as ok, as in the Ansible recap). The final
+-- counters come from SetRunHostStats and overwrite these.
+-- kind is one of ok, changed, failed, unreachable, skipped.
+INSERT INTO run_host_results (run_id, host, ok, changed, failed, unreachable, skipped, changed_tasks)
 VALUES (
     sqlc.arg(run_id), sqlc.arg(host),
+    CASE WHEN sqlc.arg(kind)::text IN ('ok', 'changed') THEN 1 ELSE 0 END,
     CASE WHEN sqlc.arg(kind)::text = 'changed' THEN 1 ELSE 0 END,
     CASE WHEN sqlc.arg(kind)::text = 'failed' THEN 1 ELSE 0 END,
     CASE WHEN sqlc.arg(kind)::text = 'unreachable' THEN 1 ELSE 0 END,
+    CASE WHEN sqlc.arg(kind)::text = 'skipped' THEN 1 ELSE 0 END,
     CASE WHEN sqlc.arg(kind)::text = 'changed' THEN jsonb_build_array(sqlc.arg(task)::text) ELSE '[]'::jsonb END
 )
 ON CONFLICT (run_id, host) DO UPDATE SET
-    changed = GREATEST(run_host_results.changed, EXCLUDED.changed),
-    failed = GREATEST(run_host_results.failed, EXCLUDED.failed),
-    unreachable = GREATEST(run_host_results.unreachable, EXCLUDED.unreachable),
+    ok = run_host_results.ok + EXCLUDED.ok,
+    changed = run_host_results.changed + EXCLUDED.changed,
+    failed = run_host_results.failed + EXCLUDED.failed,
+    unreachable = run_host_results.unreachable + EXCLUDED.unreachable,
+    skipped = run_host_results.skipped + EXCLUDED.skipped,
     changed_tasks = CASE
         WHEN sqlc.arg(kind)::text = 'changed'
          AND jsonb_array_length(run_host_results.changed_tasks) < 200

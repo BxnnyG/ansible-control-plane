@@ -141,6 +141,10 @@ func TestStreamerEventsTail(t *testing.T) {
 	_, _ = f.WriteString(`{"event":"task_start","task":"a"}` + "\n" + `{"event":"runner_ok","host":"h","task":"hunter22"}` + "\n" + `{"event":"sta`)
 	_ = f.Sync()
 	_ = s.Flush(ctx, false)
+	if len(api.events) != 0 {
+		t.Fatalf("events must be held until the next flush: %s", api.events)
+	}
+	_ = s.Flush(ctx, false)
 	if len(api.events) != 2 || strings.Contains(string(api.events[1]), "hunter22") {
 		t.Fatalf("events: %s", api.events)
 	}
