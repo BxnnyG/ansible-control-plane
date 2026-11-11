@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pollUntil } from '$lib/polling';
   import PageHeader from '$lib/components/PageHeader.svelte';
   import EmptyState from '$lib/components/EmptyState.svelte';
   import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
@@ -71,19 +72,56 @@
     }
   }
 
-  async function sync(c: Connector) {
-    if (!session.slug) return;
-    busyId = c.id;
-    error = null;
+  let syncing = $state<Record<string, boolean>>({});
+  const anySyncing = $derived(Object.values(syncing).some(Boolean));
+
+  /** Requests a sync and polls until the connector reports a new sync time (max. 60 s). */
+  async function syncOne(c: Connector): Promise<'ok' | 'error' | 'pending' | 'failed'> {
+    const ws = session.slug;
+    if (!ws) return 'failed';
+    syncing[c.id] = true;
     try {
-      await api.connectors.sync(session.slug, c.id);
-      toasts.success(`${c.name}: sync requested. Refresh in a moment to see the result.`);
-      await load(session.slug);
+      await api.connectors.sync(ws, c.id);
+      const before = c.last_sync_at;
+      const r = await pollUntil(
+        async () => {
+          const list = await api.connectors.list(ws);
+          if (session.slug === ws) items = list;
+          return list.find((x) => x.id === c.id);
+        },
+        (cur) => !cur || cur.last_sync_at !== before,
+        { intervalMs: 2000, maxMs: 60_000 },
+      );
+      if (!r.met) return 'pending';
+      return r.value?.status === 'error' ? 'error' : 'ok';
     } catch (e) {
       error = describeError(e);
+      return 'failed';
     } finally {
-      busyId = null;
+      syncing[c.id] = false;
     }
+  }
+
+  async function sync(c: Connector) {
+    error = null;
+    toasts.info(`${c.name}: sync started.`);
+    const r = await syncOne(c);
+    if (r === 'ok') toasts.success(`${c.name}: sync finished.`);
+    else if (r === 'error') toasts.error(`${c.name}: sync finished with an error. See History.`);
+    else if (r === 'pending') toasts.info(`${c.name}: still syncing. Check History in a moment.`);
+  }
+
+  async function syncAll() {
+    error = null;
+    const targets = items.filter((c) => c.enabled && !syncing[c.id]);
+    if (targets.length === 0) return;
+    toasts.info(`Sync started for ${targets.length} connector(s).`);
+    const results = await Promise.all(targets.map(syncOne));
+    const failed = results.filter((r) => r === 'error' || r === 'failed').length;
+    const pending = results.filter((r) => r === 'pending').length;
+    if (failed > 0) toasts.error(`${failed} of ${targets.length} sync(s) failed. See History.`);
+    else if (pending > 0) toasts.info(`${pending} sync(s) still running.`);
+    else toasts.success(`All ${targets.length} sync(s) finished.`);
   }
 
   async function confirmDelete() {
@@ -116,6 +154,9 @@
   description="Read-only links to OPNsense, Proxmox and other systems that feed the fleet view."
 >
   {#snippet actions()}
+    {#if canWrite && items.some((c) => c.enabled)}
+      <button class={btn} disabled={anySyncing} onclick={syncAll}>Sync all</button>
+    {/if}
     {#if canWrite && editing === null && types.length > 0}
       <button class={btnPrimary} onclick={() => (editing = 'new')}>New connector</button>
     {/if}
@@ -235,10 +276,10 @@
                     >
                     <button
                       class={btn}
-                      disabled={busyId === c.id || !c.enabled}
+                      disabled={busyId === c.id || syncing[c.id] || !c.enabled}
                       onclick={() => sync(c)}
                     >
-                      Sync now
+                      {syncing[c.id] ? 'Syncing...' : 'Sync now'}
                     </button>
                     <button class={btn} onclick={() => (editing = c)}>Edit</button>
                     <button class={btnDanger} onclick={() => (deleting = c)}>Delete</button>
