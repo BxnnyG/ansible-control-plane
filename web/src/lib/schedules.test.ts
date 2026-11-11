@@ -41,7 +41,8 @@ describe('validateSchedule', () => {
   });
 });
 
-import { CRON_PRESETS, presetFor, timeZoneOptions } from './schedules';
+import { CRON_PRESETS, presetFor, scheduleRows, timeZoneOptions } from './schedules';
+import type { Schedule } from './api';
 
 describe('cron presets', () => {
   it('are valid cron expressions', () => {
@@ -60,5 +61,22 @@ describe('timeZoneOptions', () => {
     expect(z).toContain('Mars/Olympus');
     expect(new Set(z).size).toBe(z.length);
     expect([...z].sort()).toEqual(z);
+  });
+});
+
+describe('scheduleRows', () => {
+  const sched = (id: string, enabled: boolean, next: string | null, tpl = 't1') =>
+    ({ id, name: id, template_id: tpl, enabled, next_run_at: next }) as Schedule;
+  it('joins template names and orders by next run, disabled last', () => {
+    const rows = scheduleRows(
+      [
+        sched('c', false, null),
+        sched('b', true, '2026-01-02T00:00:00Z'),
+        sched('a', true, '2026-01-01T00:00:00Z', 'gone'),
+      ],
+      [{ id: 't1', name: 'Deploy' }],
+    );
+    expect(rows.map((r) => r.schedule.id)).toEqual(['a', 'b', 'c']);
+    expect(rows.map((r) => r.templateName)).toEqual(['-', 'Deploy', 'Deploy']);
   });
 });
