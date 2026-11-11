@@ -35,6 +35,9 @@ All notable changes are documented here. The format follows
 - **Template form:** one form in collapsible sections (Basics, Source, Credentials, Variables, Survey, Options) with one Save; a failed validation opens the section with the problem and focuses the field. SSH key and become password have an inline "New secret" (SSH keys take a multi-line private key).
 - **Survey builder:** survey fields are edited as rows (type, required, secret, default, choices); the stored format is unchanged, unknown keys are preserved and raw JSON stays available as an advanced toggle without data loss.
 - **Clone template:** Clone on the template page opens the create form prefilled with the template's settings and a new name; credentials are copied as references only, secret survey defaults are dropped.
+- **Search palette:** besides pages, the palette finds templates, hosts, projects and inventories (loaded on first open, only what your role may read, grouped, ranked and capped per group). Enter opens an item; running a template is a separate Ctrl+Enter / Run... action that opens the run dialog.
+- **Schedules page:** new Schedules entry in the sidebar (needs `schedule.read`) lists all schedules of the workspace with template link, cron, time zone, next and last run; users with `schedule.write` can enable or disable them.
+- **Settings:** the subtitle now describes what the page contains (fleet network tracking).
 
 ### Added
 
