@@ -1,4 +1,6 @@
 <script lang="ts">
+  import SortHeader from '$lib/components/SortHeader.svelte';
+  import { sortRows, type SortState } from '$lib/sort';
   import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
   import { toasts } from '$lib/toasts.svelte';
   import { untrack } from 'svelte';
@@ -15,6 +17,15 @@
   let error = $state<string | null>(null);
   let editing = $state<SecretMeta | 'new' | null>(null);
   let deleting = $state<SecretMeta | null>(null);
+
+  let sort = $state<SortState | null>(null);
+  const rows = $derived(
+    sortRows(items, sort, {
+      name: (s) => s.name,
+      type: (s) => s.type,
+      updated: (s) => s.updated_at,
+    }),
+  );
 
   const canRead = $derived(session.can('secrets.meta.read'));
   const canWrite = $derived(session.can('secrets.write'));
@@ -117,12 +128,18 @@
       <table class="w-full">
         <thead class="bg-surface-2">
           <tr>
-            <th class={th}>Name</th><th class={th}>Type</th><th class={th}>Fingerprint</th>
-            <th class={th}>Updated</th><th class={th}><span class="sr-only">Actions</span></th>
+            <SortHeader label="Name" key="name" bind:sort /><SortHeader
+              label="Type"
+              key="type"
+              bind:sort
+            /><th class={th}>Fingerprint</th>
+            <SortHeader label="Updated" key="updated" bind:sort /><th class={th}
+              ><span class="sr-only">Actions</span></th
+            >
           </tr>
         </thead>
         <tbody class="divide-y divide-border">
-          {#each items as s (s.id)}
+          {#each rows as s (s.id)}
             <tr>
               <td class={td}>
                 {s.name}

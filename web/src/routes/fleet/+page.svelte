@@ -1,4 +1,6 @@
 <script lang="ts">
+  import SortHeader from '$lib/components/SortHeader.svelte';
+  import { sortRows, type SortState } from '$lib/sort';
   import { untrack } from 'svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import PageHeader from '$lib/components/PageHeader.svelte';
@@ -28,6 +30,18 @@
 
   let networks = $state<FleetNetwork[]>([]);
   let hosts = $state<FleetHost[]>([]);
+  let sort = $state<SortState | null>(null);
+  const rows = $derived(
+    sortRows(hosts, sort, {
+      name: (h) => h.name,
+      kind: (h) => h.kind,
+      online: (h) => onlineLabel(h.online),
+      ansible: (h) => ansibleLabel(h),
+      alerts: (h) => h.open_alerts,
+      conflicts: (h) => h.open_conflicts,
+      seen: (h) => h.last_seen,
+    }),
+  );
   let loading = $state(true);
   let error = $state<string | null>(null);
 
@@ -263,15 +277,23 @@
                   />
                 </th>
               {/if}
-              <th class={th}>Name</th><th class={th}>Kind</th><th class={th}>Online</th>
-              <th class={th}>Ansible</th><th class={th}>Drift</th>
-              <th class={th}>IPs</th><th class={th}>Sources</th><th class={th}>Alerts</th>
-              <th class={th}>Conflicts</th>
-              <th class={th}>Last seen</th>
+              <SortHeader label="Name" key="name" bind:sort /><SortHeader
+                label="Kind"
+                key="kind"
+                bind:sort
+              /><SortHeader label="Online" key="online" bind:sort />
+              <SortHeader label="Ansible" key="ansible" bind:sort /><th class={th}>Drift</th>
+              <th class={th}>IPs</th><th class={th}>Sources</th><SortHeader
+                label="Alerts"
+                key="alerts"
+                bind:sort
+              />
+              <SortHeader label="Conflicts" key="conflicts" bind:sort />
+              <SortHeader label="Last seen" key="seen" bind:sort />
             </tr>
           </thead>
           <tbody class="divide-y divide-border">
-            {#each hosts as h (h.id)}
+            {#each rows as h (h.id)}
               <tr>
                 {#if canBulk}
                   <td class={td}>

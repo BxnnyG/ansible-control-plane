@@ -1,4 +1,6 @@
 <script lang="ts">
+  import SortHeader from '$lib/components/SortHeader.svelte';
+  import { sortRows, type SortState } from '$lib/sort';
   import { untrack } from 'svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { goto } from '$app/navigation';
@@ -33,6 +35,17 @@
   let schedules = $state<Record<string, Schedule[]>>({});
   let now = $state(Date.now());
   const filtered = $derived(filterTemplates(items, query));
+  let sort = $state<SortState | null>(null);
+  const rows = $derived(
+    sortRows(filtered, sort, {
+      name: (t) => t.name,
+      playbook: (t) => t.playbook,
+      project: (t) => projectName(t.project_id),
+      inventory: (t) => inventoryName(t.inventory_id),
+      last: (t) => lastRuns.get(t.id)?.created_at,
+      schedule: (t) => scheduleLabel(schedules[t.id]),
+    }),
+  );
   const canSchedules = $derived(session.can('schedule.read'));
 
   const canRead = $derived(session.can('template.read'));
@@ -161,14 +174,22 @@
         <table class="w-full">
           <thead class="bg-surface-2">
             <tr>
-              <th class={th}>Name</th><th class={th}>Playbook</th><th class={th}>Project</th>
-              <th class={th}>Inventory</th><th class={th}>Last run</th>
-              {#if canSchedules}<th class={th}>Schedule</th>{/if}
+              <SortHeader label="Name" key="name" bind:sort /><SortHeader
+                label="Playbook"
+                key="playbook"
+                bind:sort
+              /><SortHeader label="Project" key="project" bind:sort />
+              <SortHeader label="Inventory" key="inventory" bind:sort /><SortHeader
+                label="Last run"
+                key="last"
+                bind:sort
+              />
+              {#if canSchedules}<SortHeader label="Schedule" key="schedule" bind:sort />{/if}
               {#if canRun}<th class={th}></th>{/if}
             </tr>
           </thead>
           <tbody class="divide-y divide-border">
-            {#each filtered as t (t.id)}
+            {#each rows as t (t.id)}
               {@const last = lastRuns.get(t.id)}
               <tr>
                 <td class={td}>

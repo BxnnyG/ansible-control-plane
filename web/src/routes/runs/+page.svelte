@@ -1,4 +1,6 @@
 <script lang="ts">
+  import SortHeader from '$lib/components/SortHeader.svelte';
+  import { sortRows, type SortState } from '$lib/sort';
   import { onDestroy, untrack } from 'svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import PageHeader from '$lib/components/PageHeader.svelte';
@@ -28,6 +30,20 @@
 
   let templates = $state<Template[]>([]);
   let items = $state<Run[]>([]);
+  let sort = $state<SortState | null>(null);
+  const rows = $derived(
+    sortRows(items, sort, {
+      status: (r) => r.status,
+      template: (r) => r.template_name,
+      trigger: (r) => r.trigger,
+      hosts: (r) => (r.params.hosts ?? []).length,
+      created: (r) => r.created_at,
+      duration: (r) =>
+        r.started_at
+          ? Date.parse(r.finished_at ?? new Date(now).toISOString()) - Date.parse(r.started_at)
+          : null,
+    }),
+  );
   let nextCursor = $state('');
   let loading = $state(true);
   let error = $state<string | null>(null);
@@ -244,13 +260,21 @@
       <table class="w-full">
         <thead class="bg-surface-2">
           <tr>
-            <th class={th}>Status</th><th class={th}>Template</th><th class={th}>Trigger</th>
-            <th class={th}>Hosts</th><th class={th}>Created</th><th class={th}>Duration</th>
+            <SortHeader label="Status" key="status" bind:sort /><SortHeader
+              label="Template"
+              key="template"
+              bind:sort
+            /><SortHeader label="Trigger" key="trigger" bind:sort />
+            <SortHeader label="Hosts" key="hosts" bind:sort /><SortHeader
+              label="Created"
+              key="created"
+              bind:sort
+            /><SortHeader label="Duration" key="duration" bind:sort />
             {#if canCancel || canRun}<th class={th}></th>{/if}
           </tr>
         </thead>
         <tbody class="divide-y divide-border">
-          {#each items as r (r.id)}
+          {#each rows as r (r.id)}
             <tr>
               <td class={td}><a href="/runs/{r.id}"><StatusBadge status={r.status} /></a></td>
               <td class={td}>

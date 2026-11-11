@@ -1,10 +1,12 @@
 <script lang="ts">
+  import SortHeader from '$lib/components/SortHeader.svelte';
+  import { sortRows, type SortState } from '$lib/sort';
   import { untrack } from 'svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { goto } from '$app/navigation';
   import { api, type Inventory, type InventoryMode, type Project } from '$lib/api';
   import { session } from '$lib/session.svelte';
-  import { btn, btnPrimary, card, fmtDate, input, label, td, th } from '$lib/ui';
+  import { btn, btnPrimary, card, fmtDate, input, label, td } from '$lib/ui';
   import ErrorBox from '$lib/components/ErrorBox.svelte';
 
   let items = $state<Inventory[]>([]);
@@ -18,6 +20,17 @@
   let projectId = $state('');
   let path = $state('');
   let branch = $state('');
+
+  let sort = $state<SortState | null>(null);
+  const rows = $derived(
+    sortRows(items, sort, {
+      name: (i) => i.name,
+      mode: (i) => i.mode,
+      hosts: (i) => i.hosts,
+      groups: (i) => i.groups,
+      import: (i) => i.last_import_at,
+    }),
+  );
 
   const canRead = $derived(session.can('inventory.read'));
   const canWrite = $derived(session.can('inventory.write'));
@@ -132,12 +145,20 @@
       <table class="w-full">
         <thead class="bg-surface-2">
           <tr>
-            <th class={th}>Name</th><th class={th}>Mode</th><th class={th}>Hosts</th>
-            <th class={th}>Groups</th><th class={th}>Last import</th>
+            <SortHeader label="Name" key="name" bind:sort /><SortHeader
+              label="Mode"
+              key="mode"
+              bind:sort
+            /><SortHeader label="Hosts" key="hosts" bind:sort />
+            <SortHeader label="Groups" key="groups" bind:sort /><SortHeader
+              label="Last import"
+              key="import"
+              bind:sort
+            />
           </tr>
         </thead>
         <tbody class="divide-y divide-border">
-          {#each items as i (i.id)}
+          {#each rows as i (i.id)}
             <tr>
               <td class={td}
                 ><a
