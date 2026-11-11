@@ -1,5 +1,6 @@
 <script lang="ts">
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
+  import PageHeader from '$lib/components/PageHeader.svelte';
   import { untrack } from 'svelte';
   import { page } from '$app/state';
   import { api, type RunDetail, type RunStatusEvent } from '$lib/api';
@@ -119,31 +120,33 @@
 {/if}
 
 {#if run && ws}
-  <header
-    class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
-  >
-    <div>
-      <h1 class="flex items-center gap-3 text-xl font-semibold">
-        {#if run.template_id}
-          <a class="hover:underline" href="/templates/{run.template_id}">{run.template_name}</a>
-        {:else}{run.template_name}{/if}
-        <StatusBadge status={run.status} />
-      </h1>
-      <p class="mt-1 font-mono text-xs text-muted">{run.params.playbook}</p>
-    </div>
-    <div class="flex flex-wrap gap-2">
-      {#if canRun && run.template_id}
+  {@const cur = run}
+  <PageHeader title={cur.template_name}>
+    {#snippet badge()}<StatusBadge status={cur.status} />{/snippet}
+    {#snippet meta()}
+      {#if cur.template_id}
+        <p>
+          <a
+            class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+            href="/templates/{cur.template_id}">Open template</a
+          >
+        </p>
+      {/if}
+      <p class="font-mono text-xs text-muted">{cur.params.playbook}</p>
+    {/snippet}
+    {#snippet actions()}
+      {#if canRun && cur.template_id}
         <button class={btn} disabled={againBusy} onclick={runAgain}>
           {againBusy ? 'Loading...' : 'Run again'}
         </button>
       {/if}
-      {#if canCancel && (run.status === 'queued' || run.status === 'running')}
-        <button class={btnDanger} disabled={busy || !!run.cancel_requested_at} onclick={cancel}>
-          {run.cancel_requested_at ? 'Cancelling...' : 'Cancel run'}
+      {#if canCancel && (cur.status === 'queued' || cur.status === 'running')}
+        <button class={btnDanger} disabled={busy || !!cur.cancel_requested_at} onclick={cancel}>
+          {cur.cancel_requested_at ? 'Cancelling...' : 'Cancel run'}
         </button>
       {/if}
-    </div>
-  </header>
+    {/snippet}
+  </PageHeader>
 
   <section class="{card} mb-6" aria-label="Run details">
     <dl class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3 lg:grid-cols-6">

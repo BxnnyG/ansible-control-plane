@@ -2,6 +2,7 @@
   import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
   import { toasts } from '$lib/toasts.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
+  import PageHeader from '$lib/components/PageHeader.svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
@@ -103,23 +104,19 @@
 <Breadcrumbs trail={[{ label: 'Inventories', href: '/inventories' }]} />
 
 {#if inv && ws}
-  <header
-    class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
+  <PageHeader
+    title={inv.name}
+    description="Mode: {inv.mode}{inv.mode === 'git'
+      ? ` (${inv.path})`
+      : ''} - version {inv.version} - last import {fmtDate(inv.last_import_at)}"
   >
-    <div>
-      <h1 class="text-xl font-semibold">{inv.name}</h1>
-      <p class="mt-1 text-sm text-muted">
-        Mode: {inv.mode}{inv.mode === 'git' ? ` (${inv.path})` : ''} - version {inv.version} - last import
-        {fmtDate(inv.last_import_at)}
-      </p>
-    </div>
-    <div class="flex gap-2">
+    {#snippet actions()}
       <button class={btn} onclick={() => load(ws, id)}>Reload</button>
       {#if canWrite}
         <button class={btnDanger} onclick={() => (confirmDelete = true)}>Delete</button>
       {/if}
-    </div>
-  </header>
+    {/snippet}
+  </PageHeader>
 
   {#if confirmDelete}
     <ConfirmDialog

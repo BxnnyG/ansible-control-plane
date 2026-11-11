@@ -2,6 +2,7 @@
   import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
   import { toasts } from '$lib/toasts.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
+  import PageHeader from '$lib/components/PageHeader.svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
@@ -100,23 +101,20 @@
 <Breadcrumbs trail={[{ label: 'Projects', href: '/projects' }]} />
 
 {#if project && ws}
-  <header
-    class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
-  >
-    <div>
-      <h1 class="text-xl font-semibold">{project.name}</h1>
-      <p class="mt-1 text-sm break-all text-muted">{project.url}</p>
-      <p class="mt-1 text-sm">
-        <SyncBadge status={project.last_sync_status} />
-        <span class="text-muted">{fmtDate(project.last_sync_at)}</span>
-        {#if project.last_sync_sha}<code class="text-xs">{project.last_sync_sha.slice(0, 8)}</code
-          >{/if}
+  {@const proj = project}
+  <PageHeader title={proj.name}>
+    {#snippet meta()}
+      <p class="break-all text-muted">{proj.url}</p>
+      <p>
+        <SyncBadge status={proj.last_sync_status} />
+        <span class="text-muted">{fmtDate(proj.last_sync_at)}</span>
+        {#if proj.last_sync_sha}<code class="text-xs">{proj.last_sync_sha.slice(0, 8)}</code>{/if}
       </p>
-      {#if project.last_sync_status === 'error' && project.last_sync_error}
-        <p class="mt-1 text-sm text-bad">{project.last_sync_error}</p>
+      {#if proj.last_sync_status === 'error' && proj.last_sync_error}
+        <p class="text-bad">{proj.last_sync_error}</p>
       {/if}
-    </div>
-    <div class="flex flex-wrap gap-2">
+    {/snippet}
+    {#snippet actions()}
       {#if canSync}
         <button class={btn} disabled={busy} onclick={test}>Test connection</button>
         <button
@@ -130,8 +128,8 @@
       {#if canWrite}
         <button class={btnDanger} onclick={() => (confirmDelete = true)}>Delete</button>
       {/if}
-    </div>
-  </header>
+    {/snippet}
+  </PageHeader>
 
   <FormError id="project-detail-error" message={error} />
 
