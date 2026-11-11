@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { api, type ConnectorSync } from '$lib/api';
   import { fmtDuration } from '$lib/connectors';
   import { describeError } from '$lib/errors';
@@ -24,7 +25,7 @@
 
 <FormError id="syncs-error" message={error} />
 {#if loading}
-  <p class="text-sm text-muted">Loading...</p>
+  <ListSkeleton rows={2} cols={3} />
 {:else if syncs.length === 0}
   <p class="text-sm text-muted">No syncs yet.</p>
 {:else}

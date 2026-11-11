@@ -67,6 +67,12 @@ func WithMetricsToken(token string) Option { return func(o *routerOpts) { o.metr
 // WithAuth mounts the OIDC/session endpoints (/api/auth/*, /api/v1/me).
 func WithAuth(a *auth.Service) Option { return func(o *routerOpts) { o.auth = a } }
 
+// compressTypes lists the content types that are gzip/deflate compressed.
+var compressTypes = []string{
+	"text/html", "text/css", "text/javascript", "application/javascript",
+	"application/json", "image/svg+xml",
+}
+
 // Router builds the HTTP handler.
 func Router(log *slog.Logger, db Pinger, static fs.FS, opts ...Option) http.Handler {
 	var ro routerOpts
@@ -76,7 +82,9 @@ func Router(log *slog.Logger, db Pinger, static fs.FS, opts ...Option) http.Hand
 	hookLim := newHookLimiter(60, time.Minute) // shared by all public hook endpoints
 	r := chi.NewRouter()
 	// Note: no RealIP middleware; trusted proxy handling is added explicitly later.
-	r.Use(middleware.Recoverer, securityHeaders(static), accessLog(log), httpMetrics)
+	// Compress only the listed text types. text/event-stream is deliberately
+	// absent: SSE responses must stay uncompressed and flush per event.
+	r.Use(middleware.Recoverer, middleware.Compress(5, compressTypes...), securityHeaders(static), accessLog(log), httpMetrics)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 		_, _ = w.Write([]byte("ok\n"))
@@ -167,6 +175,13 @@ func spa(static fs.FS) http.Handler {
 		if p != "/" {
 			if f, err := static.Open(p[1:]); err == nil {
 				_ = f.Close()
+				switch {
+				case strings.HasPrefix(p, "/_app/immutable/"):
+					// Content-hashed build output never changes under the same name.
+					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+				case p == "/index.html":
+					w.Header().Set("Cache-Control", "no-cache")
+				}
 				files.ServeHTTP(w, r)
 				return
 			}
@@ -174,10 +189,12 @@ func spa(static fs.FS) http.Handler {
 		if f, err := static.Open("index.html"); err == nil {
 			_ = f.Close()
 			r.URL.Path = "/"
+			w.Header().Set("Cache-Control", "no-cache")
 			files.ServeHTTP(w, r)
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
 		_, _ = w.Write([]byte("<!doctype html><title>ACP</title><h1>Ansible Control Plane</h1><p>Web UI not built.</p><small>" +
 			version.Attribution + "</small>"))
 	})

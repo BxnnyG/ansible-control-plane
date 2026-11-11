@@ -277,6 +277,29 @@ Example (generic scheme):
   and webhook (secret shown once). The run dialog offers only the overrides the template allows and renders the
   template survey (secret fields as password inputs). The dialog calls the preview endpoint
   (debounced on limit changes) and shows the effective host count and the first host names.
+- Template form: one form with collapsible sections (Basics, Source, Credentials, Variables, Survey,
+  Options) and a single Save. Required fields are checked on submit; the section with the first problem
+  opens and the field gets focus. The SSH key and become password selects offer "New secret" to create the
+  secret inline (needs `secrets.write`); the new secret is selected right away and its value is never shown
+  again.
+- Survey builder: the Survey section edits fields (name, type, required, secret, description, default,
+  choices) as rows. The stored format is unchanged: a list of fields, or an object with `fields`. Keys the
+  builder does not edit (nested `fields`, `elements`, unknown keys) are kept untouched. "Edit as JSON" shows the
+  raw JSON and "Use field builder" switches back; neither direction loses data, and switching alone does not
+  count as an unsaved change. A switch is refused with a message while the content is invalid.
+- Clone: the Clone button on a template opens `/templates?clone={id}`, the create form prefilled from that
+  template with the name "Copy of ...". Credentials and vault identities are copied as references; secret
+  values are never copied and defaults of secret survey fields are dropped. Environment variables are stored in
+  plain text and are copied as they are.
+- Search palette (Ctrl+K or the search button): pages first, then templates, hosts, projects and
+  inventories. Resources load on the first open (templates, projects and inventories through the list cache,
+  hosts refetched when older than 60 s) and only for what your role may read. Results are ranked (exact,
+  prefix, word prefix, substring; the label counts more than the playbook or address) and capped per group.
+  Enter or a click opens the item. Running a template is a separate action: Ctrl+Enter or the Run... button on
+  a template row opens the run dialog (needs `run.execute`); nothing starts from the palette itself.
+- `/schedules`: all schedules of the workspace (needs `schedule.read`) with template link, cron and time zone,
+  next and last run and state. With `schedule.write` a row can be enabled or disabled; create, edit and delete
+  stay on the template page. Columns sort client-side.
 - `/runs`: history with filters (template, status, trigger, user id with a "Me" shortcut, host) and the name of the user who started a run, cursor pagination and live
   updates through `runs/events` (reload after a reconnect). `/runs/{id}`: status header, cancel, live log
   (SSE, ANSI rendered as escaped text segments, search, auto-scroll, download) and per-host results.

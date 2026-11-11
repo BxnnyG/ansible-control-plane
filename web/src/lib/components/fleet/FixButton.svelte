@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
   import { onDestroy } from 'svelte';
   import { api, type RemediationRef, type RemediationResult, type RunStatus } from '$lib/api';
   import { describeError } from '$lib/errors';
@@ -84,22 +85,19 @@
       </div>
     {/if}
     {#if pending}
-      <div
-        role="alertdialog"
-        aria-label="Confirm fix"
-        class="rounded-md border border-border p-2 text-sm"
+      <ConfirmDialog
+        title="Confirm fix"
+        confirmLabel={pending.check_first ? 'Start check' : 'Run'}
+        danger={false}
+        {busy}
+        onconfirm={() => start(pending!, false)}
+        oncancel={() => (pending = null)}
       >
         <p>
           {pending.check_first ? 'Start a check-mode run of' : 'Run'} template
           <strong>{pending.template}</strong> on {describeTarget(pending)}?
         </p>
-        <div class="mt-2 flex gap-2">
-          <button class={btnPrimary} disabled={busy} onclick={() => start(pending!, false)}
-            >{pending.check_first ? 'Start check' : 'Run'}</button
-          >
-          <button class={btn} onclick={() => (pending = null)}>Cancel</button>
-        </div>
-      </div>
+      </ConfirmDialog>
     {/if}
     {#if result}
       <div role="status" class="rounded-md border border-border p-2 text-sm">

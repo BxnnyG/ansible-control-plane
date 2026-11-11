@@ -1,5 +1,8 @@
 <script lang="ts">
+  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+  import { toasts } from '$lib/toasts.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
+  import PageHeader from '$lib/components/PageHeader.svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
@@ -13,7 +16,7 @@
     type Project,
   } from '$lib/api';
   import { session } from '$lib/session.svelte';
-  import { btn, btnDanger, card, fmtDate } from '$lib/ui';
+  import { btn, btnDanger, fmtDate } from '$lib/ui';
   import ErrorBox from '$lib/components/ErrorBox.svelte';
   import GitPanel from '$lib/components/inventories/GitPanel.svelte';
   import GroupsPanel from '$lib/components/inventories/GroupsPanel.svelte';
@@ -79,13 +82,15 @@
     await mutate((s, v) => api.inventories.removeGroup(s, id, g.id, v));
   };
   const removeHost = async (h: InventoryHost) => {
-    await mutate((s, v) => api.inventories.removeHost(s, id, h.id, v));
+    if (await mutate((s, v) => api.inventories.removeHost(s, id, h.id, v)))
+      toasts.success('Host deleted.');
   };
 
   async function remove() {
     if (!ws) return;
     try {
       await api.inventories.remove(ws, id);
+      toasts.success('Inventory deleted.');
       await goto('/inventories');
     } catch (e) {
       error = e;
@@ -99,32 +104,28 @@
 <Breadcrumbs trail={[{ label: 'Inventories', href: '/inventories' }]} />
 
 {#if inv && ws}
-  <header
-    class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
+  <PageHeader
+    title={inv.name}
+    description="Mode: {inv.mode}{inv.mode === 'git'
+      ? ` (${inv.path})`
+      : ''} - version {inv.version} - last import {fmtDate(inv.last_import_at)}"
   >
-    <div>
-      <h1 class="text-xl font-semibold">{inv.name}</h1>
-      <p class="mt-1 text-sm text-muted">
-        Mode: {inv.mode}{inv.mode === 'git' ? ` (${inv.path})` : ''} - version {inv.version} - last import
-        {fmtDate(inv.last_import_at)}
-      </p>
-    </div>
-    <div class="flex gap-2">
+    {#snippet actions()}
       <button class={btn} onclick={() => load(ws, id)}>Reload</button>
       {#if canWrite}
         <button class={btnDanger} onclick={() => (confirmDelete = true)}>Delete</button>
       {/if}
-    </div>
-  </header>
+    {/snippet}
+  </PageHeader>
 
   {#if confirmDelete}
-    <div role="alertdialog" aria-label="Confirm delete" class="{card} mb-6 max-w-xl">
+    <ConfirmDialog
+      title="Confirm delete"
+      onconfirm={remove}
+      oncancel={() => (confirmDelete = false)}
+    >
       <p>Delete inventory <strong>{inv.name}</strong>?</p>
-      <div class="mt-3 flex gap-2">
-        <button class={btnDanger} onclick={remove}>Delete</button>
-        <button class={btn} onclick={() => (confirmDelete = false)}>Cancel</button>
-      </div>
-    </div>
+    </ConfirmDialog>
   {/if}
 
   <ErrorBox {error} />

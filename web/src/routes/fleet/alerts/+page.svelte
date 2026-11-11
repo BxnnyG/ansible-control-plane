@@ -1,7 +1,10 @@
 <script lang="ts">
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import PageHeader from '$lib/components/PageHeader.svelte';
+  import { untrack } from 'svelte';
   import { page } from '$app/state';
+  import { enumParam } from '$lib/urlState';
+  import { syncUrl } from '$lib/urlSync';
   import { api, type FleetAlert, type RemediationRef } from '$lib/api';
   import { describeError } from '$lib/errors';
   import { alertHost, alertLabels, severityClass, severityLabel } from '$lib/fleet';
@@ -9,6 +12,8 @@
   import { fmtDate, input, td, th } from '$lib/ui';
   import { rulesFor } from '$lib/remediation';
   import FixButton from '$lib/components/fleet/FixButton.svelte';
+  import EmptyState from '$lib/components/EmptyState.svelte';
+  import AddConnectorLink from '$lib/components/fleet/AddConnectorLink.svelte';
   import FleetTabs from '$lib/components/fleet/FleetTabs.svelte';
   import FormError from '$lib/components/FormError.svelte';
 
@@ -16,7 +21,10 @@
 
   let items = $state<FleetAlert[]>([]);
   let applicable = $state<Record<string, RemediationRef[]>>({});
-  let filter = $state<StateFilter>('open');
+  const STATES = ['open', 'resolved', 'all'] as const;
+  let filter = $state<StateFilter>(
+    untrack(() => enumParam(page.url.searchParams, 'state', STATES, 'open')),
+  );
   let loading = $state(true);
   let error = $state<string | null>(null);
 
@@ -43,12 +51,17 @@
   }
 
   $effect(() => {
+    const f = filter;
+    untrack(() => syncUrl({ state: f === 'open' ? '' : f }));
+  });
+
+  $effect(() => {
     if (session.slug && canRead) void load(session.slug, filter, hostId);
     else loading = false;
   });
 </script>
 
-<svelte:head><title>Alerts - Ansible Control Plane</title></svelte:head>
+<svelte:head><title>Alerts - Hosts - Ansible Control Plane</title></svelte:head>
 
 <PageHeader
   title="Alerts"
@@ -58,7 +71,7 @@
 <FormError id="alerts-error" message={error} />
 
 {#if !canRead}
-  <p class="text-muted">You do not have permission to view the fleet in this workspace.</p>
+  <p class="text-muted">You do not have permission to view hosts in this workspace.</p>
 {:else}
   <div class="mb-3 flex flex-wrap items-center gap-3">
     <select aria-label="State" class="{input} max-w-xs" bind:value={filter}>
@@ -78,7 +91,12 @@
   {#if loading}
     <ListSkeleton />
   {:else if items.length === 0}
-    <div class="empty">No alerts.</div>
+    <EmptyState
+      title="No alerts"
+      hint="Alerts come from monitoring connectors such as Checkmk and from alert webhooks."
+    >
+      <AddConnectorLink />
+    </EmptyState>
   {:else}
     <div class="tbl-wrap">
       <table class="w-full">

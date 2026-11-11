@@ -1,4 +1,5 @@
-import { api, ApiError, type Me, type WorkspaceDetail } from './api';
+import { api, ApiError, clearApiCache, type Me, type WorkspaceDetail } from './api';
+import { toasts } from './toasts.svelte';
 import { can } from './permissions';
 import { SETUP_WORKSPACE, pickWorkspace } from './workspace';
 
@@ -27,6 +28,11 @@ class SessionState {
   }
 
   async load(): Promise<void> {
+    clearApiCache(); // a new sign-in must never see another user's cached lists
+    // The stored workspace slug lets us fetch the workspace while `me` is in flight.
+    const guess = storedSlug();
+    const early = guess ? api.workspace(guess) : null;
+    early?.catch(() => undefined); // handled below; avoids an unhandled rejection
     try {
       this.me = await api.me();
     } catch (e) {
@@ -36,23 +42,31 @@ class SessionState {
     }
     this.slug = pickWorkspace(
       this.me.memberships.map((m) => m.slug),
-      storedSlug(),
+      guess,
     );
-    await this.loadWorkspace();
+    await this.loadWorkspace(this.slug === guess ? early : null);
     this.status = 'ready';
   }
 
-  async loadWorkspace(): Promise<void> {
+  /** Loads the active workspace; the setup status never blocks and may arrive after `ready`. */
+  async loadWorkspace(prefetched: Promise<WorkspaceDetail> | null = null): Promise<void> {
     this.workspace = null;
     this.needsSetup = false;
-    if (!this.slug) return;
+    const slug = this.slug;
+    if (!slug) return;
     try {
-      this.workspace = await api.workspace(this.slug);
-      if (this.slug === SETUP_WORKSPACE && this.can('workspace.manage')) {
-        this.needsSetup = !(await api.setupStatus(this.slug)).completed;
-      }
+      this.workspace = await (prefetched ?? api.workspace(slug));
     } catch {
       // The shell still works without workspace details; actions stay hidden.
+      return;
+    }
+    if (slug === SETUP_WORKSPACE && this.can('workspace.manage')) {
+      void api
+        .setupStatus(slug)
+        .then((st) => {
+          if (this.slug === slug) this.needsSetup = !st.completed;
+        })
+        .catch(() => undefined);
     }
   }
 
@@ -66,6 +80,8 @@ class SessionState {
   }
 
   async select(slug: string): Promise<void> {
+    clearApiCache();
+    toasts.clear();
     this.slug = slug;
     try {
       localStorage.setItem(KEY, slug);
@@ -80,6 +96,8 @@ class SessionState {
   }
 
   reset(): void {
+    clearApiCache();
+    toasts.clear();
     this.me = null;
     this.workspace = null;
     this.slug = null;

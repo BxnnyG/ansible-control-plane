@@ -1,4 +1,8 @@
 <script lang="ts">
+  import PageHeader from '$lib/components/PageHeader.svelte';
+  import EmptyState from '$lib/components/EmptyState.svelte';
+  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+  import { toasts } from '$lib/toasts.svelte';
   import { untrack } from 'svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { api, type SecretMeta, type VaultIdentity } from '$lib/api';
@@ -22,7 +26,9 @@
     loading = true;
     error = null;
     try {
-      items = await api.vaultIdentities.list(ws);
+      items = await api.vaultIdentities.list(ws, (d) => {
+        if (session.slug === ws) items = d;
+      });
       secrets = session.can('secrets.meta.read') ? await api.secrets.list(ws) : [];
     } catch (e) {
       error = describeError(e);
@@ -46,6 +52,7 @@
     if (!deleting || !session.slug) return;
     try {
       await api.vaultIdentities.remove(session.slug, deleting.id);
+      toasts.success('Vault identity deleted.');
       deleting = null;
       await load(session.slug);
     } catch (e) {
@@ -62,21 +69,18 @@
 
 <svelte:head><title>Vault identities - Ansible Control Plane</title></svelte:head>
 
-<header
-  class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
+<PageHeader
+  title="Vault identities"
+  description="Named sources for Ansible Vault passwords. The passwords themselves are never shown."
 >
-  <div>
-    <h1 class="text-xl font-semibold">Vault identities</h1>
-    <p class="mt-1 text-muted">
-      Named sources for Ansible Vault passwords. The passwords themselves are never shown.
-    </p>
-  </div>
-  {#if canManage && editing === null}
-    <button class={btnPrimary} onclick={() => (editing = 'new')}>New identity</button>
-  {/if}
-</header>
+  {#snippet actions()}
+    {#if canManage && editing === null}
+      <button class={btnPrimary} onclick={() => (editing = 'new')}>New identity</button>
+    {/if}
+  {/snippet}
+</PageHeader>
 
-<FormError id="vault-error" message={error} />
+<FormError id="vault-error" message={error} onretry={() => session.slug && load(session.slug)} />
 
 {#if !canRead}
   <p class="text-muted">You do not have permission to view vault identities in this workspace.</p>
@@ -96,22 +100,29 @@
   {/if}
 
   {#if deleting}
-    <div role="alertdialog" aria-label="Confirm delete" class="{card} mb-6 max-w-xl">
+    <ConfirmDialog
+      title="Confirm delete"
+      onconfirm={confirmDelete}
+      oncancel={() => (deleting = null)}
+    >
       <p>
         Delete vault identity <strong>{deleting.label}</strong>? Operations and runs that use this
         label can no longer obtain the password.
       </p>
-      <div class="mt-3 flex gap-2">
-        <button class={btnDanger} onclick={confirmDelete}>Delete</button>
-        <button class={btn} onclick={() => (deleting = null)}>Cancel</button>
-      </div>
-    </div>
+    </ConfirmDialog>
   {/if}
 
   {#if loading}
     <ListSkeleton />
   {:else if items.length === 0}
-    <div class="empty">No vault identities yet.</div>
+    <EmptyState
+      title="No vault identities yet."
+      hint="A vault identity names the source of an Ansible Vault password."
+    >
+      {#if canManage}
+        <button class={btnPrimary} onclick={() => (editing = 'new')}>New identity</button>
+      {/if}
+    </EmptyState>
   {:else}
     <div class="tbl-wrap">
       <table class="w-full">

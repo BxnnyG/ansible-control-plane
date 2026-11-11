@@ -11,12 +11,18 @@
     ctype,
     secretId = $bindable(null),
     canCreate,
+    id = 'conn-secret',
+    title = '',
   }: {
     ws: string;
     ctype: ConnectorType;
     /** Selected secret id; null means no credential. */
     secretId: string | null;
     canCreate: boolean;
+    /** Element id of the select; unique when several pickers share a page. */
+    id?: string;
+    /** Label text; defaults to the connector wording ("Credential"). */
+    title?: string;
   } = $props();
 
   let secrets = $state<SecretMeta[]>([]);
@@ -71,10 +77,10 @@
 </script>
 
 <div class="space-y-2">
-  <label class={label} for="conn-secret">
-    Credential{ctype.secret_required ? '' : ' (optional)'}
+  <label class={label} for={id}>
+    {title || `Credential${ctype.secret_required ? '' : ' (optional)'}`}
   </label>
-  <select id="conn-secret" class={input} bind:value={secretId} required={ctype.secret_required}>
+  <select {id} class={input} bind:value={secretId} required={ctype.secret_required}>
     <option value={null}>None</option>
     {#each options as s (s.id)}
       <option value={s.id}>{s.name} ({SECRET_TYPE_LABEL[s.type] ?? s.type})</option>
@@ -91,7 +97,14 @@
     <button type="button" class={btn} onclick={() => (creating = true)}>New secret</button>
   {/if}
   {#if creating}
-    <fieldset class="space-y-2 rounded-xl border border-border p-3">
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <!-- Enter in a field must not submit a surrounding form. -->
+    <fieldset
+      class="space-y-2 rounded-xl border border-border p-3"
+      onkeydown={(e) => {
+        if (e.key === 'Enter' && e.target instanceof HTMLInputElement) e.preventDefault();
+      }}
+    >
       <legend class="px-1 text-sm">New secret</legend>
       {#if ctype.secret_types.length > 1}
         <select aria-label="Secret type" class={input} bind:value={newType}>
@@ -117,6 +130,16 @@
           autocomplete="new-password"
           bind:value={partB}
         />
+      {:else if newType === 'ssh_key'}
+        <textarea
+          aria-label="Secret value"
+          class="{input} font-mono"
+          rows="6"
+          placeholder="Private key"
+          autocomplete="off"
+          spellcheck="false"
+          bind:value={partA}
+        ></textarea>
       {:else}
         <input
           aria-label="Secret value"

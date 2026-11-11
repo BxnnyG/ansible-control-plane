@@ -6,6 +6,46 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-11
+
+### Load times and UX polish
+
+- **Cache headers:** `/_app/immutable/*` is served with `public, max-age=31536000, immutable`; `index.html` and SPA fallbacks with `no-cache`.
+- **Compression:** HTML, CSS, JS, JSON and SVG responses are gzip/deflate compressed; SSE streams stay uncompressed and flush per event (covered by a test).
+- **Faster sign-in:** the session bootstrap fetches the stored workspace in parallel with `me` and no longer waits for the setup status; the setup redirect may happen a moment after the shell is ready.
+- **Template detail:** template, references and recent runs load in one parallel batch, with a skeleton while loading and a Retry button on errors.
+- **Templates list:** secrets and vault identities are fetched only when the template form opens, saving two requests per page view.
+- **Fleet pages:** host lists load immediately on mount and on every filter change; only the search text is debounced (250 ms). Out-of-order responses are ignored.
+- **List skeleton:** `ListSkeleton` now renders table-shaped placeholder rows; it was an empty file, so list pages showed nothing while loading. Small panels use it instead of plain "Loading..." text.
+- **Network picker:** one shared picker (fleet page, Settings, setup wizard) with a filter box (CIDR, description, VLAN, connector), groups per connector with tri-state group checkboxes, select all / none / invert on the filtered set, an "n of m selected" counter and Save disabled until something changed. On the Fleet page the network card grid became a collapsible compact section.
+- **Hosts wording:** the sidebar entry "Fleet" is now "Hosts" (route, API and permissions unchanged), with an explanatory subtitle, one title scheme for all sub-pages and empty states with an "Add connector" action.
+- **Templates list:** search box (name, playbook, description), last-run status and age per template (one runs call, limit 100, filled in after the list renders), schedule column (one workspace-wide schedules call, needs `schedule.read`), a real Run button and an empty state with a New template action.
+- **Run again:** the run detail page has a Run again button that opens the run dialog prefilled with the old run's limit, tags, mode and variables, restricted to what the template still allows. Secret variables are never prefilled and the dialog lists anything that could not be carried over.
+- **Run detail:** a skeleton shows while the run loads and a failed load offers a Retry button; switching runs resets the page and ignores late responses.
+- **Runs list:** filters apply on change (selects immediately, host text after 300 ms) with a guard against stale responses; the Filter button is gone. The user filter is a select built from the users seen in loaded runs plus you (no endpoint lists users). Rows have Cancel (active runs, needs `run.cancel`) and Run again (needs `run.execute`).
+- **Schedules API:** `GET /api/v1/workspaces/{workspace}/schedules` lists all schedules of a workspace (permission `schedule.read`, not available to scoped memberships); the templates list uses it instead of one call per template.
+- **Toasts:** global toast notifications (success auto-dismisses after 4 s, errors stay until closed, announced via `role="status"` / `role="alert"`, stacked above the bottom edge on phones) replace the page-top status texts on connectors, projects, notification channels, group rules and unmanaged hosts, and confirm deletes of secrets, connectors, projects, templates, inventories, vault identities, rules and schedules.
+- **Confirm dialogs:** one shared `ConfirmDialog` (native `<dialog>`, focus on Cancel, Esc and backdrop click cancel, bottom sheet on phones) replaces the inline confirmation cards on 11 pages; deleting an inventory host now asks for confirmation.
+- **Run dialogs:** the run dialog and the bulk run dialog on the Hosts page are native modal dialogs (focus on open, Esc and backdrop click close, bottom sheet on phones).
+- **List cache:** list GETs of secrets (metadata), vault identities, projects, templates, inventories, connectors and schedules use an in-memory stale-while-revalidate cache keyed by workspace and URL. Returning to a list page shows the cached data at once and updates it when the background refresh differs. Any mutation drops the cached lists of its workspace; logout, sign-in and workspace switch clear everything. Nothing is persisted (no localStorage) and detail endpoints are never cached.
+- **Filters in the URL:** the Hosts page filters (search, network, conflicts, alerts, untracked), the state filter of Alerts and Conflicts and the Notifications tab are kept in the query string (`?q=...&alerts=1`, `?state=resolved`, `?tab=rules`), so reload, back and shared links keep them. Defaults are omitted.
+- **Column sorting:** clickable column headers (ascending, descending, off; `aria-sort`, natural and case-insensitive order, empty values last) on the templates, runs, hosts, inventories and secrets lists through one shared helper. Sorting applies to the rows loaded on the page (the runs list sorts the loaded pages only).
+- **Dashboard polling:** the dashboard refreshes every 60 s instead of 30 s, not at all while the tab is hidden, and once when the tab becomes visible again (if the data is older than 30 s). No backend change: the host list is still needed for the host figures.
+- **Consistency:** secrets, inventories, vault identities, projects, connectors, group rules and remediation use the shared page header; empty lists show a hint and a create action; failed list loads offer a Retry button; creating an inventory disables the button while saving; the template form asks before discarding unsaved edits (in-app navigation, reload, closing the tab) and stays silent after a successful save.
+- **Connector sync:** Sync now waits for the result (polls every 2 s for up to 60 s until the sync time changes) and reports success or failure; a new Sync all button starts every enabled connector and reports a summary.
+- **Schedule form:** cron presets (hourly, daily at 03:00, weekly on Monday 03:00) fill the expression, which stays editable, and the time zone field suggests all IANA zones from the browser.
+- **Template form:** one form in collapsible sections (Basics, Source, Credentials, Variables, Survey, Options) with one Save; a failed validation opens the section with the problem and focuses the field. SSH key and become password have an inline "New secret" (SSH keys take a multi-line private key).
+- **Survey builder:** survey fields are edited as rows (type, required, secret, default, choices); the stored format is unchanged, unknown keys are preserved and raw JSON stays available as an advanced toggle without data loss.
+- **Clone template:** Clone on the template page opens the create form prefilled with the template's settings and a new name; credentials are copied as references only, secret survey defaults are dropped.
+- **Search palette:** besides pages, the palette finds templates, hosts, projects and inventories (loaded on first open, only what your role may read, grouped, ranked and capped per group). Enter opens an item; running a template is a separate Ctrl+Enter / Run... action that opens the run dialog.
+- **Schedules page:** new Schedules entry in the sidebar (needs `schedule.read`) lists all schedules of the workspace with template link, cron, time zone, next and last run; users with `schedule.write` can enable or disable them.
+- **Settings:** the subtitle now describes what the page contains (fleet network tracking).
+- **Host detail:** Run template on this host opens the bulk run dialog for the one host (only templates that allow a limit override are offered).
+- **Conflicts:** select several open conflicts and acknowledge them in one action (one call per conflict; internal state only). Alerts keep per-item remediation only, because the API has no acknowledge for them.
+- **Detail pages:** template, run, project, inventory and host pages use the shared page header.
+
+## [1.2.0] - 2026-11-10
+
 ### Added
 
 - **Tracked networks:** choose which discovered networks the fleet follows (migration 00020). Untracked networks are hidden from host lists, unmanaged hosts, alerts and the dashboard unless `include_untracked=true`; per-network and bulk (`track_only`) API, workspace default for new networks, a Tracked toggle on the Fleet page, a setup wizard step, a Settings panel and `acp admin fleet network list|track|untrack`.

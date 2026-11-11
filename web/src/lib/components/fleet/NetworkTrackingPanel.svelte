@@ -1,37 +1,60 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { api, type FleetNetwork } from '$lib/api';
   import { describeError } from '$lib/errors';
-  import { selectedIds, trackedSelection } from '$lib/fleet';
+  import { initialSelection, isDirty, selectedNetworkIds } from '$lib/networkPicker';
   import { session } from '$lib/session.svelte';
   import { btnPrimary } from '$lib/ui';
+  import NetworkPicker from '$lib/components/fleet/NetworkPicker.svelte';
+  import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import FormError from '$lib/components/FormError.svelte';
 
   let {
     ws,
+    networks: given,
     saveLabel = 'Save',
+    allowUnchanged = false,
     onsaved,
-  }: { ws: string; saveLabel?: string; onsaved?: () => void } = $props();
+  }: {
+    ws: string;
+    /** Already loaded networks; the panel fetches them itself when omitted. */
+    networks?: FleetNetwork[];
+    saveLabel?: string;
+    /** Keeps Save enabled without changes (setup wizard: Save continues). */
+    allowUnchanged?: boolean;
+    onsaved?: () => void;
+  } = $props();
 
   let networks = $state<FleetNetwork[]>([]);
   let selection = $state<Record<string, boolean>>({});
   let newTracked = $state(true);
+  let savedNewTracked = $state(true);
   let loading = $state(true);
   let saving = $state(false);
   let saved = $state(false);
   let error = $state<string | null>(null);
 
   const canManage = $derived(session.can('fleet.manage'));
+  const dirty = $derived(isDirty(networks, selection) || newTracked !== savedNewTracked);
 
   $effect(() => {
-    loading = true;
-    Promise.all([api.fleet.networks(ws), api.fleet.settings(ws)])
-      .then(([n, s]) => {
-        networks = n ?? [];
-        selection = trackedSelection(networks);
-        newTracked = s.new_networks_tracked;
-      })
-      .catch((e) => (error = describeError(e)))
-      .finally(() => (loading = false));
+    const slug = ws;
+    const list = given;
+    untrack(() => {
+      loading = true;
+      Promise.all([
+        list ? Promise.resolve(list) : api.fleet.networks(slug),
+        api.fleet.settings(slug),
+      ])
+        .then(([n, s]) => {
+          networks = n ?? [];
+          selection = initialSelection(networks);
+          newTracked = s.new_networks_tracked;
+          savedNewTracked = s.new_networks_tracked;
+        })
+        .catch((e) => (error = describeError(e)))
+        .finally(() => (loading = false));
+    });
   });
 
   async function save() {
@@ -39,9 +62,12 @@
     saved = false;
     error = null;
     try {
-      if (networks.length > 0) await api.fleet.trackOnly(ws, selectedIds(selection));
+      if (networks.length > 0)
+        await api.fleet.trackOnly(ws, selectedNetworkIds(networks, selection));
       await api.fleet.setSettings(ws, { new_networks_tracked: newTracked });
+      networks = networks.map((n) => ({ ...n, tracked: !!selection[n.id] }));
       saved = true;
+      savedNewTracked = newTracked;
       onsaved?.();
     } catch (e) {
       error = describeError(e);
@@ -58,39 +84,26 @@
   </p>
   <FormError id="tracking-error" message={error} />
   {#if loading}
-    <p class="text-muted">Loading...</p>
+    <ListSkeleton rows={3} cols={2} />
   {:else}
     {#if networks.length === 0}
       <p class="text-sm text-muted">
         No networks discovered yet. Add a connector and run a sync; you can choose later.
       </p>
     {:else}
-      <fieldset class="space-y-2">
-        <legend class="mb-1 text-sm font-medium">Which networks should the fleet track?</legend>
-        {#each networks as n (n.id)}
-          <label class="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              bind:checked={selection[n.id]}
-              disabled={!canManage}
-              aria-label="Track {n.cidr}"
-            />
-            <span class="font-mono">{n.cidr}</span>
-            <span class="text-muted">
-              {n.description || n.interface || '-'} - {n.host_count} host{n.host_count === 1
-                ? ''
-                : 's'} via {n.connector}
-            </span>
-          </label>
-        {/each}
-      </fieldset>
+      <NetworkPicker {networks} bind:selection disabled={!canManage} />
     {/if}
     <label class="flex items-center gap-2 text-sm">
       <input type="checkbox" bind:checked={newTracked} disabled={!canManage} />
       Track newly discovered networks by default
     </label>
     {#if canManage}
-      <button type="button" class={btnPrimary} disabled={saving} onclick={save}>
+      <button
+        type="button"
+        class={btnPrimary}
+        disabled={saving || !(dirty || allowUnchanged)}
+        onclick={save}
+      >
         {saving ? 'Saving...' : saveLabel}
       </button>
       {#if saved}<span role="status" class="ml-2 text-sm text-muted">Saved.</span>{/if}

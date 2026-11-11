@@ -10,7 +10,10 @@
     type Template,
   } from '$lib/api';
   import { describeError } from '$lib/errors';
+  import { page } from '$app/state';
   import { session } from '$lib/session.svelte';
+  import { enumParam } from '$lib/urlState';
+  import { syncUrl } from '$lib/urlSync';
   import FormError from '$lib/components/FormError.svelte';
   import ChannelsTab from '$lib/components/notifications/ChannelsTab.svelte';
   import DeliveriesTab from '$lib/components/notifications/DeliveriesTab.svelte';
@@ -23,7 +26,20 @@
     { id: 'deliveries', label: 'Deliveries' },
   ];
 
-  let tab = $state<Tab>('channels');
+  let tab = $state<Tab>(
+    untrack(() =>
+      enumParam(
+        page.url.searchParams,
+        'tab',
+        TABS.map((t) => t.id),
+        'channels',
+      ),
+    ),
+  );
+  $effect(() => {
+    const t = tab;
+    untrack(() => syncUrl({ tab: t === 'channels' ? '' : t }));
+  });
   let channels = $state<NotificationChannel[]>([]);
   let rules = $state<NotificationRule[]>([]);
   let secrets = $state<SecretMeta[]>([]);
@@ -65,7 +81,11 @@
   description="Send run results (failed, recovered, drift) to webhooks, Matrix, e-mail, Gotify or ntfy."
 />
 
-<FormError id="notifications-error" message={error} />
+<FormError
+  id="notifications-error"
+  message={error}
+  onretry={() => session.slug && load(session.slug)}
+/>
 
 {#if !canRead}
   <p class="text-muted">You do not have permission to view notifications in this workspace.</p>

@@ -2,7 +2,7 @@
   import { api, type BulkRunResult, type FleetHost, type Template } from '$lib/api';
   import { describeError } from '$lib/errors';
   import { describeRemediationError } from '$lib/remediation';
-  import { btn, btnPrimary, card, input, label } from '$lib/ui';
+  import { btn, btnPrimary, input, label } from '$lib/ui';
   import FormError from '$lib/components/FormError.svelte';
 
   let {
@@ -21,6 +21,11 @@
   const usable = $derived(templates.filter((t) => t.allow_limit_override));
   // svelte-ignore state_referenced_locally
   let templateId = $state(templates.find((t) => t.allow_limit_override)?.id ?? '');
+  let dialog: HTMLDialogElement | undefined = $state();
+  // Rendered only while open: show as modal on mount.
+  $effect(() => {
+    if (dialog && !dialog.open) dialog.showModal();
+  });
   let checkMode = $state(true);
   let busy = $state(false);
   let error = $state<string | null>(null);
@@ -50,8 +55,21 @@
   }
 </script>
 
-<div role="dialog" aria-label="Bulk run" class="{card} mb-6 max-w-xl">
-  <h2 class="mb-2 text-sm font-semibold">Run a template on {hosts.length} selected host(s)</h2>
+<dialog
+  bind:this={dialog}
+  aria-labelledby="bulk-run-h"
+  class="dlg m-auto w-full max-w-xl rounded-2xl border border-border bg-surface p-5 text-fg backdrop:bg-(--overlay)"
+  oncancel={(e) => {
+    e.preventDefault();
+    onclose();
+  }}
+  onclick={(e) => {
+    if (e.target === dialog) onclose();
+  }}
+>
+  <h2 id="bulk-run-h" class="mb-2 text-sm font-semibold">
+    Run a template on {hosts.length} selected host(s)
+  </h2>
   {#if result}
     <p role="status" class="text-sm">
       Run queued on {result.hosts.length} inventory host(s):
@@ -107,4 +125,4 @@
       <button class={btn} onclick={onclose}>Cancel</button>
     </div>
   {/if}
-</div>
+</dialog>

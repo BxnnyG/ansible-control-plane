@@ -1,5 +1,8 @@
 <script lang="ts">
+  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+  import { toasts } from '$lib/toasts.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
+  import { untrack } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { api, type Run, type Template } from '$lib/api';
@@ -8,6 +11,8 @@
   import { session } from '$lib/session.svelte';
   import { loadTemplateRefs, type TemplateRefs } from '$lib/templateData';
   import { btn, btnDanger, btnPrimary, card, fmtDate, td, th } from '$lib/ui';
+  import PageHeader from '$lib/components/PageHeader.svelte';
+  import Skeleton from '$lib/components/Skeleton.svelte';
   import FormError from '$lib/components/FormError.svelte';
   import StatusBadge from '$lib/components/runs/StatusBadge.svelte';
   import RunDialog from '$lib/components/templates/RunDialog.svelte';
@@ -24,32 +29,42 @@
   let refs = $state<TemplateRefs>({ projects: [], inventories: [], secrets: [], identities: [] });
   let recent = $state<Run[]>([]);
   let error = $state<string | null>(null);
+  let loading = $state(true);
   let editing = $state(false);
   let confirmDelete = $state(false);
   let running = $state(false);
 
   async function load(slug: string, tid: string) {
     error = null;
+    loading = true;
+    const wantRuns = untrack(() => session.can('run.read'));
     try {
-      template = await api.templates.get(slug, tid);
-      refs = await loadTemplateRefs(slug);
-      if (session.can('run.read')) {
-        recent =
-          (await api.runs.list(slug, buildRunQuery({ template: tid, limit: 5 }))).items ?? [];
-      }
+      const [t, r, rr] = await Promise.all([
+        api.templates.get(slug, tid),
+        loadTemplateRefs(slug),
+        wantRuns ? api.runs.list(slug, buildRunQuery({ template: tid, limit: 5 })) : null,
+      ]);
+      template = t;
+      refs = r;
+      recent = rr?.items ?? [];
     } catch (e) {
       error = describeError(e);
+    } finally {
+      loading = false;
     }
   }
 
   $effect(() => {
-    if (ws && id) void load(ws, id);
+    const slug = ws;
+    const tid = id;
+    if (slug && tid) untrack(() => void load(slug, tid));
   });
 
   async function remove() {
     if (!ws || !template) return;
     try {
       await api.templates.remove(ws, template.id);
+      toasts.success('Template deleted.');
       await goto('/templates');
     } catch (e) {
       error = describeError(e);
@@ -68,36 +83,51 @@
 <svelte:head><title>{template?.name ?? 'Template'} - Ansible Control Plane</title></svelte:head>
 
 <Breadcrumbs trail={[{ label: 'Templates', href: '/templates' }]} />
-<FormError id="template-page-error" message={error} />
+{#if !template}
+  <FormError id="template-page-error" message={error} />
+  {#if loading}
+    <div class="space-y-4" aria-busy="true" aria-label="Loading template">
+      <Skeleton class="h-7 w-64" />
+      <div class="{card} space-y-3">
+        <Skeleton class="h-4 w-full" />
+        <Skeleton class="h-4 w-3/4" />
+        <Skeleton class="h-4 w-1/2" />
+      </div>
+      <div class="{card} space-y-3">
+        <Skeleton class="h-4 w-full" />
+        <Skeleton class="h-4 w-2/3" />
+      </div>
+    </div>
+  {:else if error}
+    <button class={btn} onclick={() => ws && load(ws, id)}>Retry</button>
+  {/if}
+{:else}
+  <FormError id="template-page-error" message={error} />
+{/if}
 
 {#if template && ws}
-  <header
-    class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
-  >
-    <div>
-      <h1 class="text-xl font-semibold">{template.name}</h1>
-      {#if template.description}<p class="mt-1 text-muted">{template.description}</p>{/if}
-    </div>
-    <div class="flex gap-2">
+  <PageHeader title={template.name} description={template.description}>
+    {#snippet actions()}
       {#if canRun}<button class={btnPrimary} onclick={() => (running = true)}>Run</button>{/if}
       {#if canWrite && !editing}
         <button class={btn} onclick={() => (editing = true)}>Edit</button>
+        <a class={btn} href="/templates?clone={template!.id}">Clone</a>
         <button class={btnDanger} onclick={() => (confirmDelete = true)}>Delete</button>
       {/if}
-    </div>
-  </header>
+    {/snippet}
+  </PageHeader>
 
   {#if confirmDelete}
-    <div role="alertdialog" aria-label="Confirm delete" class="{card} mb-6 max-w-xl">
+    <ConfirmDialog
+      title="Confirm delete"
+      onconfirm={remove}
+      oncancel={() => (confirmDelete = false)}
+    >
       <p>
         Delete template <strong>{template.name}</strong>? Queued runs are cancelled; run history is
         kept.
       </p>
-      <div class="mt-3 flex gap-2">
-        <button class={btnDanger} onclick={remove}>Delete</button>
-        <button class={btn} onclick={() => (confirmDelete = false)}>Cancel</button>
-      </div>
-    </div>
+    </ConfirmDialog>
   {/if}
 
   {#if editing}

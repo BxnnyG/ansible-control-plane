@@ -1,4 +1,9 @@
 <script lang="ts">
+  import { pollUntil } from '$lib/polling';
+  import PageHeader from '$lib/components/PageHeader.svelte';
+  import EmptyState from '$lib/components/EmptyState.svelte';
+  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+  import { toasts } from '$lib/toasts.svelte';
   import { untrack } from 'svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { api, type Connector, type ConnectorCreated, type ConnectorType } from '$lib/api';
@@ -17,7 +22,6 @@
   let types = $state<ConnectorType[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let notice = $state<string | null>(null);
   let editing = $state<Connector | 'new' | null>(null);
   let deleting = $state<Connector | null>(null);
   let history = $state<string | null>(null);
@@ -30,7 +34,12 @@
     loading = true;
     error = null;
     try {
-      [items, types] = await Promise.all([api.connectors.list(ws), api.connectorTypes(ws)]);
+      [items, types] = await Promise.all([
+        api.connectors.list(ws, (d) => {
+          if (session.slug === ws) items = d;
+        }),
+        api.connectorTypes(ws),
+      ]);
     } catch (e) {
       error = describeError(e);
     } finally {
@@ -51,11 +60,11 @@
   async function test(c: Connector) {
     if (!session.slug) return;
     busyId = c.id;
-    notice = null;
     error = null;
     try {
       const r = await api.connectors.test(session.slug, c.id);
-      notice = r.ok ? `${c.name}: connection OK.` : `${c.name}: connection failed: ${r.error}`;
+      if (r.ok) toasts.success(`${c.name}: connection OK.`);
+      else toasts.error(`${c.name}: connection failed: ${r.error}`);
     } catch (e) {
       error = describeError(e);
     } finally {
@@ -63,26 +72,63 @@
     }
   }
 
-  async function sync(c: Connector) {
-    if (!session.slug) return;
-    busyId = c.id;
-    notice = null;
-    error = null;
+  let syncing = $state<Record<string, boolean>>({});
+  const anySyncing = $derived(Object.values(syncing).some(Boolean));
+
+  /** Requests a sync and polls until the connector reports a new sync time (max. 60 s). */
+  async function syncOne(c: Connector): Promise<'ok' | 'error' | 'pending' | 'failed'> {
+    const ws = session.slug;
+    if (!ws) return 'failed';
+    syncing[c.id] = true;
     try {
-      await api.connectors.sync(session.slug, c.id);
-      notice = `${c.name}: sync requested. Refresh in a moment to see the result.`;
-      await load(session.slug);
+      await api.connectors.sync(ws, c.id);
+      const before = c.last_sync_at;
+      const r = await pollUntil(
+        async () => {
+          const list = await api.connectors.list(ws);
+          if (session.slug === ws) items = list;
+          return list.find((x) => x.id === c.id);
+        },
+        (cur) => !cur || cur.last_sync_at !== before,
+        { intervalMs: 2000, maxMs: 60_000 },
+      );
+      if (!r.met) return 'pending';
+      return r.value?.status === 'error' ? 'error' : 'ok';
     } catch (e) {
       error = describeError(e);
+      return 'failed';
     } finally {
-      busyId = null;
+      syncing[c.id] = false;
     }
+  }
+
+  async function sync(c: Connector) {
+    error = null;
+    toasts.info(`${c.name}: sync started.`);
+    const r = await syncOne(c);
+    if (r === 'ok') toasts.success(`${c.name}: sync finished.`);
+    else if (r === 'error') toasts.error(`${c.name}: sync finished with an error. See History.`);
+    else if (r === 'pending') toasts.info(`${c.name}: still syncing. Check History in a moment.`);
+  }
+
+  async function syncAll() {
+    error = null;
+    const targets = items.filter((c) => c.enabled && !syncing[c.id]);
+    if (targets.length === 0) return;
+    toasts.info(`Sync started for ${targets.length} connector(s).`);
+    const results = await Promise.all(targets.map(syncOne));
+    const failed = results.filter((r) => r === 'error' || r === 'failed').length;
+    const pending = results.filter((r) => r === 'pending').length;
+    if (failed > 0) toasts.error(`${failed} of ${targets.length} sync(s) failed. See History.`);
+    else if (pending > 0) toasts.info(`${pending} sync(s) still running.`);
+    else toasts.success(`All ${targets.length} sync(s) finished.`);
   }
 
   async function confirmDelete() {
     if (!deleting || !session.slug) return;
     try {
       await api.connectors.remove(session.slug, deleting.id);
+      toasts.success('Connector deleted.');
       deleting = null;
       await load(session.slug);
     } catch (e) {
@@ -103,22 +149,25 @@
 
 <svelte:head><title>Connectors - Ansible Control Plane</title></svelte:head>
 
-<header
-  class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
+<PageHeader
+  title="Connectors"
+  description="Read-only links to OPNsense, Proxmox and other systems that feed the fleet view."
 >
-  <div>
-    <h1 class="text-xl font-semibold">Connectors</h1>
-    <p class="mt-1 text-muted">
-      Read-only links to OPNsense, Proxmox and other systems that feed the fleet view.
-    </p>
-  </div>
-  {#if canWrite && editing === null && types.length > 0}
-    <button class={btnPrimary} onclick={() => (editing = 'new')}>New connector</button>
-  {/if}
-</header>
+  {#snippet actions()}
+    {#if canWrite && items.some((c) => c.enabled)}
+      <button class={btn} disabled={anySyncing} onclick={syncAll}>Sync all</button>
+    {/if}
+    {#if canWrite && editing === null && types.length > 0}
+      <button class={btnPrimary} onclick={() => (editing = 'new')}>New connector</button>
+    {/if}
+  {/snippet}
+</PageHeader>
 
-<FormError id="connectors-error" message={error} />
-{#if notice}<p role="status" class="mb-3 text-sm">{notice}</p>{/if}
+<FormError
+  id="connectors-error"
+  message={error}
+  onretry={() => session.slug && load(session.slug)}
+/>
 {#if created}
   <div role="status" class="{card} mb-6 max-w-2xl">
     <p>
@@ -153,22 +202,29 @@
   {/if}
 
   {#if deleting}
-    <div role="alertdialog" aria-label="Confirm delete" class="{card} mb-6 max-w-xl">
+    <ConfirmDialog
+      title="Confirm delete"
+      onconfirm={confirmDelete}
+      oncancel={() => (deleting = null)}
+    >
       <p>
         Delete connector <strong>{deleting.name}</strong>? Its observations are removed from the
         fleet view.
       </p>
-      <div class="mt-3 flex gap-2">
-        <button class={btnDanger} onclick={confirmDelete}>Delete</button>
-        <button class={btn} onclick={() => (deleting = null)}>Cancel</button>
-      </div>
-    </div>
+    </ConfirmDialog>
   {/if}
 
   {#if loading}
     <ListSkeleton />
   {:else if items.length === 0}
-    <div class="empty">No connectors yet.</div>
+    <EmptyState
+      title="No connectors yet."
+      hint="Connectors read hosts and alerts from OPNsense, Proxmox and other systems."
+    >
+      {#if canWrite && types.length > 0}
+        <button class={btnPrimary} onclick={() => (editing = 'new')}>New connector</button>
+      {/if}
+    </EmptyState>
   {:else}
     <div class="tbl-wrap">
       <table class="w-full">
@@ -220,10 +276,10 @@
                     >
                     <button
                       class={btn}
-                      disabled={busyId === c.id || !c.enabled}
+                      disabled={busyId === c.id || syncing[c.id] || !c.enabled}
                       onclick={() => sync(c)}
                     >
-                      Sync now
+                      {syncing[c.id] ? 'Syncing...' : 'Sync now'}
                     </button>
                     <button class={btn} onclick={() => (editing = c)}>Edit</button>
                     <button class={btnDanger} onclick={() => (deleting = c)}>Delete</button>

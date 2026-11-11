@@ -1,22 +1,41 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
-  import { api, type Template } from '$lib/api';
+  import { api, type RunOverrides, type Template } from '$lib/api';
   import { describeError } from '$lib/errors';
   import { createPreviewScheduler, previewSummary, type PreviewState } from '$lib/runPreview';
-  import { buildStartRequest, initialStartForm } from '$lib/runStart';
+  import { buildStartRequest, startFormFromOverrides } from '$lib/runStart';
   import { surveyToFormFields } from '$lib/survey';
   import { surveyFields } from '$lib/templates';
   import { btn, btnPrimary, input, label } from '$lib/ui';
   import OverrideFields from './OverrideFields.svelte';
   import FormError from '$lib/components/FormError.svelte';
 
-  let { ws, template, onclose }: { ws: string; template: Template; onclose: () => void } = $props();
+  let {
+    ws,
+    template,
+    onclose,
+    prefill = null,
+    notCarried = [],
+  }: {
+    ws: string;
+    template: Template;
+    onclose: () => void;
+    /** Settings of an earlier run to start from ("Run again"). */
+    prefill?: RunOverrides | null;
+    /** Settings of that run that could not be carried over; shown as a notice. */
+    notCarried?: string[];
+  } = $props();
 
   // svelte-ignore state_referenced_locally
   const fields = surveyToFormFields(surveyFields(template.survey));
   // svelte-ignore state_referenced_locally
-  let form = $state(initialStartForm(template, fields));
+  let form = $state(startFormFromOverrides(template, fields, prefill));
+  let dialog: HTMLDialogElement | undefined = $state();
+  // Rendered only while open: show as modal on mount (focus moves to the first field).
+  $effect(() => {
+    if (dialog && !dialog.open) dialog.showModal();
+  });
   let errors = $state<string[]>([]);
   let error = $state<string | null>(null);
   let busy = $state(false);
@@ -68,17 +87,19 @@
   }
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && onclose()} />
-
-<div
-  class="dlg-overlay fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-(--overlay) p-4"
+<dialog
+  bind:this={dialog}
+  aria-labelledby="run-dialog-h"
+  class="dlg m-auto w-full max-w-xl rounded-2xl border border-border bg-surface p-5 text-fg backdrop:bg-(--overlay)"
+  oncancel={(e) => {
+    e.preventDefault();
+    onclose();
+  }}
+  onclick={(e) => {
+    if (e.target === dialog) onclose();
+  }}
 >
-  <div
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="run-dialog-h"
-    class="dlg mt-8 w-full max-w-xl rounded-2xl border border-border bg-surface p-5"
-  >
+  <div>
     <h2 id="run-dialog-h" class="text-base font-semibold">Run {template.name}</h2>
     <p class="text-sm text-muted">
       <code>{template.playbook}</code>
@@ -86,6 +107,14 @@
         on <code>{template.default_limit}</code>
       {/if}
     </p>
+    {#if prefill}
+      <p class="mt-2 text-sm text-muted" id="run-prefill-note">
+        Prefilled from the earlier run.
+        {#if notCarried.length > 0}
+          Not carried over: {notCarried.join(', ')}.
+        {/if}
+      </p>
+    {/if}
     <form onsubmit={submit} class="mt-4 space-y-3">
       {#if template.allow_limit_override}
         <div>
@@ -131,4 +160,4 @@
       </div>
     </form>
   </div>
-</div>
+</dialog>

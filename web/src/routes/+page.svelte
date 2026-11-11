@@ -9,6 +9,7 @@
     relativeTime,
     runStats,
   } from '$lib/dashboard';
+  import { DASHBOARD_POLL_MS, shouldRefresh } from '$lib/polling';
   import { describeError } from '$lib/errors';
   import { buildRunQuery, formatDuration, statusClass } from '$lib/runs';
   import { session } from '$lib/session.svelte';
@@ -63,9 +64,20 @@
     // Permissions are read here (tracked) so a workspace switch reloads once they are known.
     void [canRuns, canFleet, canConnectors];
     untrack(() => void load(ws));
-    // Keep the numbers fresh without a live stream.
-    const t = setInterval(() => untrack(() => void load(ws)), 30_000);
-    return () => clearInterval(t);
+    // Keep the numbers fresh without a live stream, but never while the tab is hidden.
+    let last = Date.now();
+    const refresh = (minAge: number) => {
+      if (!shouldRefresh(document.hidden, last, Date.now(), minAge)) return;
+      last = Date.now();
+      untrack(() => void load(ws));
+    };
+    const t = setInterval(() => refresh(DASHBOARD_POLL_MS - 1000), DASHBOARD_POLL_MS);
+    const onVisible = () => refresh(30_000);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   });
 
   const stats = $derived(runStats(runs, now));

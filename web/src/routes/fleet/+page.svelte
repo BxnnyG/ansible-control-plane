@@ -1,43 +1,61 @@
 <script lang="ts">
+  import SortHeader from '$lib/components/SortHeader.svelte';
+  import { sortRows, type SortState } from '$lib/sort';
+  import { untrack } from 'svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import PageHeader from '$lib/components/PageHeader.svelte';
   import { api, type FleetHost, type FleetNetwork, type Template } from '$lib/api';
   import { describeError } from '$lib/errors';
+  import { page } from '$app/state';
   import { session } from '$lib/session.svelte';
+  import { fleetFiltersFromParams, fleetFiltersToUpdates } from '$lib/urlState';
+  import { syncUrl } from '$lib/urlSync';
   import {
     alertBadge,
     ansibleClass,
     ansibleLabel,
     driftLabel,
     hiddenNetworkCount,
-    listedNetworks,
-    selectedIds,
-    networkCountsLabel,
     onlineClass,
     onlineLabel,
     severityClass,
   } from '$lib/fleet';
-  import { btn, btnPrimary, card, fmtDate, input, td, th } from '$lib/ui';
+  import { btnPrimary, card, fmtDate, input, td, th } from '$lib/ui';
   import BulkRunDialog from '$lib/components/fleet/BulkRunDialog.svelte';
+  import EmptyState from '$lib/components/EmptyState.svelte';
+  import AddConnectorLink from '$lib/components/fleet/AddConnectorLink.svelte';
   import FleetTabs from '$lib/components/fleet/FleetTabs.svelte';
+  import NetworkTrackingPanel from '$lib/components/fleet/NetworkTrackingPanel.svelte';
   import FormError from '$lib/components/FormError.svelte';
 
   let networks = $state<FleetNetwork[]>([]);
   let hosts = $state<FleetHost[]>([]);
+  let sort = $state<SortState | null>(null);
+  const rows = $derived(
+    sortRows(hosts, sort, {
+      name: (h) => h.name,
+      kind: (h) => h.kind,
+      online: (h) => onlineLabel(h.online),
+      ansible: (h) => ansibleLabel(h),
+      alerts: (h) => h.open_alerts,
+      conflicts: (h) => h.open_conflicts,
+      seen: (h) => h.last_seen,
+    }),
+  );
   let loading = $state(true);
   let error = $state<string | null>(null);
 
-  let network = $state('');
-  let q = $state('');
-  let conflictsOnly = $state(false);
-  let alertsOnly = $state(false);
-  let showHidden = $state(false);
-  let pick = $state(false); // "track only selected" mode
-  let picked = $state<Record<string, boolean>>({});
-  let trackBusy = $state(false);
+  // Filters live in the URL so a reload or shared link keeps them.
+  const initial = untrack(() => fleetFiltersFromParams(page.url.searchParams));
+  let network = $state(initial.network);
+  let q = $state(initial.q);
+  let qDebounced = $state(initial.q);
+  let conflictsOnly = $state(initial.conflicts);
+  let alertsOnly = $state(initial.alerts);
+  let showHidden = $state(initial.hidden);
+  let networksOpen = $state(false);
 
-  const canManage = $derived(session.can('fleet.manage'));
-  const shownNetworks = $derived(listedNetworks(networks, showHidden));
+  const trackedCount = $derived(networks.filter((n) => n.tracked).length);
   const hidden = $derived(hiddenNetworkCount(networks));
 
   const canRead = $derived(session.can('fleet.read'));
@@ -72,56 +90,23 @@
     }
   }
 
-  async function setTracked(n: FleetNetwork, tracked: boolean) {
-    if (!session.slug || trackBusy) return;
-    trackBusy = true;
-    error = null;
-    try {
-      await api.fleet.trackNetwork(session.slug, n.id, tracked);
-      n.tracked = tracked;
-      if (!tracked && !showHidden && network === n.id) network = '';
-      void loadHosts(session.slug, {
-        network,
-        q,
-        conflicts: conflictsOnly,
-        alerts: alertsOnly,
-        showHidden,
-      });
-    } catch (e) {
-      error = describeError(e);
-    } finally {
-      trackBusy = false;
-    }
+  /** After the tracking panel saved: refresh networks and the host list. */
+  async function onTrackingSaved() {
+    const ws = session.slug;
+    if (!ws) return;
+    await loadNetworks(ws);
+    if (network && !networks.find((n) => n.id === network)?.tracked && !showHidden) network = '';
+    await loadHosts(ws, {
+      network,
+      q: qDebounced,
+      conflicts: conflictsOnly,
+      alerts: alertsOnly,
+      showHidden,
+    });
   }
 
-  function startPick() {
-    picked = Object.fromEntries(networks.filter((n) => n.tracked).map((n) => [n.id, true]));
-    pick = true;
-  }
-
-  async function applyPick() {
-    if (!session.slug || trackBusy) return;
-    trackBusy = true;
-    error = null;
-    try {
-      await api.fleet.trackOnly(session.slug, selectedIds(picked));
-      pick = false;
-      await loadNetworks(session.slug);
-      if (network && !networks.find((n) => n.id === network)?.tracked && !showHidden) network = '';
-      await loadHosts(session.slug, {
-        network,
-        q,
-        conflicts: conflictsOnly,
-        alerts: alertsOnly,
-        showHidden,
-      });
-    } catch (e) {
-      error = describeError(e);
-    } finally {
-      trackBusy = false;
-    }
-  }
-
+  const filtersActive = $derived(!!(network || qDebounced.trim() || conflictsOnly || alertsOnly));
+  let hostSeq = 0;
   async function loadHosts(
     ws: string,
     f: {
@@ -134,123 +119,99 @@
   ) {
     loading = true;
     error = null;
+    const seq = ++hostSeq;
     try {
-      hosts = await api.fleet.hosts(ws, {
+      const list = await api.fleet.hosts(ws, {
         network: f.network || undefined,
         q: f.q.trim() || undefined,
         conflicts: f.conflicts,
         alerts: f.alerts,
         includeUntracked: f.showHidden,
       });
+      if (seq !== hostSeq) return; // a newer request superseded this one
+      hosts = list;
       // Keep the selection to hosts still listed.
       selected = Object.fromEntries(hosts.filter((h) => selected[h.id]).map((h) => [h.id, true]));
     } catch (e) {
-      error = describeError(e);
+      if (seq === hostSeq) error = describeError(e);
     } finally {
-      loading = false;
+      if (seq === hostSeq) loading = false;
     }
   }
 
   $effect(() => {
-    if (session.slug && canRead) void loadNetworks(session.slug);
+    const ws = session.slug;
+    if (ws && canRead) untrack(() => void loadNetworks(ws));
   });
 
-  // Debounce the search so typing does not fire a request per key.
+  // Only the search text is debounced; every other filter loads immediately.
   $effect(() => {
-    const f = { network, q, conflicts: conflictsOnly, alerts: alertsOnly, showHidden };
+    const v = q;
+    if (v === untrack(() => qDebounced)) return;
+    const t = setTimeout(() => (qDebounced = v), 250);
+    return () => clearTimeout(t);
+  });
+
+  $effect(() => {
+    const u = fleetFiltersToUpdates({
+      network,
+      q: qDebounced,
+      conflicts: conflictsOnly,
+      alerts: alertsOnly,
+      hidden: showHidden,
+    });
+    untrack(() => syncUrl(u));
+  });
+
+  $effect(() => {
+    const f = { network, q: qDebounced, conflicts: conflictsOnly, alerts: alertsOnly, showHidden };
     const ws = session.slug;
     if (!ws || !canRead) {
       loading = false;
       return;
     }
-    const t = setTimeout(() => void loadHosts(ws, f), 250);
-    return () => clearTimeout(t);
+    untrack(() => void loadHosts(ws, f));
   });
 </script>
 
-<svelte:head><title>Fleet - Ansible Control Plane</title></svelte:head>
+<svelte:head><title>Hosts - Ansible Control Plane</title></svelte:head>
 
-<PageHeader title="Fleet" description="Hosts and networks merged from all connectors." />
+<PageHeader
+  title="Hosts"
+  description="Every machine your connectors have seen, merged into one list, with online, Ansible and alert status."
+/>
 <FleetTabs />
 <FormError id="fleet-error" message={error} />
 
 {#if !canRead}
-  <p class="text-muted">You do not have permission to view the fleet in this workspace.</p>
+  <p class="text-muted">You do not have permission to view hosts in this workspace.</p>
 {:else}
-  <section aria-labelledby="networks-h" class="mb-8">
-    <div class="mb-2 flex flex-wrap items-center gap-3">
-      <h2 id="networks-h" class="text-sm font-semibold">Networks</h2>
-      {#if networks.length > 0}
-        <label class="flex items-center gap-2 text-sm">
-          <input type="checkbox" bind:checked={showHidden} /> Show hidden networks{hidden > 0
-            ? ` (${hidden})`
-            : ''}
-        </label>
-        {#if canManage && !pick}
-          <button type="button" class={btn} onclick={startPick}>Track only selected...</button>
+  <section aria-labelledby="networks-h" class="mb-6">
+    <details
+      class="{card} !p-0"
+      ontoggle={(e) => (networksOpen = (e.currentTarget as HTMLDetailsElement).open)}
+    >
+      <summary class="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3">
+        <h2 id="networks-h" class="text-sm font-semibold">Networks</h2>
+        <span class="text-sm text-muted">
+          {trackedCount} of {networks.length} tracked{hidden > 0 ? `, ${hidden} hidden` : ''}
+        </span>
+      </summary>
+      <div class="border-t border-border px-4 py-4">
+        {#if networksOpen && session.slug}
+          <NetworkTrackingPanel
+            ws={session.slug}
+            {networks}
+            saveLabel="Save tracking"
+            onsaved={onTrackingSaved}
+          />
         {/if}
-        {#if pick}
-          <button type="button" class={btnPrimary} disabled={trackBusy} onclick={applyPick}
-            >Track only the {selectedIds(picked).length} selected</button
-          >
-          <button type="button" class={btn} onclick={() => (pick = false)}>Cancel</button>
-        {/if}
-      {/if}
-    </div>
-    {#if networks.length === 0}
-      <p class="text-sm text-muted">No networks discovered yet.</p>
-    {:else if shownNetworks.length === 0}
-      <p class="text-sm text-muted">All networks are hidden. Turn on "Show hidden networks".</p>
-    {:else}
-      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {#each shownNetworks as n (n.id)}
-          <div
-            class="{card} {n.tracked ? '' : 'opacity-60'} {network === n.id
-              ? 'ring-2 ring-accent'
-              : ''}"
-          >
-            <button
-              type="button"
-              class="block w-full text-left"
-              aria-pressed={network === n.id}
-              onclick={() => (network = network === n.id ? '' : n.id)}
-            >
-              <div class="font-mono text-sm font-medium">{n.cidr}</div>
-              <div class="text-xs text-muted">
-                {n.description || n.interface || '-'}{n.vlan ? ` - VLAN ${n.vlan}` : ''}
-              </div>
-              <div class="mt-2 text-sm">
-                {n.host_count} host{n.host_count === 1 ? '' : 's'}
-                <span class="text-xs text-muted">via {n.connector}</span>
-              </div>
-              <div class="text-xs text-muted">
-                {networkCountsLabel(n.counts)}{n.counts?.open_alerts
-                  ? `, ${n.counts.open_alerts} alert${n.counts.open_alerts === 1 ? '' : 's'}`
-                  : ''}
-              </div>
-            </button>
-            {#if pick}
-              <label class="mt-2 flex items-center gap-2 text-sm">
-                <input type="checkbox" bind:checked={picked[n.id]} aria-label="Select {n.cidr}" />
-                Select
-              </label>
-            {:else if canManage}
-              <label class="mt-2 flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={n.tracked}
-                  disabled={trackBusy}
-                  aria-label="Tracked {n.cidr}"
-                  onchange={(e) => setTracked(n, e.currentTarget.checked)}
-                />
-                Tracked
-              </label>
-            {:else if !n.tracked}
-              <p class="mt-2 text-xs text-muted">Not tracked</p>
-            {/if}
-          </div>
-        {/each}
       </div>
+    </details>
+    {#if networks.length > 0}
+      <label class="mt-2 flex items-center gap-2 text-sm">
+        <input type="checkbox" bind:checked={showHidden} /> Show hosts of untracked networks
+      </label>
     {/if}
   </section>
 
@@ -291,7 +252,16 @@
     {#if loading}
       <ListSkeleton />
     {:else if hosts.length === 0}
-      <div class="empty">No hosts match.</div>
+      {#if filtersActive}
+        <div class="empty">No hosts match the filters.</div>
+      {:else}
+        <EmptyState
+          title="No hosts yet"
+          hint="Hosts appear after a connector (OPNsense, Proxmox, NetBox, Checkmk) has synced."
+        >
+          <AddConnectorLink />
+        </EmptyState>
+      {/if}
     {:else}
       <div class="tbl-wrap">
         <table class="w-full">
@@ -307,15 +277,23 @@
                   />
                 </th>
               {/if}
-              <th class={th}>Name</th><th class={th}>Kind</th><th class={th}>Online</th>
-              <th class={th}>Ansible</th><th class={th}>Drift</th>
-              <th class={th}>IPs</th><th class={th}>Sources</th><th class={th}>Alerts</th>
-              <th class={th}>Conflicts</th>
-              <th class={th}>Last seen</th>
+              <SortHeader label="Name" key="name" bind:sort /><SortHeader
+                label="Kind"
+                key="kind"
+                bind:sort
+              /><SortHeader label="Online" key="online" bind:sort />
+              <SortHeader label="Ansible" key="ansible" bind:sort /><th class={th}>Drift</th>
+              <th class={th}>IPs</th><th class={th}>Sources</th><SortHeader
+                label="Alerts"
+                key="alerts"
+                bind:sort
+              />
+              <SortHeader label="Conflicts" key="conflicts" bind:sort />
+              <SortHeader label="Last seen" key="seen" bind:sort />
             </tr>
           </thead>
           <tbody class="divide-y divide-border">
-            {#each hosts as h (h.id)}
+            {#each rows as h (h.id)}
               <tr>
                 {#if canBulk}
                   <td class={td}>

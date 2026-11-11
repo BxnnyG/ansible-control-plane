@@ -3,10 +3,13 @@ import type { Run } from './api';
 import {
   applyRunUpdate,
   buildRunQuery,
+  canCancelRun,
+  collectUsers,
   formatDuration,
   isFinal,
   isUuid,
   matchesFilter,
+  userOptions,
   triggeredByLabel,
 } from './runs';
 
@@ -114,5 +117,40 @@ describe('triggeredByLabel', () => {
     expect(triggeredByLabel(run('x', '2026-01-01T00:00:00Z', { triggered_by: null }), 'u2')).toBe(
       'unknown',
     );
+  });
+});
+
+describe('user filter helpers', () => {
+  const a = run('1', '2026-01-01T00:00:00Z', { triggered_by: 'u1', triggered_by_name: 'Zed' });
+  const b = run('2', '2026-01-01T00:00:00Z', { triggered_by: 'u2', triggered_by_name: 'Amy' });
+  const sched = run('3', '2026-01-01T00:00:00Z', { triggered_by: null, triggered_by_name: null });
+
+  it('collects users from runs and skips unattended runs', () => {
+    expect(collectUsers({}, [a, b, sched])).toEqual({ u1: 'Zed', u2: 'Amy' });
+    expect(collectUsers({ u9: 'Old' }, [a])).toEqual({ u9: 'Old', u1: 'Zed' });
+  });
+  it('lists me first, then names alphabetically, and keeps the selected id', () => {
+    const known = { u1: 'Zed', u2: 'Amy' };
+    expect(userOptions(known, { id: 'u1' }, '').map((o) => o.label)).toEqual(['you', 'Amy']);
+    expect(userOptions(known, undefined, '').map((o) => o.label)).toEqual(['Amy', 'Zed']);
+    expect(userOptions(known, undefined, 'x9')).toContainEqual({
+      id: 'x9',
+      label: 'selected user',
+    });
+  });
+});
+
+describe('canCancelRun', () => {
+  it('requires permission, an active status and no pending cancel', () => {
+    expect(canCancelRun(run('1', 'x', { status: 'running' }), true)).toBe(true);
+    expect(canCancelRun(run('1', 'x', { status: 'queued' }), true)).toBe(true);
+    expect(canCancelRun(run('1', 'x', { status: 'running' }), false)).toBe(false);
+    expect(canCancelRun(run('1', 'x', { status: 'failed' }), true)).toBe(false);
+    expect(
+      canCancelRun(
+        run('1', 'x', { status: 'running', cancel_requested_at: '2026-01-01T00:00:00Z' }),
+        true,
+      ),
+    ).toBe(false);
   });
 });

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { Template } from './api';
-import { buildStartRequest, initialStartForm, startFormFromOverrides } from './runStart';
+import type { RunParams, Template } from './api';
+import {
+  buildStartRequest,
+  initialStartForm,
+  overridesFromRun,
+  startFormFromOverrides,
+} from './runStart';
 import { surveyToFormFields } from './survey';
 
 const tpl = {
@@ -42,5 +47,49 @@ describe('startFormFromOverrides / buildStartRequest', () => {
     const t = { ...tpl, allow_vars_override: false } as Template;
     const form = startFormFromOverrides(t, fields, { extra_vars: { other: 1 } });
     expect(form.surveyRaw).not.toBeNull();
+  });
+});
+
+describe('overridesFromRun', () => {
+  const base = { ...tpl, extra_vars: { keep: 1 }, survey: null } as unknown as Template;
+  const params = (p: Partial<RunParams>): RunParams =>
+    ({
+      limit: '',
+      tags: '',
+      skip_tags: '',
+      check: false,
+      diff: false,
+      verbosity: 0,
+      extra_vars: { keep: 1 },
+      ...p,
+    }) as RunParams;
+
+  it('returns nothing for a run with default settings', () => {
+    expect(overridesFromRun(base, fields, params({}))).toEqual({ overrides: {}, notCarried: [] });
+  });
+  it('carries allowed overrides', () => {
+    const r = overridesFromRun(base, fields, params({ limit: 'web', check: true, tags: 'a' }));
+    expect(r.overrides).toEqual({ limit: 'web', check: true, tags: 'a', skip_tags: '' });
+    expect(r.notCarried).toEqual([]);
+  });
+  it('reports overrides the template no longer allows', () => {
+    const r = overridesFromRun(base, fields, params({ diff: true, verbosity: 2 }));
+    expect(r.overrides).toEqual({});
+    expect(r.notCarried).toEqual(['diff mode', 'verbosity']);
+  });
+  it('never carries secret variables and ignores template-defined ones', () => {
+    const r = overridesFromRun(
+      base,
+      fields,
+      params({ extra_vars: { keep: 1, pkg: 'nginx', token: 'x' }, secret_vars: ['token'] }),
+    );
+    expect(r.overrides.extra_vars).toEqual({ pkg: 'nginx' });
+    expect(r.notCarried).toEqual(['secret variables (enter them again)']);
+  });
+  it('limits variables to survey answers without the variable override', () => {
+    const t = { ...base, allow_vars_override: false } as Template;
+    const r = overridesFromRun(t, fields, params({ extra_vars: { keep: 1, pkg: 'a', other: 2 } }));
+    expect(r.overrides.extra_vars).toEqual({ pkg: 'a' });
+    expect(r.notCarried).toEqual(['variables']);
   });
 });

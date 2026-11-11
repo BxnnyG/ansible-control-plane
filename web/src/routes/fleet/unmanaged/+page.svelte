@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { toasts } from '$lib/toasts.svelte';
+  import { untrack } from 'svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import PageHeader from '$lib/components/PageHeader.svelte';
   import { api, type FleetHost, type Inventory } from '$lib/api';
@@ -14,7 +16,6 @@
   let inventories = $state<Inventory[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let notice = $state<string | null>(null);
   let q = $state('');
   let adding = $state<FleetHost | null>(null);
   let reload = $state(0);
@@ -34,15 +35,24 @@
     }
   }
 
+  // Only the search text is debounced.
+  let qDebounced = $state('');
+  $effect(() => {
+    const v = q;
+    if (v === untrack(() => qDebounced)) return;
+    const t = setTimeout(() => (qDebounced = v), 250);
+    return () => clearTimeout(t);
+  });
+
   $effect(() => {
     const ws = session.slug;
+    const query = qDebounced;
     void reload;
     if (!ws || !canRead) {
       loading = false;
       return;
     }
-    const t = setTimeout(() => void load(ws, q), 250);
-    return () => clearTimeout(t);
+    untrack(() => void load(ws, query));
   });
 
   $effect(() => {
@@ -55,17 +65,17 @@
   });
 </script>
 
-<svelte:head><title>Unmanaged hosts - Ansible Control Plane</title></svelte:head>
+<svelte:head><title>Unmanaged hosts - Hosts - Ansible Control Plane</title></svelte:head>
 
-<PageHeader title="Fleet" description="Hosts that no inventory of this workspace manages yet." />
+<PageHeader
+  title="Unmanaged hosts"
+  description="Hosts that no inventory of this workspace manages yet."
+/>
 <FleetTabs />
 <FormError id="unmanaged-error" message={error} />
-{#if notice}<p role="status" class="mb-3 text-sm text-ok">
-    {notice}
-  </p>{/if}
 
 {#if !canRead}
-  <p class="text-muted">You do not have permission to view the fleet in this workspace.</p>
+  <p class="text-muted">You do not have permission to view hosts in this workspace.</p>
 {:else}
   <div class="mb-3">
     <input
@@ -139,7 +149,7 @@
     {inventories}
     onclose={() => (adding = null)}
     ondone={(m) => {
-      notice = m;
+      toasts.success(m);
       adding = null;
       reload++;
     }}

@@ -18,7 +18,7 @@ describe('filterNav', () => {
 describe('visibleNav', () => {
   it('hides entries whose permission is missing', () => {
     const labels = visibleNav(NAV_ITEMS, () => false).map((i) => i.label);
-    expect(labels).not.toContain('Fleet');
+    expect(labels).not.toContain('Hosts');
     expect(labels).not.toContain('Connectors');
     expect(labels).toContain('Runs');
   });
@@ -26,7 +26,7 @@ describe('visibleNav', () => {
   it('shows entries when the permission is granted', () => {
     const labels = visibleNav(NAV_ITEMS, (p) => p === 'connector.read').map((i) => i.label);
     expect(labels).toContain('Connectors');
-    expect(labels).not.toContain('Fleet');
+    expect(labels).not.toContain('Hosts');
   });
 });
 

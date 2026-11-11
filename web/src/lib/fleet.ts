@@ -77,6 +77,11 @@ export function canAck(c: Pick<FleetConflict, 'state'>): boolean {
   return c.state === 'open';
 }
 
+/** Ids of the conflicts that can still be acknowledged (open ones). */
+export function ackableIds(items: readonly Pick<FleetConflict, 'id' | 'state'>[]): string[] {
+  return items.filter(canAck).map((c) => c.id);
+}
+
 /** Link labels for the hosts of a conflict; falls back to "host N" without a name. */
 export function conflictHosts(
   c: Pick<FleetConflict, 'host_ids' | 'hosts'>,

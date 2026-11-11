@@ -15,6 +15,7 @@
   import CommandPalette from '$lib/components/CommandPalette.svelte';
   import Skeleton from '$lib/components/Skeleton.svelte';
   import Footer from '$lib/components/Footer.svelte';
+  import Toasts from '$lib/components/Toasts.svelte';
 
   let { children } = $props();
 
@@ -221,3 +222,4 @@
 {/if}
 
 <CommandPalette bind:open={paletteOpen} />
+<Toasts />

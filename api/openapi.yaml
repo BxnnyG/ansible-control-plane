@@ -760,6 +760,16 @@ paths:
       responses:
         '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Schedule'}}}}
         default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/schedules:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [schedules]
+      operationId: listWorkspaceSchedules
+      summary: All schedules of the workspace
+      x-acp-permission: schedule.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Schedule'}}}}}
+        default: {$ref: '#/components/responses/Error'}
   /api/v1/workspaces/{workspace}/schedules/preview:
     parameters: [{$ref: '#/components/parameters/Workspace'}]
     get:

@@ -1,11 +1,16 @@
 <script lang="ts">
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
+  import PageHeader from '$lib/components/PageHeader.svelte';
+  import { untrack } from 'svelte';
   import { page } from '$app/state';
   import { api, type RunDetail, type RunStatusEvent } from '$lib/api';
   import { describeError } from '$lib/errors';
   import { formatDuration, isFinal, triggeredByLabel } from '$lib/runs';
   import { session } from '$lib/session.svelte';
-  import { btnDanger, card, fmtDate } from '$lib/ui';
+  import { prepareRunAgain, type RunAgain } from '$lib/runAgain';
+  import { btn, btnDanger, card, fmtDate } from '$lib/ui';
+  import Skeleton from '$lib/components/Skeleton.svelte';
+  import RunDialog from '$lib/components/templates/RunDialog.svelte';
   import FormError from '$lib/components/FormError.svelte';
   import HostResults from '$lib/components/runs/HostResults.svelte';
   import LogViewer from '$lib/components/runs/LogViewer.svelte';
@@ -14,24 +19,54 @@
   const id = $derived(page.params.id ?? '');
   const ws = $derived(session.slug);
   const canCancel = $derived(session.can('run.cancel'));
+  const canRun = $derived(session.can('run.execute'));
 
   let run = $state<RunDetail | null>(null);
   const runId = $derived(run?.id ?? '');
   let error = $state<string | null>(null);
   let now = $state(Date.now());
   let busy = $state(false);
+  let again = $state<RunAgain | null>(null);
+  let againBusy = $state(false);
 
-  async function load(slug: string, rid: string) {
+  async function runAgain() {
+    if (!ws || !run?.template_id) return;
+    againBusy = true;
     error = null;
     try {
-      run = await api.runs.get(slug, rid);
+      again = await prepareRunAgain(ws, run);
     } catch (e) {
       error = describeError(e);
+    } finally {
+      againBusy = false;
+    }
+  }
+
+  let loading = $state(true);
+  let loadError = $state<string | null>(null);
+
+  async function load(slug: string, rid: string) {
+    loadError = null;
+    loading = true;
+    try {
+      const r = await api.runs.get(slug, rid);
+      // Ignore a response for a run the page has since navigated away from.
+      if (untrack(() => id) === rid) run = r;
+    } catch (e) {
+      if (untrack(() => id) === rid) loadError = describeError(e);
+    } finally {
+      loading = false;
     }
   }
 
   $effect(() => {
-    if (ws && id) void load(ws, id);
+    const slug = ws;
+    const rid = id;
+    if (!slug || !rid) return;
+    untrack(() => {
+      run = null;
+      void load(slug, rid);
+    });
   });
 
   // Ticking clock for the duration of a running run.
@@ -66,27 +101,52 @@
 <svelte:head><title>Run - Ansible Control Plane</title></svelte:head>
 
 <Breadcrumbs trail={[{ label: 'Runs', href: '/runs' }]} />
-<FormError id="run-page-error" message={error} />
+<FormError id="run-page-error" message={run ? error : (loadError ?? error)} />
+
+{#if !run}
+  {#if loading}
+    <div class="space-y-4" aria-busy="true" aria-label="Loading run">
+      <Skeleton class="h-7 w-64" />
+      <div class="{card} space-y-3">
+        <Skeleton class="h-4 w-full" />
+        <Skeleton class="h-4 w-3/4" />
+        <Skeleton class="h-4 w-1/2" />
+      </div>
+      <Skeleton class="h-48 w-full" />
+    </div>
+  {:else if loadError}
+    <button class={btn} onclick={() => ws && load(ws, id)}>Retry</button>
+  {/if}
+{/if}
 
 {#if run && ws}
-  <header
-    class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
-  >
-    <div>
-      <h1 class="flex items-center gap-3 text-xl font-semibold">
-        {#if run.template_id}
-          <a class="hover:underline" href="/templates/{run.template_id}">{run.template_name}</a>
-        {:else}{run.template_name}{/if}
-        <StatusBadge status={run.status} />
-      </h1>
-      <p class="mt-1 font-mono text-xs text-muted">{run.params.playbook}</p>
-    </div>
-    {#if canCancel && (run.status === 'queued' || run.status === 'running')}
-      <button class={btnDanger} disabled={busy || !!run.cancel_requested_at} onclick={cancel}>
-        {run.cancel_requested_at ? 'Cancelling...' : 'Cancel run'}
-      </button>
-    {/if}
-  </header>
+  {@const cur = run}
+  <PageHeader title={cur.template_name}>
+    {#snippet badge()}<StatusBadge status={cur.status} />{/snippet}
+    {#snippet meta()}
+      {#if cur.template_id}
+        <p>
+          <a
+            class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
+            href="/templates/{cur.template_id}">Open template</a
+          >
+        </p>
+      {/if}
+      <p class="font-mono text-xs text-muted">{cur.params.playbook}</p>
+    {/snippet}
+    {#snippet actions()}
+      {#if canRun && cur.template_id}
+        <button class={btn} disabled={againBusy} onclick={runAgain}>
+          {againBusy ? 'Loading...' : 'Run again'}
+        </button>
+      {/if}
+      {#if canCancel && (cur.status === 'queued' || cur.status === 'running')}
+        <button class={btnDanger} disabled={busy || !!cur.cancel_requested_at} onclick={cancel}>
+          {cur.cancel_requested_at ? 'Cancelling...' : 'Cancel run'}
+        </button>
+      {/if}
+    {/snippet}
+  </PageHeader>
 
   <section class="{card} mb-6" aria-label="Run details">
     <dl class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3 lg:grid-cols-6">
@@ -153,4 +213,14 @@
     <h2 id="hosts-h" class="mb-2 text-sm font-semibold">Hosts</h2>
     <HostResults results={run.host_results} />
   </section>
+{/if}
+
+{#if again && ws}
+  <RunDialog
+    {ws}
+    template={again.template}
+    prefill={again.prefill}
+    notCarried={again.notCarried}
+    onclose={() => (again = null)}
+  />
 {/if}

@@ -1,5 +1,8 @@
 <script lang="ts">
+  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+  import { toasts } from '$lib/toasts.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
+  import PageHeader from '$lib/components/PageHeader.svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
@@ -26,7 +29,6 @@
   let revisions = $state<ProjectRevision[]>([]);
   let latest = $state<ProjectRevision | null>(null);
   let error = $state<string | null>(null);
-  let notice = $state<string | null>(null);
   let busy = $state(false);
   let confirmDelete = $state(false);
 
@@ -60,10 +62,9 @@
     if (!ws) return;
     busy = true;
     error = null;
-    notice = null;
     try {
       await fn();
-      notice = label;
+      toasts.success(label);
       project = await api.projects.get(ws, id);
       await loadRevisions(ws, id);
     } catch (e) {
@@ -86,6 +87,7 @@
     if (!ws) return;
     try {
       await api.projects.remove(ws, id);
+      toasts.success('Project deleted.');
       await goto('/projects');
     } catch (e) {
       error = describeError(e);
@@ -99,23 +101,20 @@
 <Breadcrumbs trail={[{ label: 'Projects', href: '/projects' }]} />
 
 {#if project && ws}
-  <header
-    class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
-  >
-    <div>
-      <h1 class="text-xl font-semibold">{project.name}</h1>
-      <p class="mt-1 text-sm break-all text-muted">{project.url}</p>
-      <p class="mt-1 text-sm">
-        <SyncBadge status={project.last_sync_status} />
-        <span class="text-muted">{fmtDate(project.last_sync_at)}</span>
-        {#if project.last_sync_sha}<code class="text-xs">{project.last_sync_sha.slice(0, 8)}</code
-          >{/if}
+  {@const proj = project}
+  <PageHeader title={proj.name}>
+    {#snippet meta()}
+      <p class="break-all text-muted">{proj.url}</p>
+      <p>
+        <SyncBadge status={proj.last_sync_status} />
+        <span class="text-muted">{fmtDate(proj.last_sync_at)}</span>
+        {#if proj.last_sync_sha}<code class="text-xs">{proj.last_sync_sha.slice(0, 8)}</code>{/if}
       </p>
-      {#if project.last_sync_status === 'error' && project.last_sync_error}
-        <p class="mt-1 text-sm text-bad">{project.last_sync_error}</p>
+      {#if proj.last_sync_status === 'error' && proj.last_sync_error}
+        <p class="text-bad">{proj.last_sync_error}</p>
       {/if}
-    </div>
-    <div class="flex flex-wrap gap-2">
+    {/snippet}
+    {#snippet actions()}
       {#if canSync}
         <button class={btn} disabled={busy} onclick={test}>Test connection</button>
         <button
@@ -129,22 +128,19 @@
       {#if canWrite}
         <button class={btnDanger} onclick={() => (confirmDelete = true)}>Delete</button>
       {/if}
-    </div>
-  </header>
+    {/snippet}
+  </PageHeader>
 
-  {#if notice}<p role="status" class="mb-3 text-sm text-ok">
-      {notice}
-    </p>{/if}
   <FormError id="project-detail-error" message={error} />
 
   {#if confirmDelete}
-    <div role="alertdialog" aria-label="Confirm delete" class="{card} mb-6 max-w-xl">
+    <ConfirmDialog
+      title="Confirm delete"
+      onconfirm={remove}
+      oncancel={() => (confirmDelete = false)}
+    >
       <p>Delete project <strong>{project.name}</strong> and its synced data?</p>
-      <div class="mt-3 flex gap-2">
-        <button class={btnDanger} onclick={remove}>Delete</button>
-        <button class={btn} onclick={() => (confirmDelete = false)}>Cancel</button>
-      </div>
-    </div>
+    </ConfirmDialog>
   {/if}
 
   <div class="grid gap-6 lg:grid-cols-2">
@@ -158,7 +154,7 @@
             {secrets}
             ondone={(p) => {
               project = p;
-              notice = 'Saved.';
+              toasts.success('Saved.');
             }}
           />
         {/key}

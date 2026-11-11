@@ -251,6 +251,23 @@ func (s *Service) List(ctx context.Context, ws, tpl uuid.UUID) ([]Schedule, erro
 	return out, nil
 }
 
+// ListAll returns every schedule of the workspace.
+func (s *Service) ListAll(ctx context.Context, ws uuid.UUID) ([]Schedule, error) {
+	rows, err := s.q.ListSchedules(ctx, ws)
+	if err != nil {
+		return nil, fmt.Errorf("list workspace schedules: %w", err)
+	}
+	out := make([]Schedule, 0, len(rows))
+	for _, r := range rows {
+		v, err := toSchedule(r)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, nil
+}
+
 // Get returns one schedule.
 func (s *Service) Get(ctx context.Context, ws, id uuid.UUID) (Schedule, error) {
 	row, err := s.q.GetSchedule(ctx, dbgen.GetScheduleParams{ID: id, WorkspaceID: ws})

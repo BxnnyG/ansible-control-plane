@@ -1,4 +1,8 @@
 <script lang="ts">
+  import PageHeader from '$lib/components/PageHeader.svelte';
+  import EmptyState from '$lib/components/EmptyState.svelte';
+  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+  import { toasts } from '$lib/toasts.svelte';
   import { untrack } from 'svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { api, type GroupRule, type GroupRulePreview, type Inventory } from '$lib/api';
@@ -15,7 +19,6 @@
   let inventories = $state<Inventory[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let notice = $state<string | null>(null);
   let editing = $state<GroupRule | 'new' | null>(null);
   let deleting = $state<GroupRule | null>(null);
   let preview = $state<GroupRulePreview | null>(null);
@@ -59,7 +62,6 @@
     if (!session.slug) return;
     busy = true;
     error = null;
-    notice = null;
     confirmApply = false;
     try {
       preview = await api.groupRules.preview(session.slug, r.id);
@@ -78,7 +80,9 @@
     try {
       const res = await api.groupRules.apply(session.slug, preview.rule.id);
       const r = res.result;
-      notice = `Applied "${res.rule.name}": ${(r.added ?? []).length} added, ${(r.removed ?? []).length} removed, ${(r.hosts_created ?? []).length} host(s) created${r.commit ? ' (committed to Git)' : ''}.`;
+      toasts.success(
+        `Applied "${res.rule.name}": ${(r.added ?? []).length} added, ${(r.removed ?? []).length} removed, ${(r.hosts_created ?? []).length} host(s) created${r.commit ? ' (committed to Git)' : ''}.`,
+      );
       preview = null;
       confirmApply = false;
       await load(session.slug);
@@ -94,6 +98,7 @@
     if (!deleting || !session.slug) return;
     try {
       await api.groupRules.remove(session.slug, deleting.id);
+      toasts.success('Group rule deleted.');
       if (preview?.rule.id === deleting.id) preview = null;
       deleting = null;
       await load(session.slug);
@@ -109,25 +114,20 @@
   }
 </script>
 
-<svelte:head><title>Group rules - Ansible Control Plane</title></svelte:head>
+<svelte:head><title>Group rules - Hosts - Ansible Control Plane</title></svelte:head>
 
-<header
-  class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
->
-  <div>
-    <h1 class="text-xl font-semibold">Group rules</h1>
-    <p class="mt-1 text-muted">Fill inventory groups automatically from fleet data.</p>
-  </div>
-  {#if canManage && editing === null}
-    <button class={btnPrimary} onclick={() => (editing = 'new')}>New rule</button>
-  {/if}
-</header>
+<PageHeader title="Group rules" description="Fill inventory groups automatically from fleet data.">
+  {#snippet actions()}
+    {#if canManage && editing === null}
+      <button class={btnPrimary} onclick={() => (editing = 'new')}>New rule</button>
+    {/if}
+  {/snippet}
+</PageHeader>
 <FleetTabs />
-<FormError id="rules-error" message={error} />
-{#if notice}<p role="status" class="mb-3 text-sm">{notice}</p>{/if}
+<FormError id="rules-error" message={error} onretry={() => session.slug && load(session.slug)} />
 
 {#if !canRead}
-  <p class="text-muted">You do not have permission to view the fleet in this workspace.</p>
+  <p class="text-muted">You do not have permission to view hosts in this workspace.</p>
 {:else}
   {#if editing !== null && session.slug}
     <div class="{card} mb-6 max-w-xl">
@@ -144,15 +144,15 @@
   {/if}
 
   {#if deleting}
-    <div role="alertdialog" aria-label="Confirm delete" class="{card} mb-6 max-w-xl">
+    <ConfirmDialog
+      title="Confirm delete"
+      onconfirm={confirmDelete}
+      oncancel={() => (deleting = null)}
+    >
       <p>
         Delete rule <strong>{deleting.name}</strong>? Existing group members stay in the inventory.
       </p>
-      <div class="mt-3 flex gap-2">
-        <button class={btnDanger} onclick={confirmDelete}>Delete</button>
-        <button class={btn} onclick={() => (deleting = null)}>Cancel</button>
-      </div>
-    </div>
+    </ConfirmDialog>
   {/if}
 
   {#if preview}
@@ -173,21 +173,20 @@
         <button class={btn} onclick={() => (preview = null)}>Close</button>
       </div>
       {#if confirmApply}
-        <div
-          role="alertdialog"
-          aria-label="Confirm apply"
-          class="mt-3 rounded-md border border-border p-3"
+        <ConfirmDialog
+          title="Confirm apply"
+          confirmLabel="Apply"
+          danger={false}
+          {busy}
+          onconfirm={doApply}
+          oncancel={() => (confirmApply = false)}
         >
-          <p class="text-sm">
+          <p>
             Apply this change to inventory <strong>{invName(preview.rule.inventory_id)}</strong>?
             {#if preview.inventory_mode === 'git'}A commit is written to the inventory's write
               branch.{/if}
           </p>
-          <div class="mt-2 flex gap-2">
-            <button class={btnPrimary} disabled={busy} onclick={doApply}>Confirm apply</button>
-            <button class={btn} onclick={() => (confirmApply = false)}>Cancel</button>
-          </div>
-        </div>
+        </ConfirmDialog>
       {/if}
     </section>
   {/if}
@@ -195,7 +194,14 @@
   {#if loading}
     <ListSkeleton />
   {:else if rules.length === 0}
-    <div class="empty">No group rules yet.</div>
+    <EmptyState
+      title="No group rules yet."
+      hint="A group rule fills an inventory group automatically from fleet data."
+    >
+      {#if canManage}
+        <button class={btnPrimary} onclick={() => (editing = 'new')}>New rule</button>
+      {/if}
+    </EmptyState>
   {:else}
     <div class="tbl-wrap">
       <table class="w-full">

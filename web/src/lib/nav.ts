@@ -28,7 +28,14 @@ export const NAV_ITEMS: readonly NavItem[] = [
     section: 'Operate',
   },
   {
-    label: 'Fleet',
+    label: 'Schedules',
+    href: '/schedules',
+    icon: 'M12 7v5l3 2M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z',
+    permission: 'schedule.read',
+    section: 'Operate',
+  },
+  {
+    label: 'Hosts',
     href: '/fleet',
     icon: 'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01',
     permission: 'fleet.read',

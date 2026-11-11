@@ -1,4 +1,8 @@
 <script lang="ts">
+  import PageHeader from '$lib/components/PageHeader.svelte';
+  import EmptyState from '$lib/components/EmptyState.svelte';
+  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+  import { toasts } from '$lib/toasts.svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { api, type RemediationRule, type Template } from '$lib/api';
   import { describeError } from '$lib/errors';
@@ -43,6 +47,7 @@
     if (!deleting || !session.slug) return;
     try {
       await api.remediation.remove(session.slug, deleting.id);
+      toasts.success('Remediation rule deleted.');
       deleting = null;
       await load(session.slug);
     } catch (e) {
@@ -57,24 +62,20 @@
   }
 </script>
 
-<svelte:head><title>Remediation - Ansible Control Plane</title></svelte:head>
+<svelte:head><title>Remediation - Hosts - Ansible Control Plane</title></svelte:head>
 
-<header
-  class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
+<PageHeader
+  title="Remediation"
+  description="Map alerts to a template and a limit. Rules only offer a Fix button on matching alerts; nothing runs automatically."
 >
-  <div>
-    <h1 class="text-xl font-semibold">Remediation</h1>
-    <p class="mt-1 text-muted">
-      Map alerts to a template and a limit. Rules only offer a Fix button on matching alerts;
-      nothing runs automatically.
-    </p>
-  </div>
-  {#if canManage && editing === null}
-    <button class={btnPrimary} onclick={() => (editing = 'new')}>New rule</button>
-  {/if}
-</header>
+  {#snippet actions()}
+    {#if canManage && editing === null}
+      <button class={btnPrimary} onclick={() => (editing = 'new')}>New rule</button>
+    {/if}
+  {/snippet}
+</PageHeader>
 <FleetTabs />
-<FormError id="rem-error" message={error} />
+<FormError id="rem-error" message={error} onretry={() => session.slug && load(session.slug)} />
 
 {#if !canManage}
   <p class="text-muted">
@@ -96,19 +97,26 @@
   {/if}
 
   {#if deleting}
-    <div role="alertdialog" aria-label="Confirm delete" class="{card} mb-6 max-w-xl">
+    <ConfirmDialog
+      title="Confirm delete"
+      onconfirm={confirmDelete}
+      oncancel={() => (deleting = null)}
+    >
       <p>Delete rule <strong>{deleting.name}</strong>? Runs already started are not affected.</p>
-      <div class="mt-3 flex gap-2">
-        <button class={btnDanger} onclick={confirmDelete}>Delete</button>
-        <button class={btn} onclick={() => (deleting = null)}>Cancel</button>
-      </div>
-    </div>
+    </ConfirmDialog>
   {/if}
 
   {#if loading}
     <ListSkeleton />
   {:else if rules.length === 0}
-    <div class="empty">No remediation rules yet.</div>
+    <EmptyState
+      title="No remediation rules yet."
+      hint="A remediation rule maps an alert to a template so the alert gets a Fix button."
+    >
+      {#if canManage}
+        <button class={btnPrimary} onclick={() => (editing = 'new')}>New rule</button>
+      {/if}
+    </EmptyState>
   {:else}
     <div class="tbl-wrap">
       <table class="w-full">

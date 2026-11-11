@@ -1,4 +1,4 @@
-import type { MissedPolicy, ScheduleInput } from './api';
+import type { MissedPolicy, Schedule, ScheduleInput } from './api';
 
 export interface ScheduleForm {
   name: string;
@@ -74,4 +74,68 @@ export function toScheduleInput(f: ScheduleForm): ScheduleInput {
     enabled: f.enabled,
     missed_policy: f.missedPolicy,
   };
+}
+
+export interface CronPreset {
+  id: string;
+  label: string;
+  cron: string;
+}
+
+/** Quick picks for the cron field; the expression stays freely editable. */
+export const CRON_PRESETS: readonly CronPreset[] = [
+  { id: 'hourly', label: 'Hourly', cron: '0 * * * *' },
+  { id: 'daily', label: 'Daily at 03:00', cron: '0 3 * * *' },
+  { id: 'weekly', label: 'Weekly (Monday 03:00)', cron: '0 3 * * 1' },
+];
+
+/** Id of the preset matching `cron` (whitespace-insensitive), or '' for a custom expression. */
+export function presetFor(cron: string): string {
+  const norm = cron.trim().split(/\s+/).join(' ');
+  return CRON_PRESETS.find((p) => p.cron === norm)?.id ?? '';
+}
+
+/** IANA time zones for the datalist: Intl list when supported, otherwise a short fallback. */
+export function timeZoneOptions(current: string = browserTimezone()): string[] {
+  let zones: string[] = [];
+  try {
+    const fn = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] })
+      .supportedValuesOf;
+    zones = fn ? fn('timeZone') : [];
+  } catch {
+    zones = [];
+  }
+  if (zones.length === 0) zones = ['UTC', 'Europe/Berlin', 'Europe/London', 'America/New_York'];
+  const set = new Set(zones);
+  set.add('UTC');
+  if (current) set.add(current);
+  return [...set].sort();
+}
+
+export interface ScheduleRow {
+  schedule: Schedule;
+  /** Name of the template, or '-' when the template is not visible to the caller. */
+  templateName: string;
+}
+
+/** Joins schedules with template names; default order: enabled first, soonest next run first. */
+export function scheduleRows(
+  schedules: readonly Schedule[],
+  templates: readonly { id: string; name: string }[],
+): ScheduleRow[] {
+  const names = new Map(templates.map((t) => [t.id, t.name]));
+  const rank = (s: Schedule) =>
+    s.enabled && s.next_run_at ? Date.parse(s.next_run_at) : Number.POSITIVE_INFINITY;
+  return schedules
+    .map((schedule) => ({ schedule, templateName: names.get(schedule.template_id) ?? '-' }))
+    .sort(
+      (a, b) =>
+        Number(b.schedule.enabled) - Number(a.schedule.enabled) ||
+        (rank(a.schedule) === rank(b.schedule)
+          ? 0
+          : rank(a.schedule) < rank(b.schedule)
+            ? -1
+            : 1) ||
+        a.schedule.name.localeCompare(b.schedule.name),
+    );
 }
