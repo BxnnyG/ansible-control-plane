@@ -6,7 +6,9 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
-### v1.3 load times and UX polish
+## [1.3.0] - 2026-11-11
+
+### Load times and UX polish
 
 - **Cache headers:** `/_app/immutable/*` is served with `public, max-age=31536000, immutable`; `index.html` and SPA fallbacks with `no-cache`.
 - **Compression:** HTML, CSS, JS, JSON and SVG responses are gzip/deflate compressed; SSE streams stay uncompressed and flush per event (covered by a test).
@@ -41,6 +43,8 @@ All notable changes are documented here. The format follows
 - **Host detail:** Run template on this host opens the bulk run dialog for the one host (only templates that allow a limit override are offered).
 - **Conflicts:** select several open conflicts and acknowledge them in one action (one call per conflict; internal state only). Alerts keep per-item remediation only, because the API has no acknowledge for them.
 - **Detail pages:** template, run, project, inventory and host pages use the shared page header.
+
+## [1.2.0] - 2026-11-10
 
 ### Added
 
