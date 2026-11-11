@@ -1,4 +1,6 @@
 <script lang="ts">
+  import PageHeader from '$lib/components/PageHeader.svelte';
+  import EmptyState from '$lib/components/EmptyState.svelte';
   import SortHeader from '$lib/components/SortHeader.svelte';
   import { sortRows, type SortState } from '$lib/sort';
   import { untrack } from 'svelte';
@@ -14,6 +16,7 @@
   let loading = $state(true);
   let error = $state<unknown>(null);
   let creating = $state(false);
+  let saving = $state(false);
 
   let name = $state('');
   let mode = $state<InventoryMode>('db');
@@ -58,8 +61,9 @@
 
   async function create(e: SubmitEvent) {
     e.preventDefault();
-    if (!session.slug) return;
+    if (!session.slug || saving) return;
     error = null;
+    saving = true;
     try {
       const inv = await api.inventories.create(session.slug, {
         name,
@@ -71,23 +75,24 @@
       await goto(`/inventories/${inv.id}`);
     } catch (err) {
       error = err;
+    } finally {
+      saving = false;
     }
   }
 </script>
 
 <svelte:head><title>Inventories - Ansible Control Plane</title></svelte:head>
 
-<header
-  class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
+<PageHeader
+  title="Inventories"
+  description="Host and group definitions stored in the database or in Git."
 >
-  <div>
-    <h1 class="text-xl font-semibold">Inventories</h1>
-    <p class="mt-1 text-muted">Host and group definitions stored in the database or in Git.</p>
-  </div>
-  {#if canWrite && !creating}
-    <button class={btnPrimary} onclick={() => (creating = true)}>New inventory</button>
-  {/if}
-</header>
+  {#snippet actions()}
+    {#if canWrite && !creating}
+      <button class={btnPrimary} onclick={() => (creating = true)}>New inventory</button>
+    {/if}
+  {/snippet}
+</PageHeader>
 
 {#if !canRead}
   <p class="text-muted">You do not have permission to view inventories in this workspace.</p>
@@ -129,17 +134,27 @@
         </div>
       {/if}
       <div class="flex gap-2">
-        <button class={btnPrimary}>Create</button>
+        <button class={btnPrimary} disabled={saving}>{saving ? 'Creating...' : 'Create'}</button>
         <button type="button" class={btn} onclick={() => (creating = false)}>Cancel</button>
       </div>
     </form>
   {/if}
   <ErrorBox {error} />
+  {#if error}<button type="button" class={btn} onclick={() => session.slug && load(session.slug)}
+      >Retry</button
+    >{/if}
 
   {#if loading}
     <ListSkeleton />
   {:else if items.length === 0}
-    <div class="empty">No inventories yet.</div>
+    <EmptyState
+      title="No inventories yet."
+      hint="An inventory lists the hosts and groups a template runs against."
+    >
+      {#if canWrite}
+        <button class={btnPrimary} onclick={() => (creating = true)}>New inventory</button>
+      {/if}
+    </EmptyState>
   {:else}
     <div class="tbl-wrap">
       <table class="w-full">

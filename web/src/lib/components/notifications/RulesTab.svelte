@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmptyState from '$lib/components/EmptyState.svelte';
   import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
   import { toasts } from '$lib/toasts.svelte';
   import { api, type NotificationChannel, type NotificationRule, type Template } from '$lib/api';
@@ -88,7 +89,14 @@
 {/if}
 
 {#if rules.length === 0}
-  <div class="empty">No rules yet. Without a rule no notification is sent.</div>
+  <EmptyState
+    title="No rules yet."
+    hint="Without a rule no notification is sent. A rule picks events and a channel."
+  >
+    {#if canManage}
+      <button class={btnPrimary} onclick={() => (editing = 'new')}>New rule</button>
+    {/if}
+  </EmptyState>
 {:else}
   <div class="tbl-wrap">
     <table class="w-full">

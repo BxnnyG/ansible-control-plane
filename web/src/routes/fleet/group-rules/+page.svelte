@@ -1,4 +1,6 @@
 <script lang="ts">
+  import PageHeader from '$lib/components/PageHeader.svelte';
+  import EmptyState from '$lib/components/EmptyState.svelte';
   import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
   import { toasts } from '$lib/toasts.svelte';
   import { untrack } from 'svelte';
@@ -114,19 +116,15 @@
 
 <svelte:head><title>Group rules - Hosts - Ansible Control Plane</title></svelte:head>
 
-<header
-  class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
->
-  <div>
-    <h1 class="text-xl font-semibold">Group rules</h1>
-    <p class="mt-1 text-muted">Fill inventory groups automatically from fleet data.</p>
-  </div>
-  {#if canManage && editing === null}
-    <button class={btnPrimary} onclick={() => (editing = 'new')}>New rule</button>
-  {/if}
-</header>
+<PageHeader title="Group rules" description="Fill inventory groups automatically from fleet data.">
+  {#snippet actions()}
+    {#if canManage && editing === null}
+      <button class={btnPrimary} onclick={() => (editing = 'new')}>New rule</button>
+    {/if}
+  {/snippet}
+</PageHeader>
 <FleetTabs />
-<FormError id="rules-error" message={error} />
+<FormError id="rules-error" message={error} onretry={() => session.slug && load(session.slug)} />
 
 {#if !canRead}
   <p class="text-muted">You do not have permission to view hosts in this workspace.</p>
@@ -196,7 +194,14 @@
   {#if loading}
     <ListSkeleton />
   {:else if rules.length === 0}
-    <div class="empty">No group rules yet.</div>
+    <EmptyState
+      title="No group rules yet."
+      hint="A group rule fills an inventory group automatically from fleet data."
+    >
+      {#if canManage}
+        <button class={btnPrimary} onclick={() => (editing = 'new')}>New rule</button>
+      {/if}
+    </EmptyState>
   {:else}
     <div class="tbl-wrap">
       <table class="w-full">

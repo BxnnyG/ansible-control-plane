@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmptyState from '$lib/components/EmptyState.svelte';
   import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
   import { toasts } from '$lib/toasts.svelte';
   import { api, type NotificationChannel, type NotificationRule, type SecretMeta } from '$lib/api';
@@ -112,7 +113,14 @@
 {/if}
 
 {#if channels.length === 0}
-  <div class="empty">No channels yet.</div>
+  <EmptyState
+    title="No channels yet."
+    hint="A channel is a destination for notifications, such as email or ntfy."
+  >
+    {#if canManage}
+      <button class={btnPrimary} onclick={() => (editing = 'new')}>New channel</button>
+    {/if}
+  </EmptyState>
 {:else}
   <div class="tbl-wrap">
     <table class="w-full">

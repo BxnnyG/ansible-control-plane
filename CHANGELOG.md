@@ -29,6 +29,7 @@ All notable changes are documented here. The format follows
 - **Filters in the URL:** the Hosts page filters (search, network, conflicts, alerts, untracked), the state filter of Alerts and Conflicts and the Notifications tab are kept in the query string (`?q=...&alerts=1`, `?state=resolved`, `?tab=rules`), so reload, back and shared links keep them. Defaults are omitted.
 - **Column sorting:** clickable column headers (ascending, descending, off; `aria-sort`, natural and case-insensitive order, empty values last) on the templates, runs, hosts, inventories and secrets lists through one shared helper. Sorting applies to the rows loaded on the page (the runs list sorts the loaded pages only).
 - **Dashboard polling:** the dashboard refreshes every 60 s instead of 30 s, not at all while the tab is hidden, and once when the tab becomes visible again (if the data is older than 30 s). No backend change: the host list is still needed for the host figures.
+- **Consistency:** secrets, inventories, vault identities, projects, connectors, group rules and remediation use the shared page header; empty lists show a hint and a create action; failed list loads offer a Retry button; creating an inventory disables the button while saving; the template form asks before discarding unsaved edits (in-app navigation, reload, closing the tab) and stays silent after a successful save.
 
 ### Added
 

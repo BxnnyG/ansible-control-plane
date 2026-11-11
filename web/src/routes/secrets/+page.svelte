@@ -1,4 +1,6 @@
 <script lang="ts">
+  import PageHeader from '$lib/components/PageHeader.svelte';
+  import EmptyState from '$lib/components/EmptyState.svelte';
   import SortHeader from '$lib/components/SortHeader.svelte';
   import { sortRows, type SortState } from '$lib/sort';
   import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
@@ -76,19 +78,18 @@
 
 <svelte:head><title>Secrets - Ansible Control Plane</title></svelte:head>
 
-<header
-  class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
+<PageHeader
+  title="Secrets"
+  description="Credentials used by projects and runs. Values are write-only."
 >
-  <div>
-    <h1 class="text-xl font-semibold">Secrets</h1>
-    <p class="mt-1 text-muted">Credentials used by projects and runs. Values are write-only.</p>
-  </div>
-  {#if canWrite && editing === null}
-    <button class={btnPrimary} onclick={() => (editing = 'new')}>New secret</button>
-  {/if}
-</header>
+  {#snippet actions()}
+    {#if canWrite && editing === null}
+      <button class={btnPrimary} onclick={() => (editing = 'new')}>New secret</button>
+    {/if}
+  {/snippet}
+</PageHeader>
 
-<FormError id="secrets-error" message={error} />
+<FormError id="secrets-error" message={error} onretry={() => session.slug && load(session.slug)} />
 
 {#if !canRead}
   <p class="text-muted">You do not have permission to view secrets in this workspace.</p>
@@ -122,7 +123,14 @@
   {#if loading}
     <ListSkeleton />
   {:else if items.length === 0}
-    <div class="empty">No secrets yet.</div>
+    <EmptyState
+      title="No secrets yet."
+      hint="Secrets hold the SSH keys, tokens and passwords that projects and runs use. Values are write-only."
+    >
+      {#if canWrite}
+        <button class={btnPrimary} onclick={() => (editing = 'new')}>New secret</button>
+      {/if}
+    </EmptyState>
   {:else}
     <div class="tbl-wrap">
       <table class="w-full">

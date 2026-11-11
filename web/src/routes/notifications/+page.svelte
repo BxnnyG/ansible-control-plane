@@ -81,7 +81,11 @@
   description="Send run results (failed, recovered, drift) to webhooks, Matrix, e-mail, Gotify or ntfy."
 />
 
-<FormError id="notifications-error" message={error} />
+<FormError
+  id="notifications-error"
+  message={error}
+  onretry={() => session.slug && load(session.slug)}
+/>
 
 {#if !canRead}
   <p class="text-muted">You do not have permission to view notifications in this workspace.</p>

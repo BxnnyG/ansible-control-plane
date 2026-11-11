@@ -20,6 +20,8 @@
   } from '$lib/templates';
   import { btn, btnPrimary, input, label } from '$lib/ui';
   import FormError from '$lib/components/FormError.svelte';
+  import { beforeNavigate } from '$app/navigation';
+  import { isDirty, snapshotOf } from '$lib/dirty';
 
   let {
     ws,
@@ -77,6 +79,43 @@
   let playbookNote = $state<string | null>(null);
   let error = $state<string | null>(null);
   let busy = $state(false);
+
+  const snapshot = () =>
+    snapshotOf({
+      name,
+      description,
+      projectId,
+      inventoryId,
+      playbook,
+      sshSecret,
+      becomeSecret,
+      vaultIds,
+      defaultLimit,
+      defaultTags,
+      defaultSkipTags,
+      verbosity,
+      checkMode,
+      diffMode,
+      envText,
+      extraVarsText,
+      surveyText,
+      maxConcurrent,
+      allowLimit,
+      allowTags,
+      allowVars,
+      allowCheck,
+      allowDiff,
+      allowVerbosity,
+    });
+  const baseline = snapshot();
+  let saved = false;
+
+  // Leaving the page with edits (in-app navigation, reload or closing the tab) asks first.
+  beforeNavigate((nav) => {
+    if (!isDirty(baseline, snapshot(), saved)) return;
+    if (nav.willUnload) nav.cancel();
+    else if (!confirm('You have unsaved changes. Leave this page and discard them?')) nav.cancel();
+  });
 
   const sshChoices = $derived(secrets.filter((s) => s.type === 'ssh_key'));
   const becomeChoices = $derived(secrets.filter((s) => s.type === 'password'));
@@ -163,11 +202,11 @@
     };
     busy = true;
     try {
-      ondone(
-        template
-          ? await api.templates.update(ws, template.id, body)
-          : await api.templates.create(ws, body),
-      );
+      const result = template
+        ? await api.templates.update(ws, template.id, body)
+        : await api.templates.create(ws, body);
+      saved = true; // no unsaved-changes prompt for the navigation that follows a save
+      ondone(result);
     } catch (err) {
       error = describeError(err);
     } finally {

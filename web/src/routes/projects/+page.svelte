@@ -1,4 +1,6 @@
 <script lang="ts">
+  import PageHeader from '$lib/components/PageHeader.svelte';
+  import EmptyState from '$lib/components/EmptyState.svelte';
   import { untrack } from 'svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { goto } from '$app/navigation';
@@ -43,19 +45,15 @@
 
 <svelte:head><title>Projects - Ansible Control Plane</title></svelte:head>
 
-<header
-  class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
->
-  <div>
-    <h1 class="text-xl font-semibold">Projects</h1>
-    <p class="mt-1 text-muted">Git repositories containing playbooks and roles.</p>
-  </div>
-  {#if canWrite && !creating}
-    <button class={btnPrimary} onclick={() => (creating = true)}>New project</button>
-  {/if}
-</header>
+<PageHeader title="Projects" description="Git repositories containing playbooks and roles.">
+  {#snippet actions()}
+    {#if canWrite && !creating}
+      <button class={btnPrimary} onclick={() => (creating = true)}>New project</button>
+    {/if}
+  {/snippet}
+</PageHeader>
 
-<FormError id="projects-error" message={error} />
+<FormError id="projects-error" message={error} onretry={() => session.slug && load(session.slug)} />
 
 {#if !canRead}
   <p class="text-muted">You do not have permission to view projects in this workspace.</p>
@@ -74,7 +72,14 @@
   {#if loading}
     <ListSkeleton />
   {:else if items.length === 0}
-    <div class="empty">No projects yet.</div>
+    <EmptyState
+      title="No projects yet."
+      hint="A project is a Git repository with playbooks and roles."
+    >
+      {#if canWrite}
+        <button class={btnPrimary} onclick={() => (creating = true)}>New project</button>
+      {/if}
+    </EmptyState>
   {:else}
     <div class="tbl-wrap">
       <table class="w-full">

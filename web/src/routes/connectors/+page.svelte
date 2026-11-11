@@ -1,4 +1,6 @@
 <script lang="ts">
+  import PageHeader from '$lib/components/PageHeader.svelte';
+  import EmptyState from '$lib/components/EmptyState.svelte';
   import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
   import { toasts } from '$lib/toasts.svelte';
   import { untrack } from 'svelte';
@@ -109,21 +111,22 @@
 
 <svelte:head><title>Connectors - Ansible Control Plane</title></svelte:head>
 
-<header
-  class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
+<PageHeader
+  title="Connectors"
+  description="Read-only links to OPNsense, Proxmox and other systems that feed the fleet view."
 >
-  <div>
-    <h1 class="text-xl font-semibold">Connectors</h1>
-    <p class="mt-1 text-muted">
-      Read-only links to OPNsense, Proxmox and other systems that feed the fleet view.
-    </p>
-  </div>
-  {#if canWrite && editing === null && types.length > 0}
-    <button class={btnPrimary} onclick={() => (editing = 'new')}>New connector</button>
-  {/if}
-</header>
+  {#snippet actions()}
+    {#if canWrite && editing === null && types.length > 0}
+      <button class={btnPrimary} onclick={() => (editing = 'new')}>New connector</button>
+    {/if}
+  {/snippet}
+</PageHeader>
 
-<FormError id="connectors-error" message={error} />
+<FormError
+  id="connectors-error"
+  message={error}
+  onretry={() => session.slug && load(session.slug)}
+/>
 {#if created}
   <div role="status" class="{card} mb-6 max-w-2xl">
     <p>
@@ -173,7 +176,14 @@
   {#if loading}
     <ListSkeleton />
   {:else if items.length === 0}
-    <div class="empty">No connectors yet.</div>
+    <EmptyState
+      title="No connectors yet."
+      hint="Connectors read hosts and alerts from OPNsense, Proxmox and other systems."
+    >
+      {#if canWrite && types.length > 0}
+        <button class={btnPrimary} onclick={() => (editing = 'new')}>New connector</button>
+      {/if}
+    </EmptyState>
   {:else}
     <div class="tbl-wrap">
       <table class="w-full">

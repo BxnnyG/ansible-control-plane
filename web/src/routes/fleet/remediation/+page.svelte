@@ -1,4 +1,6 @@
 <script lang="ts">
+  import PageHeader from '$lib/components/PageHeader.svelte';
+  import EmptyState from '$lib/components/EmptyState.svelte';
   import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
   import { toasts } from '$lib/toasts.svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
@@ -62,22 +64,18 @@
 
 <svelte:head><title>Remediation - Hosts - Ansible Control Plane</title></svelte:head>
 
-<header
-  class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
+<PageHeader
+  title="Remediation"
+  description="Map alerts to a template and a limit. Rules only offer a Fix button on matching alerts; nothing runs automatically."
 >
-  <div>
-    <h1 class="text-xl font-semibold">Remediation</h1>
-    <p class="mt-1 text-muted">
-      Map alerts to a template and a limit. Rules only offer a Fix button on matching alerts;
-      nothing runs automatically.
-    </p>
-  </div>
-  {#if canManage && editing === null}
-    <button class={btnPrimary} onclick={() => (editing = 'new')}>New rule</button>
-  {/if}
-</header>
+  {#snippet actions()}
+    {#if canManage && editing === null}
+      <button class={btnPrimary} onclick={() => (editing = 'new')}>New rule</button>
+    {/if}
+  {/snippet}
+</PageHeader>
 <FleetTabs />
-<FormError id="rem-error" message={error} />
+<FormError id="rem-error" message={error} onretry={() => session.slug && load(session.slug)} />
 
 {#if !canManage}
   <p class="text-muted">
@@ -111,7 +109,14 @@
   {#if loading}
     <ListSkeleton />
   {:else if rules.length === 0}
-    <div class="empty">No remediation rules yet.</div>
+    <EmptyState
+      title="No remediation rules yet."
+      hint="A remediation rule maps an alert to a template so the alert gets a Fix button."
+    >
+      {#if canManage}
+        <button class={btnPrimary} onclick={() => (editing = 'new')}>New rule</button>
+      {/if}
+    </EmptyState>
   {:else}
     <div class="tbl-wrap">
       <table class="w-full">

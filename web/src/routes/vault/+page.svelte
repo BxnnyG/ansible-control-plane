@@ -1,4 +1,6 @@
 <script lang="ts">
+  import PageHeader from '$lib/components/PageHeader.svelte';
+  import EmptyState from '$lib/components/EmptyState.svelte';
   import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
   import { toasts } from '$lib/toasts.svelte';
   import { untrack } from 'svelte';
@@ -67,21 +69,18 @@
 
 <svelte:head><title>Vault identities - Ansible Control Plane</title></svelte:head>
 
-<header
-  class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-3 border-b border-border pb-4"
+<PageHeader
+  title="Vault identities"
+  description="Named sources for Ansible Vault passwords. The passwords themselves are never shown."
 >
-  <div>
-    <h1 class="text-xl font-semibold">Vault identities</h1>
-    <p class="mt-1 text-muted">
-      Named sources for Ansible Vault passwords. The passwords themselves are never shown.
-    </p>
-  </div>
-  {#if canManage && editing === null}
-    <button class={btnPrimary} onclick={() => (editing = 'new')}>New identity</button>
-  {/if}
-</header>
+  {#snippet actions()}
+    {#if canManage && editing === null}
+      <button class={btnPrimary} onclick={() => (editing = 'new')}>New identity</button>
+    {/if}
+  {/snippet}
+</PageHeader>
 
-<FormError id="vault-error" message={error} />
+<FormError id="vault-error" message={error} onretry={() => session.slug && load(session.slug)} />
 
 {#if !canRead}
   <p class="text-muted">You do not have permission to view vault identities in this workspace.</p>
@@ -116,7 +115,14 @@
   {#if loading}
     <ListSkeleton />
   {:else if items.length === 0}
-    <div class="empty">No vault identities yet.</div>
+    <EmptyState
+      title="No vault identities yet."
+      hint="A vault identity names the source of an Ansible Vault password."
+    >
+      {#if canManage}
+        <button class={btnPrimary} onclick={() => (editing = 'new')}>New identity</button>
+      {/if}
+    </EmptyState>
   {:else}
     <div class="tbl-wrap">
       <table class="w-full">
