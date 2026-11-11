@@ -253,6 +253,7 @@ func (h *Handler) events(w http.ResponseWriter, req *http.Request) {
 	}
 	ctx := req.Context()
 	var last int64
+	fresh := len(in.Chunks) == 0 // false once every chunk of the batch is a duplicate
 	if len(in.Chunks) > 0 {
 		m, err := h.masker(ctx, run)
 		if err != nil {
@@ -265,14 +266,21 @@ func (h *Handler) events(w http.ResponseWriter, req *http.Request) {
 				return
 			}
 			data := m.Mask(strings.ToValidUTF8(c.Data, "�"))
-			if _, err := h.q.AppendRunLogChunk(ctx, dbgen.AppendRunLogChunkParams{RunID: run.ID, Seq: c.Seq, Data: data}); err != nil {
+			n, err := h.q.AppendRunLogChunk(ctx, dbgen.AppendRunLogChunkParams{RunID: run.ID, Seq: c.Seq, Data: data})
+			if err != nil {
 				h.internalErr(w, "append chunk", err)
 				return
 			}
+			fresh = fresh || n > 0
 			last = max(last, c.Seq)
 		}
 	}
+	// A batch whose chunks are all known is a retry: its events were counted
+	// already (the live counters add up, so replaying them would double them).
 	for _, raw := range in.Events {
+		if !fresh {
+			break
+		}
 		if err := h.applyEvent(ctx, run.ID, raw); err != nil {
 			h.internalErr(w, "apply event", err)
 			return
@@ -320,7 +328,7 @@ func (h *Handler) applyEvent(ctx context.Context, run uuid.UUID, raw json.RawMes
 		return nil
 	}
 	switch e.Event {
-	case "runner_ok", "runner_changed", "runner_failed", "runner_unreachable":
+	case "runner_ok", "runner_changed", "runner_failed", "runner_unreachable", "runner_skipped":
 		if e.Host == "" {
 			return nil
 		}

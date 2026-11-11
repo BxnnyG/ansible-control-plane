@@ -5931,6 +5931,8 @@ export interface operations {
         parameters: {
             query?: {
                 state?: components["schemas"]["ConflictState"];
+                /** @description true also returns conflicts whose hosts all lie only in untracked networks. */
+                include_untracked?: boolean;
             };
             header?: never;
             path: {

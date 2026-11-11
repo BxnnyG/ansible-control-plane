@@ -78,6 +78,9 @@
     busy = true;
     try {
       const run = await api.templates.start(ws, template.id, built.overrides);
+      // Close first: when the caller is the run page itself (Run again) the same
+      // route component is reused for the new run and would keep the dialog open.
+      onclose();
       await goto(`/runs/${run.id}`);
     } catch (err) {
       error = describeError(err);

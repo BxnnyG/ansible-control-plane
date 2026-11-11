@@ -309,9 +309,10 @@ Hidden by default (add `include_untracked=true` to see everything):
 
 - `GET /hosts` (this includes `managed=false`, the Unmanaged tab) and the dashboard hosts tile
 - `GET /alerts` (alerts linked to hidden hosts; unlinked alerts stay visible)
+- `GET /conflicts` (a conflict is hidden only when every involved host is hidden)
 
 Not affected: `GET /networks` always lists every network (with `tracked`) and per-network host
-counts, conflicts, group rules and remediation targeting (they keep using all hosts, so a
+counts, group rules and remediation targeting (they keep using all hosts, so a
 group rule with a CIDR still matches hosts of untracked networks; tracking only changes the
 views). Merge and connector syncs also keep collecting untracked networks.
 

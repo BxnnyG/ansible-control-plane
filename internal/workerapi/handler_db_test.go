@@ -196,6 +196,26 @@ func TestRunFlow(t *testing.T) {
 			json.RawMessage(`"not an object"`),
 		},
 	}
+	// Live counters grow with every event; a retried batch is not counted twice.
+	live := runproto.EventsRequest{
+		Chunks: []runproto.Chunk{{Seq: 100, Data: "ok: [live1.example.test]\n"}},
+		Events: []json.RawMessage{
+			ev(map[string]any{"event": "runner_ok", "host": "live1.example.test", "task": "a"}),
+			ev(map[string]any{"event": "runner_changed", "host": "live1.example.test", "task": "b"}),
+			ev(map[string]any{"event": "runner_skipped", "host": "live1.example.test", "task": "c"}),
+		},
+	}
+	for i := 0; i < 2; i++ {
+		if code, b := e.do(t, "POST", base+"/events", cl.LeaseID, live); code != http.StatusNoContent {
+			t.Fatalf("live events: %d %s", code, b)
+		}
+	}
+	liveRows, _ := e.q.ListRunHostResults(ctx, queued.ID)
+	for _, h := range liveRows {
+		if h.Host == "live1.example.test" && (h.Ok != 2 || h.Changed != 1 || h.Skipped != 1) {
+			t.Errorf("live counters: %+v", h)
+		}
+	}
 	for i := 0; i < 2; i++ { // retry of the same batch must be idempotent
 		if code, b := e.do(t, "POST", base+"/events", cl.LeaseID, req); code != http.StatusNoContent {
 			t.Fatalf("events: %d %s", code, b)
@@ -203,7 +223,7 @@ func TestRunFlow(t *testing.T) {
 	}
 	runID := queued.ID
 	chunks, err := e.q.ListRunLogChunks(ctx, dbgen.ListRunLogChunksParams{RunID: runID, Seq: 0, Limit: 10})
-	if err != nil || len(chunks) != 2 {
+	if err != nil || len(chunks) != 3 {
 		t.Fatalf("chunks: %v %d", err, len(chunks))
 	}
 	for _, s := range []string{testBecome, testSurveyPw, testVault} {

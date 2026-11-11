@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Combobox from '$lib/components/Combobox.svelte';
+  import { playbookOptions } from '$lib/combobox';
   import {
     api,
     ApiError,
@@ -130,6 +132,14 @@
 
   let playbooks = $state<string[]>([]);
   let playbookNote = $state<string | null>(null);
+  const projectOptions = $derived(projects.map((p) => ({ value: p.id, label: p.name })));
+  const inventoryOptions = $derived(inventories.map((i) => ({ value: i.id, label: i.name })));
+  // A stored playbook that the latest scan no longer lists stays selectable.
+  const playbookChoices = $derived(
+    playbookOptions(
+      playbook && !playbooks.includes(playbook) ? [playbook, ...playbooks] : playbooks,
+    ),
+  );
   let error = $state<string | null>(null);
   let busy = $state(false);
 
@@ -382,28 +392,16 @@
           <div class="grid gap-3 sm:grid-cols-2">
             <div>
               <label class={label} for="t-project">Project</label>
-              <select id="t-project" class={input} bind:value={projectId} required>
-                <option value="">Select...</option>
-                {#each projects as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
-              </select>
+              <Combobox id="t-project" options={projectOptions} bind:value={projectId} required />
             </div>
             <div>
               <label class={label} for="t-playbook">Playbook</label>
-              <select id="t-playbook" class={input} bind:value={playbook} required>
-                <option value="">Select...</option>
-                {#if playbook && !playbooks.includes(playbook)}<option value={playbook}
-                    >{playbook}</option
-                  >{/if}
-                {#each playbooks as p (p)}<option value={p}>{p}</option>{/each}
-              </select>
+              <Combobox id="t-playbook" options={playbookChoices} bind:value={playbook} required />
               {#if playbookNote}<p class="mt-1 text-xs text-muted">{playbookNote}</p>{/if}
             </div>
             <div>
               <label class={label} for="t-inv">Inventory</label>
-              <select id="t-inv" class={input} bind:value={inventoryId} required>
-                <option value="">Select...</option>
-                {#each inventories as i (i.id)}<option value={i.id}>{i.name}</option>{/each}
-              </select>
+              <Combobox id="t-inv" options={inventoryOptions} bind:value={inventoryId} required />
             </div>
           </div>
         {:else if sec.id === 'credentials'}

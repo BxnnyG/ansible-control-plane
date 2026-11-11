@@ -189,3 +189,25 @@ func TestNetworkTrackingBulkDefaultAndSyncStability(t *testing.T) {
 		}
 	}
 }
+
+func TestConflictsRespectTracking(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	lan := e.network(t, "lan", "192.0.2.0/24")
+	e.observe(t, "opnsense", "a", connectors.Fields{MACs: []string{m1}, IPs: []string{"192.0.2.5"}}, e.now)
+	e.observe(t, "proxmox", "b", connectors.Fields{MACs: []string{m2}, IPs: []string{"192.0.2.5"}, Hostname: "web1"}, e.now)
+	e.merge(t)
+
+	if got, err := e.store.Conflicts(ctx, e.ws, fleet.StateOpen, true, nil); err != nil || len(got) != 1 {
+		t.Fatalf("tracked network: %d conflicts, %v", len(got), err)
+	}
+	if _, err := e.store.SetTracked(ctx, e.ws, []uuid.UUID{lan}, false); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := e.store.Conflicts(ctx, e.ws, fleet.StateOpen, true, nil); len(got) != 0 {
+		t.Errorf("conflict of untracked hosts must be hidden, got %d", len(got))
+	}
+	if got, _ := e.store.Conflicts(ctx, e.ws, fleet.StateOpen, false, nil); len(got) != 1 {
+		t.Errorf("include untracked must list the conflict, got %d", len(got))
+	}
+}
