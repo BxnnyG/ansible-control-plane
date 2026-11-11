@@ -2,7 +2,13 @@
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
   import ListSkeleton from '$lib/components/ListSkeleton.svelte';
   import { page } from '$app/state';
-  import { api, type FleetAlert, type FleetHostDetail, type RemediationRef } from '$lib/api';
+  import {
+    api,
+    type FleetAlert,
+    type FleetHostDetail,
+    type RemediationRef,
+    type Template,
+  } from '$lib/api';
   import { describeError } from '$lib/errors';
   import {
     alertBadge,
@@ -21,7 +27,9 @@
   import { rulesFor } from '$lib/remediation';
   import FixButton from '$lib/components/fleet/FixButton.svelte';
   import { session } from '$lib/session.svelte';
-  import { fmtDate, td, th } from '$lib/ui';
+  import { btn, fmtDate, td, th } from '$lib/ui';
+  import BulkRunDialog from '$lib/components/fleet/BulkRunDialog.svelte';
+  import PageHeader from '$lib/components/PageHeader.svelte';
   import FormError from '$lib/components/FormError.svelte';
 
   let host = $state<FleetHostDetail | null>(null);
@@ -31,6 +39,22 @@
   let applicable = $state<Record<string, RemediationRef[]>>({});
 
   const canRead = $derived(session.can('fleet.read'));
+  const canRun = $derived(session.can('run.execute') && session.can('template.read'));
+  let templates = $state<Template[]>([]);
+  let runOpen = $state(false);
+
+  /** Templates load only when the dialog is requested; the bulk dialog filters for limit overrides. */
+  async function openRun() {
+    const ws = session.slug;
+    if (!ws) return;
+    error = null;
+    try {
+      templates = (await api.templates.list(ws)) ?? [];
+      runOpen = true;
+    } catch (e) {
+      error = describeError(e);
+    }
+  }
   const canFix = $derived(session.can('fleet.remediate'));
   const rows = $derived(host ? fieldRows(host) : []);
 
@@ -72,21 +96,26 @@
 {:else if loading}
   <ListSkeleton />
 {:else if host}
-  <header class="mb-6">
-    <h1 class="text-xl font-semibold">{host.name}</h1>
-    <p class="mt-1 text-muted">
-      First seen {fmtDate(host.first_seen)}, last seen {fmtDate(host.last_seen)}
-    </p>
-    {#if host.open_alerts > 0}
-      <p class="mt-2 text-sm">
+  <PageHeader
+    title={host.name}
+    description="First seen {fmtDate(host.first_seen)}, last seen {fmtDate(host.last_seen)}"
+  >
+    {#snippet actions()}
+      {#if host && host.open_alerts > 0}
         <a
           href="/fleet/alerts?host_id={host.id}"
-          class="rounded px-2 py-0.5 {severityClass(host.worst_severity)}"
+          class="rounded px-2 py-0.5 text-sm {severityClass(host.worst_severity)}"
           >Open alerts: {alertBadge(host)}</a
         >
-      </p>
-    {/if}
-  </header>
+      {/if}
+      {#if canRun}
+        <button class={btn} onclick={openRun}>Run template on this host</button>
+      {/if}
+    {/snippet}
+  </PageHeader>
+  {#if runOpen && session.slug}
+    <BulkRunDialog ws={session.slug} hosts={[host]} {templates} onclose={() => (runOpen = false)} />
+  {/if}
 
   <section aria-labelledby="status-h" class="mb-8">
     <h2 id="status-h" class="mb-2 text-sm font-semibold">Status</h2>
