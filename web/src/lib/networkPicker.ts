@@ -111,3 +111,42 @@ export function isDirty(networks: readonly PickerNetwork[], sel: Selection): boo
 export function selectedNetworkIds(networks: readonly PickerNetwork[], sel: Selection): string[] {
   return networks.filter((n) => sel[n.id]).map((n) => n.id);
 }
+
+export type NetworkSort = 'default' | 'hosts';
+
+/** Default for the "hide empty networks" toggle: on once the list is long. */
+export const MANY_NETWORKS = 12;
+
+type Counted = PickerNetwork & { host_count: number };
+
+/** Drops networks without hosts, but never ones that are currently selected. */
+export function hideEmpty<T extends Counted>(networks: readonly T[], sel: Selection): T[] {
+  return networks.filter((n) => n.host_count > 0 || !!sel[n.id]);
+}
+
+/**
+ * Orders networks for the picker: selected first (when `selectedFirst`), then by
+ * host count (descending) or by connector and CIDR. Stable and non-mutating.
+ */
+export function sortNetworks<T extends Counted>(
+  networks: readonly T[],
+  sel: Selection,
+  mode: NetworkSort,
+  selectedFirst = true,
+): T[] {
+  const cmp = (a: T, b: T): number => {
+    if (selectedFirst) {
+      const d = Number(!!sel[b.id]) - Number(!!sel[a.id]);
+      if (d !== 0) return d;
+    }
+    if (mode === 'hosts' && a.host_count !== b.host_count) return b.host_count - a.host_count;
+    return a.cidr.localeCompare(b.cidr, undefined, { numeric: true });
+  };
+  return [...networks].sort(cmp);
+}
+
+/** Short chip label: description (or interface) plus CIDR. */
+export function networkChipLabel(n: PickerNetwork): string {
+  const name = n.description || n.interface;
+  return name ? `${name} ${n.cidr}` : n.cidr;
+}

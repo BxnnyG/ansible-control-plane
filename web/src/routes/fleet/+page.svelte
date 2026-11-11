@@ -53,7 +53,6 @@
   let conflictsOnly = $state(initial.conflicts);
   let alertsOnly = $state(initial.alerts);
   let showHidden = $state(initial.hidden);
-  let networksOpen = $state(false);
 
   const trackedCount = $derived(networks.filter((n) => n.tracked).length);
   const hidden = $derived(hiddenNetworkCount(networks));
@@ -187,27 +186,23 @@
   <p class="text-muted">You do not have permission to view hosts in this workspace.</p>
 {:else}
   <section aria-labelledby="networks-h" class="mb-6">
-    <details
-      class="{card} !p-0"
-      ontoggle={(e) => (networksOpen = (e.currentTarget as HTMLDetailsElement).open)}
-    >
-      <summary class="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3">
+    <div class="{card} space-y-3">
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
         <h2 id="networks-h" class="text-sm font-semibold">Networks</h2>
         <span class="text-sm text-muted">
           {trackedCount} of {networks.length} tracked{hidden > 0 ? `, ${hidden} hidden` : ''}
         </span>
-      </summary>
-      <div class="border-t border-border px-4 py-4">
-        {#if networksOpen && session.slug}
-          <NetworkTrackingPanel
-            ws={session.slug}
-            {networks}
-            saveLabel="Save tracking"
-            onsaved={onTrackingSaved}
-          />
-        {/if}
       </div>
-    </details>
+      {#if session.slug}
+        <NetworkTrackingPanel
+          ws={session.slug}
+          {networks}
+          collapsible
+          saveLabel="Save tracking"
+          onsaved={onTrackingSaved}
+        />
+      {/if}
+    </div>
     {#if networks.length > 0}
       <label class="mt-2 flex items-center gap-2 text-sm">
         <input type="checkbox" bind:checked={showHidden} /> Show hosts of untracked networks

@@ -11,6 +11,9 @@ import {
   selectNone,
   selectedNetworkIds,
   toggleGroup,
+  hideEmpty,
+  networkChipLabel,
+  sortNetworks,
   type PickerNetwork,
 } from './networkPicker';
 
@@ -94,5 +97,37 @@ describe('selection', () => {
   });
   it('lists selected ids in network order', () => {
     expect(selectedNetworkIds(nets, { ...sel, d: true })).toEqual(['a', 'c', 'd']);
+  });
+});
+
+describe('sortNetworks / hideEmpty / networkChipLabel', () => {
+  const mk = (id: string, cidr: string, host_count: number, tracked = false) => ({
+    id,
+    cidr,
+    connector: 'c',
+    tracked,
+    host_count,
+  });
+  const nets = [
+    mk('a', '192.0.2.0/24', 1),
+    mk('b', '198.51.100.0/24', 9),
+    mk('c', '203.0.113.0/24', 0),
+  ];
+
+  it('puts selected first, then by host count', () => {
+    const out = sortNetworks(nets, { a: true }, 'hosts').map((n) => n.id);
+    expect(out).toEqual(['a', 'b', 'c']);
+    expect(sortNetworks(nets, {}, 'hosts').map((n) => n.id)).toEqual(['b', 'a', 'c']);
+    expect(sortNetworks(nets, {}, 'default').map((n) => n.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('hides empty networks except selected ones', () => {
+    expect(hideEmpty(nets, {}).map((n) => n.id)).toEqual(['a', 'b']);
+    expect(hideEmpty(nets, { c: true }).map((n) => n.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('builds chip labels', () => {
+    expect(networkChipLabel({ ...nets[0], description: 'Lab' })).toBe('Lab 192.0.2.0/24');
+    expect(networkChipLabel(nets[0])).toBe('192.0.2.0/24');
   });
 });
