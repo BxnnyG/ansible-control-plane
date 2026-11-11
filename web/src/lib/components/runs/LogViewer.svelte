@@ -10,13 +10,24 @@
     ws,
     runId,
     onstatus,
-  }: { ws: string; runId: string; onstatus?: (e: RunStatusEvent) => void } = $props();
+    query = $bindable(''),
+    lines = $bindable([]),
+    jumpTo,
+  }: {
+    ws: string;
+    runId: string;
+    onstatus?: (e: RunStatusEvent) => void;
+    /** Search text; the parent may set it (host filter). */
+    query?: string;
+    /** Loaded lines, exposed read-only for the parent (failure extraction). */
+    lines?: LogLine[];
+    /** Scrolls to a line index when `n` changes. */
+    jumpTo?: { line: number; n: number };
+  } = $props();
 
-  let lines = $state.raw<LogLine[]>([]);
   let dropped = $state(0);
   let connection = $state<'connecting' | 'live' | 'reconnecting' | 'ended'>('connecting');
   let autoscroll = $state(true);
-  let query = $state('');
   let cursor = $state(0);
   let box = $state<HTMLDivElement | null>(null);
 
@@ -82,6 +93,19 @@
   $effect(() => {
     void query;
     cursor = 0;
+  });
+
+  $effect(() => {
+    const j = jumpTo;
+    if (!j) return;
+    untrack(() => {
+      autoscroll = false;
+      // Wait for the highlight/render caused by a simultaneous query change.
+      setTimeout(
+        () => document.getElementById(`log-line-${j.line}`)?.scrollIntoView({ block: 'center' }),
+        0,
+      );
+    });
   });
 
   function jump(delta: number) {

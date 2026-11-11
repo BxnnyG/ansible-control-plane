@@ -13,6 +13,8 @@
   import RunDialog from '$lib/components/templates/RunDialog.svelte';
   import FormError from '$lib/components/FormError.svelte';
   import HostResults from '$lib/components/runs/HostResults.svelte';
+  import { extractHostFailures } from '$lib/hostFailures';
+  import type { LogLine } from '$lib/runlog';
   import LogViewer from '$lib/components/runs/LogViewer.svelte';
   import StatusBadge from '$lib/components/runs/StatusBadge.svelte';
 
@@ -42,6 +44,32 @@
     }
   }
 
+  let logQuery = $state('');
+  let logLines = $state.raw<LogLine[]>([]);
+  let jumpTo = $state<{ line: number; n: number } | undefined>();
+  let hostFilter = $state<string | null>(null);
+  const failures = $derived(extractHostFailures(logLines.map((l) => l.text)));
+
+  /** Click on a host row: filter the log to the host and show its first failure; again: reset. */
+  function selectHost(host: string) {
+    if (hostFilter === host) {
+      clearHost();
+      return;
+    }
+    hostFilter = host;
+    logQuery = host;
+    const f = failures.get(host);
+    if (f) jumpTo = { line: f.line, n: (jumpTo?.n ?? 0) + 1 };
+  }
+  function clearHost() {
+    hostFilter = null;
+    logQuery = '';
+  }
+  // Editing the search by hand ends the host filter.
+  $effect(() => {
+    if (hostFilter && logQuery !== hostFilter) hostFilter = null;
+  });
+
   let loading = $state(true);
   let loadError = $state<string | null>(null);
 
@@ -65,6 +93,13 @@
     if (!slug || !rid) return;
     untrack(() => {
       run = null;
+      // The route component is reused when the id changes: drop dialog state.
+      again = null;
+      hostFilter = null;
+      logQuery = '';
+      jumpTo = undefined;
+      againBusy = false;
+      error = null;
       void load(slug, rid);
     });
   });
@@ -206,12 +241,30 @@
 
   <section class="mb-6" aria-labelledby="log-h">
     <h2 id="log-h" class="mb-2 text-sm font-semibold">Log</h2>
-    <LogViewer {ws} {runId} onstatus={applyStatus} />
+    <LogViewer
+      {ws}
+      {runId}
+      onstatus={applyStatus}
+      bind:query={logQuery}
+      bind:lines={logLines}
+      {jumpTo}
+    />
   </section>
 
   <section aria-labelledby="hosts-h">
     <h2 id="hosts-h" class="mb-2 text-sm font-semibold">Hosts</h2>
-    <HostResults results={run.host_results} />
+    <div class="mb-2 flex items-center gap-2 text-xs text-muted">
+      <span>Click a host to filter the log to it; hover a failed host to see its error.</span>
+      {#if hostFilter}
+        <button type="button" class={btn} onclick={clearHost}>Clear filter ({hostFilter})</button>
+      {/if}
+    </div>
+    <HostResults
+      results={run.host_results}
+      {failures}
+      selected={hostFilter}
+      onselect={selectHost}
+    />
   </section>
 {/if}
 
