@@ -86,6 +86,7 @@ Execution order: M4 → M7 → M5 → M6 → M8 (numbers unchanged, see `PLAN.md
 - Project subagents (`.claude/agents/`) are only loaded when Claude Code is started inside the repository directory.
 - Infrastructure specifics (addresses, hostnames, tokens) belong in `docs/local/` and `secrets/` (both git-ignored), never in tracked files.
 - The host is small (4 GiB RAM): use multi-stage builds and memory limits; keep worker concurrency low by default.
+- Before every `docker compose up -d --build` check `df -h /`: a cold worker image build needs several GB. With less than ~4 GB free run `docker builder prune -af` first. A full disk crashes the live Postgres and can leave a stale endpoint in `acp_internal` (fix: `docker compose rm -sf app worker postgres`, `docker network rm acp_internal`, `docker compose up -d`; never `down`, the egress rules are bound to the `acp_egress` bridge).
 - The root disk is small (16 GB) and shared with the live stack and Semaphore: never run Go/test containers in parallel, always `docker run --rm`, no anonymous volumes (test Postgres uses tmpfs), remove throwaway images (e.g. `acp-e2e-*:test`) after use.
 - OPNsense instances may use different DHCP backends (Kea, dnsmasq, ISC legacy) – detect per instance, never assume.
 - Some upstream APIs are only reachable over plain HTTP on non-standard ports inside an encrypted overlay network – connectors must support per-instance URL, port and TLS settings.

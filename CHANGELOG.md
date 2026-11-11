@@ -6,6 +6,21 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-11-11
+
+### Fixed
+
+- **Conflicts and tracked networks:** `GET /conflicts` hides conflicts whose hosts are all in untracked networks (`include_untracked=true` shows everything).
+- **Run page counters:** per-host counters update live for every task result, not only for failures; the worker ships host events after the log lines they belong to. Needs the new worker image.
+- **Run again:** the run dialog closes on submit and no longer stays open over the new run.
+- **Network tracking panel:** a slow, older load can no longer overwrite the current selection.
+
+### Changed
+
+- **Network tracking on the Hosts page:** collapsed by default with the tracked networks as chips; the picker sorts tracked networks first (optionally by host count), can hide empty networks and has collapsible connector groups.
+- **Template form:** project, playbook and inventory are searchable comboboxes; playbooks are grouped by directory.
+- **Run page hosts table:** hovering or focusing a failed host shows its failure message; clicking a host filters the log to it and jumps to the first failure line.
+
 ## [1.3.0] - 2026-11-11
 
 ### Load times and UX polish
