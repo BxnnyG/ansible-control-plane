@@ -33,6 +33,7 @@
   let saving = $state(false);
   let saved = $state(false);
   let error = $state<string | null>(null);
+  let runId = 0;
 
   const canManage = $derived(session.can('fleet.manage'));
   const dirty = $derived(isDirty(networks, selection) || newTracked !== savedNewTracked);
@@ -41,19 +42,27 @@
     const slug = ws;
     const list = given;
     untrack(() => {
+      // Only the newest run may write: a slower, older run would otherwise
+      // overwrite the selection with stale tracked flags.
+      const run = ++runId;
       loading = true;
       Promise.all([
         list ? Promise.resolve(list) : api.fleet.networks(slug),
         api.fleet.settings(slug),
       ])
         .then(([n, s]) => {
+          if (run !== runId) return;
           networks = n ?? [];
           selection = initialSelection(networks);
           newTracked = s.new_networks_tracked;
           savedNewTracked = s.new_networks_tracked;
         })
-        .catch((e) => (error = describeError(e)))
-        .finally(() => (loading = false));
+        .catch((e) => {
+          if (run === runId) error = describeError(e);
+        })
+        .finally(() => {
+          if (run === runId) loading = false;
+        });
     });
   });
 
