@@ -45,7 +45,7 @@ const MaskedValue = "***"
 // the credential references. The worker API builds the bundle from it; later
 // edits of the template do not affect queued runs.
 type Params struct {
-	Playbook        string         `json:"playbook"`
+	Playbook string `json:"playbook"`
 	// Builtin is set for runs of a playbook shipped with the worker image
 	// (runproto.BuiltinProbe); such runs have no template and no project.
 	Builtin         string         `json:"builtin,omitempty"`

@@ -51,9 +51,9 @@ type ClaimResponse struct {
 // Spec is the command specification inside the bundle. It never contains
 // credentials, only the list of values the worker must mask (Mask).
 type Spec struct {
-	RunID     string            `json:"run_id"`
-	Revision  string            `json:"revision"`
-	Playbook  string            `json:"playbook"`
+	RunID    string `json:"run_id"`
+	Revision string `json:"revision"`
+	Playbook string `json:"playbook"`
 	// Builtin names a playbook of the worker image (BuiltinProbe). The project
 	// tree is empty then and Playbook is the file name copied from the image.
 	Builtin   string            `json:"builtin,omitempty"`

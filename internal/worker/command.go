@@ -165,7 +165,7 @@ func installBuiltin(project, builtinDir string, sp runproto.Spec) error {
 	if err != nil {
 		return fmt.Errorf("read built-in playbook: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(project, file), b, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(project, file), b, 0o600); err != nil { //nolint:gosec // file comes from the fixed allowlist above
 		return fmt.Errorf("install built-in playbook: %w", err)
 	}
 	return nil
