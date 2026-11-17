@@ -4,7 +4,16 @@ All notable changes are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.4.0] - 2026-11-17
+
+### Added
+
+- **Reachability matrix (NET-1):** scheduled or on-demand ping, TCP and DNS probes from inventory hosts to configured targets, shown as a source by target matrix at `/network/reachability` with latency, detail, stale marking and a link to the run. "Probe host unreachable" is distinct from "failed". New permissions `reachability.read`, `reachability.write`, `reachability.run`; API under `/workspaces/{ws}/reachability`; bundled probe playbook in the worker image (needs the new worker image). Guide: `docs/reachability.md`.
+- **CI:** the worker image job runs the callback plugin tests (`scripts/test-callback.sh`).
+
+### Changed
+
+- Run list and run detail hide the playbook line for built-in probe runs (no template, label "Reachability probe").
 
 ## [1.3.1] - 2026-11-11
 

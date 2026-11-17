@@ -3,6 +3,10 @@
 
 Only status fields are emitted, never result payloads (ADR-0016). Tasks marked
 no_log are reported with status only and without any task arguments.
+
+The one exception is the built-in reachability probe (ADR-0022): when the worker
+sets ACP_PROBE_RUN=1, the set_stats key "acp_probe" of each host is forwarded as
+a "probe_result" event. For every other run the no-payload rule stays unchanged.
 """
 from __future__ import annotations
 
@@ -86,6 +90,16 @@ class CallbackModule(CallbackBase):
     def v2_runner_on_skipped(self, result):
         self._runner("skipped", result)
 
+    def _emit_probe_results(self, stats):
+        """Forward the acp_probe custom stats per host (built-in probe runs only)."""
+        if os.environ.get("ACP_PROBE_RUN") != "1":
+            return
+        custom = getattr(stats, "custom", None) or {}
+        for host in sorted(h for h in custom if h != "_run"):
+            data = custom[host]
+            if isinstance(data, dict) and isinstance(data.get("acp_probe"), dict):
+                self._emit("probe_result", host=host, results=data["acp_probe"])
+
     def v2_playbook_on_stats(self, stats):
         hosts = {}
         for h in sorted(stats.processed.keys()):
@@ -93,6 +107,8 @@ class CallbackModule(CallbackBase):
             hosts[h] = {k: int(s.get(k, 0)) for k in
                         ("ok", "changed", "failures", "unreachable", "skipped", "rescued", "ignored")}
         self._emit("stats", hosts=hosts)
+        # After "stats": the app marks unreachable sources from the host counters.
+        self._emit_probe_results(stats)
         if self._fh:
             self._fh.close()
             self._fh = None

@@ -32,6 +32,9 @@ type Runner struct {
 	Log      *slog.Logger
 	WorkDir  string // run directories live here (tmpfs), default /tmp/runs
 	CacheDir string // Galaxy cache
+	// BuiltinDir holds the playbooks of built-in runs (sp.Builtin); default
+	// /usr/share/acp/ansible/builtin.
+	BuiltinDir string
 	// Binaries; defaults "ansible-playbook" and "ansible-galaxy".
 	PlaybookBin string
 	GalaxyBin   string
@@ -162,7 +165,7 @@ func (r *Runner) Execute(ctx context.Context, claim runproto.ClaimResponse) {
 		return
 	}
 	st.masker = runmask.New(sp.Mask)
-	if err := prepareDirs(dir, sp); err != nil {
+	if err := prepareDirs(dir, sp, r.builtinDir()); err != nil {
 		fail("cannot prepare run directory", err)
 		return
 	}
@@ -201,7 +204,14 @@ func readSpec(dir string) (runproto.Spec, error) {
 	return sp, nil
 }
 
-func prepareDirs(dir string, sp runproto.Spec) error {
+func (r *Runner) builtinDir() string {
+	if r.BuiltinDir != "" {
+		return r.BuiltinDir
+	}
+	return defaultBuiltinDir
+}
+
+func prepareDirs(dir string, sp runproto.Spec, builtinDir string) error {
 	for _, d := range []string{filepath.Join(dir, tmpSubdir, "local"), filepath.Join(dir, tmpSubdir, "home"), filepath.Join(dir, tmpSubdir, "remote"), filepath.Join(dir, projectDir)} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			return err
@@ -212,6 +222,11 @@ func prepareDirs(dir string, sp runproto.Spec) error {
 	}
 	if err := insideProject(filepath.Join(dir, projectDir), sp.Playbook); err != nil {
 		return err
+	}
+	if sp.Builtin != "" {
+		if err := installBuiltin(filepath.Join(dir, projectDir), builtinDir, sp); err != nil {
+			return err
+		}
 	}
 	if err := os.WriteFile(filepath.Join(dir, eventsFile), nil, 0o600); err != nil {
 		return err

@@ -27,6 +27,7 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/notify"
 	"github.com/BxnnyG/ansible-control-plane/internal/policy"
 	"github.com/BxnnyG/ansible-control-plane/internal/projects"
+	"github.com/BxnnyG/ansible-control-plane/internal/reachability"
 	"github.com/BxnnyG/ansible-control-plane/internal/remediation"
 	"github.com/BxnnyG/ansible-control-plane/internal/runs"
 	"github.com/BxnnyG/ansible-control-plane/internal/runstream"
@@ -165,6 +166,9 @@ func run(args []string) error {
 			server.WithNotifications(notify.NewService(notify.ServiceOptions{DB: pool, Secrets: sec, PublicURL: cfg.PublicURL})))
 		go auth.RunSessionCleanup(ctx, q, auth.DefaultCleanupInterval, log)
 		go schedSvc.Run(ctx, schedules.DefaultTick, log)
+		reachSvc := reachability.New(reachability.Options{DB: pool, Runs: runSvc})
+		opts = append(opts, server.WithReachability(reachSvc))
+		go reachSvc.Run(ctx, reachability.DefaultTick, log)
 		notifyDisp := notify.New(notify.DispatcherOptions{DB: pool, Secrets: sec, PublicURL: cfg.PublicURL, RetentionDays: cfg.RunLogRetentionDays})
 		go notifyDisp.Run(ctx, notify.DefaultTick, log)
 		go prj.RunScheduler(ctx, projects.DefaultScheduleTick, projects.DefaultScheduleConcurrency, log)

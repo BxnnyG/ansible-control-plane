@@ -42,6 +42,9 @@ const (
 	VaultDecrypt       Permission = "vault.decrypt"
 	NotificationRead   Permission = "notification.read"
 	NotificationManage Permission = "notification.manage"
+	ReachabilityRead   Permission = "reachability.read"
+	ReachabilityWrite  Permission = "reachability.write"
+	ReachabilityRun    Permission = "reachability.run"
 )
 
 // Roles in ascending order of privilege.
@@ -62,6 +65,8 @@ var workspaceWide = map[Permission]bool{
 	AuditRead: true, ConnectorRead: true, ConnectorWrite: true, SecretsWrite: true, SecretsMetaRead: true,
 	VaultRead: true, VaultManage: true, VaultDecrypt: true,
 	NotificationRead: true, NotificationManage: true,
+	// The matrix spans the whole workspace and probe runs use workspace authority.
+	ReachabilityRead: true, ReachabilityWrite: true, ReachabilityRun: true,
 }
 
 // IsWorkspaceWide reports whether the permission requires an unscoped membership.
@@ -70,7 +75,7 @@ func IsWorkspaceWide(p Permission) bool { return workspaceWide[p] }
 // Viewers read everything that is not administrative. members.read,
 // connector.read, audit.read and secrets.meta.read are granted by higher roles.
 var viewerPerms = []Permission{
-	WorkspaceRead, ProjectRead, InventoryRead, TemplateRead, RunRead, ScheduleRead, FleetRead,
+	WorkspaceRead, ProjectRead, InventoryRead, TemplateRead, RunRead, ScheduleRead, FleetRead, ReachabilityRead,
 }
 
 var matrix = buildMatrix()
@@ -87,8 +92,8 @@ func buildMatrix() map[string]map[Permission]bool {
 		return m
 	}
 	viewer := grant(nil, viewerPerms...)
-	operator := grant(viewer, RunExecute, RunCancel, ProjectSync, FleetRemediate)
-	editor := grant(operator, SecretsMetaRead, ProjectWrite, InventoryWrite, TemplateWrite, ScheduleWrite, VaultRead, FleetManage, NotificationRead)
+	operator := grant(viewer, RunExecute, RunCancel, ProjectSync, FleetRemediate, ReachabilityRun)
+	editor := grant(operator, SecretsMetaRead, ProjectWrite, InventoryWrite, TemplateWrite, ScheduleWrite, VaultRead, FleetManage, NotificationRead, ReachabilityWrite)
 	admin := grant(editor, SecretsWrite, WorkspaceManage, MembersRead, MembersManage, AuditRead, ConnectorRead, ConnectorWrite, VaultManage, VaultDecrypt, NotificationManage)
 	owner := grant(admin, WorkspaceDelete)
 	return map[string]map[Permission]bool{

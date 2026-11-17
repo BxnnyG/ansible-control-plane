@@ -195,3 +195,51 @@ func TestRequirementsKeyAndKinds(t *testing.T) {
 		t.Errorf("legacy collections: %v", got)
 	}
 }
+
+func TestProbeRunEnv(t *testing.T) {
+	base := []string{"PATH=/usr/bin", "ACP_PROBE_RUN=1"}
+	tests := []struct {
+		name string
+		sp   runproto.Spec
+		want string
+	}{
+		{"probe run", runproto.Spec{Builtin: runproto.BuiltinProbe, Playbook: "probe.yml"}, "1"},
+		{"regular run", runproto.Spec{Playbook: "site.yml"}, ""},
+		{"template cannot set it", runproto.Spec{Playbook: "site.yml", Env: map[string]string{"ACP_PROBE_RUN": "1"}}, ""},
+		{"other builtin", runproto.Spec{Builtin: "other", Playbook: "x.yml", Env: map[string]string{"ACP_PROBE_RUN": "1"}}, ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := envMap(buildEnv(tc.sp, "/tmp/runs/r1", base, "", ""))["ACP_PROBE_RUN"]
+			if got != tc.want {
+				t.Errorf("ACP_PROBE_RUN = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestInstallBuiltin(t *testing.T) {
+	src, project := t.TempDir(), t.TempDir()
+	if err := os.WriteFile(filepath.Join(src, "probe.yml"), []byte("- hosts: all\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	probe := runproto.Spec{Builtin: runproto.BuiltinProbe, Playbook: "probe.yml"}
+	if err := installBuiltin(project, src, probe); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := os.ReadFile(filepath.Join(project, "probe.yml")); err != nil || string(b) != "- hosts: all\n" {
+		t.Errorf("installed playbook: %q %v", b, err)
+	}
+	for name, sp := range map[string]runproto.Spec{
+		"unknown source":    {Builtin: "shell", Playbook: "probe.yml"},
+		"playbook mismatch": {Builtin: runproto.BuiltinProbe, Playbook: "../../etc/x.yml"},
+		"other file in dir": {Builtin: runproto.BuiltinProbe, Playbook: "other.yml"},
+	} {
+		if err := installBuiltin(t.TempDir(), src, sp); err == nil {
+			t.Errorf("%s accepted", name)
+		}
+	}
+	if err := installBuiltin(project, t.TempDir(), probe); err == nil {
+		t.Error("missing image playbook accepted")
+	}
+}

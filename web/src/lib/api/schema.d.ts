@@ -1707,6 +1707,151 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace}/reachability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Source x target matrix with the latest result per pair.
+         * @description Workspace-wide: requires an unscoped membership. A pair without a result has not been probed yet. `probe_unreachable` means the worker could not reach the source host, which is distinct from a failed check.
+         */
+        get: operations["getReachabilityMatrix"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace}/reachability/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        get: operations["getReachabilityConfig"];
+        /** Replace the probe configuration (interval 0 = scheduler off). */
+        put: operations["setReachabilityConfig"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace}/reachability/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        get: operations["listReachabilitySources"];
+        put?: never;
+        /** Make a host of the probe inventory a probe source. */
+        post: operations["createReachabilitySource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace}/reachability/sources/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteReachabilitySource"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace}/reachability/targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        get: operations["listReachabilityTargets"];
+        put?: never;
+        post: operations["createReachabilityTarget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace}/reachability/targets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["updateReachabilityTarget"];
+        post?: never;
+        delete: operations["deleteReachabilityTarget"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace}/reachability/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a probe run now (built-in playbook, no template).
+         * @description Returns the queued run. 409 when a probe run is already queued or running.
+         */
+        post: operations["runReachabilityProbe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace}/notifications/channels": {
         parameters: {
             query?: never;
@@ -1851,6 +1996,86 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ReachabilityConfig: {
+            /** Format: uuid */
+            inventory_id: string | null;
+            /** Format: uuid */
+            ssh_secret_id: string | null;
+            /** @description 0 = scheduler off, otherwise 60-86400. */
+            interval_seconds: number;
+            /** Format: date-time */
+            next_run_at: string | null;
+            /** Format: date-time */
+            last_run_at: string | null;
+        };
+        ReachabilityConfigInput: {
+            /** Format: uuid */
+            inventory_id?: string | null;
+            /** Format: uuid */
+            ssh_secret_id?: string | null;
+            interval_seconds: number;
+        };
+        ReachabilitySource: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            host_id: string;
+            host_name: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ReachabilitySourceInput: {
+            /** Format: uuid */
+            host_id: string;
+        };
+        /** @enum {string} */
+        ReachabilityCheck: "icmp" | "tcp" | "dns";
+        ReachabilityTarget: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            address: string;
+            check: components["schemas"]["ReachabilityCheck"];
+            port: number | null;
+            dns_name: string;
+            enabled: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ReachabilityTargetInput: {
+            name: string;
+            /** @description Host name or IP address; informational for dns checks. */
+            address: string;
+            check: components["schemas"]["ReachabilityCheck"];
+            /** @description Required for tcp. */
+            port?: number | null;
+            /** @description Name resolved on the source host; required for dns. */
+            dns_name?: string;
+            enabled?: boolean;
+        };
+        /** @enum {string} */
+        ReachabilityStatus: "ok" | "failed" | "probe_unreachable";
+        ReachabilityResult: {
+            /** Format: uuid */
+            source_id: string;
+            /** Format: uuid */
+            target_id: string;
+            status: components["schemas"]["ReachabilityStatus"];
+            latency_ms: number | null;
+            detail: string;
+            /** Format: uuid */
+            run_id: string | null;
+            /** Format: date-time */
+            checked_at: string;
+        };
+        ReachabilityMatrix: {
+            config: components["schemas"]["ReachabilityConfig"];
+            sources: components["schemas"]["ReachabilitySource"][];
+            targets: components["schemas"]["ReachabilityTarget"][];
+            results: components["schemas"]["ReachabilityResult"][];
+        };
         /** @description Error envelope. `code` is a stable machine-readable value (open set, e.g. not_found, conflict, invalid, bad_request, version_conflict, git_conflict). */
         ErrorBody: {
             error: string;
@@ -6532,6 +6757,283 @@ export interface operations {
                 };
                 content?: never;
             };
+            default: components["responses"]["Error"];
+        };
+    };
+    getReachabilityMatrix: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReachabilityMatrix"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getReachabilityConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReachabilityConfig"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setReachabilityConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReachabilityConfigInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReachabilityConfig"];
+                };
+            };
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listReachabilitySources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReachabilitySource"][];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createReachabilitySource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReachabilitySourceInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReachabilitySource"];
+                };
+            };
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteReachabilitySource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["NoContent"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listReachabilityTargets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReachabilityTarget"][];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createReachabilityTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReachabilityTargetInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReachabilityTarget"];
+                };
+            };
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updateReachabilityTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReachabilityTargetInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReachabilityTarget"];
+                };
+            };
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteReachabilityTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["NoContent"];
+            default: components["responses"]["Error"];
+        };
+    };
+    runReachabilityProbe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace slug. */
+                workspace: components["parameters"]["Workspace"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

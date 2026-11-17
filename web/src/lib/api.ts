@@ -28,6 +28,15 @@ export type ProjectInput = S['ProjectInput'];
 export type ProjectUpdate = S['ProjectUpdate'];
 export type HostKeyInfo = S['HostKeyInfo'];
 export type ProjectRevision = S['ProjectRevision'];
+export type ReachabilityConfig = S['ReachabilityConfig'];
+export type ReachabilityConfigInput = S['ReachabilityConfigInput'];
+export type ReachabilitySource = S['ReachabilitySource'];
+export type ReachabilityTarget = S['ReachabilityTarget'];
+export type ReachabilityTargetInput = S['ReachabilityTargetInput'];
+export type ReachabilityCheck = S['ReachabilityCheck'];
+export type ReachabilityStatus = S['ReachabilityStatus'];
+export type ReachabilityResult = S['ReachabilityResult'];
+export type ReachabilityMatrix = S['ReachabilityMatrix'];
 export type InventoryMode = S['InventoryMode'];
 export type Inventory = S['Inventory'];
 export type InventoryInput = S['InventoryInput'];
@@ -459,6 +468,26 @@ export const api = {
         version,
       ),
   },
+  reachability: {
+    matrix: (ws: string) => request<ReachabilityMatrix>('GET', reachabilityPath(ws, '')),
+    setConfig: (ws: string, c: ReachabilityConfigInput) =>
+      request<ReachabilityConfig>('PUT', reachabilityPath(ws, '/config'), c),
+    addSource: (ws: string, hostId: string) =>
+      request<ReachabilitySource>('POST', reachabilityPath(ws, '/sources'), { host_id: hostId }),
+    removeSource: (ws: string, id: string) =>
+      request<void>('DELETE', reachabilityPath(ws, `/sources/${encodeURIComponent(id)}`)),
+    addTarget: (ws: string, t: ReachabilityTargetInput) =>
+      request<ReachabilityTarget>('POST', reachabilityPath(ws, '/targets'), t),
+    updateTarget: (ws: string, id: string, t: ReachabilityTargetInput) =>
+      request<ReachabilityTarget>(
+        'PUT',
+        reachabilityPath(ws, `/targets/${encodeURIComponent(id)}`),
+        t,
+      ),
+    removeTarget: (ws: string, id: string) =>
+      request<void>('DELETE', reachabilityPath(ws, `/targets/${encodeURIComponent(id)}`)),
+    run: (ws: string) => request<Run>('POST', reachabilityPath(ws, '/run')),
+  },
   notifications: {
     channels: {
       list: (ws: string) =>
@@ -690,6 +719,10 @@ function connectorsPath(ws: string, sub?: string): string {
   let p = `/api/v1/workspaces/${encodeURIComponent(ws)}/connectors`;
   if (sub) p += `/${sub}`;
   return p;
+}
+
+function reachabilityPath(ws: string, sub: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(ws)}/reachability${sub}`;
 }
 
 function notificationsPath(ws: string, sub: string): string {

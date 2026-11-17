@@ -34,6 +34,7 @@ RUN mkdir -m 0750 /usr/libexec/acp \
  && chmod 0750 /usr/libexec/acp/acp-worker \
  && setcap cap_chown,cap_kill,cap_setgid,cap_setuid+ep /usr/libexec/acp/acp-worker
 COPY worker/ansible/callback_plugins /usr/share/acp/ansible/callback_plugins
+COPY worker/ansible/builtin /usr/share/acp/ansible/builtin
 USER acp
 ENV HOME=/home/acp \
     ANSIBLE_LOCAL_TEMP=/tmp/ansible-local \

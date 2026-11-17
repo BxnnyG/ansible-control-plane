@@ -35,6 +35,7 @@ tags:
   - {name: connectors}
   - {name: fleet}
   - {name: notifications}
+  - {name: reachability}
   - {name: hooks}
 paths:
   /api/auth/config:
@@ -1331,6 +1332,128 @@ paths:
         '429': {description: Rate limited.}
         default: {$ref: '#/components/responses/Error'}
 
+  /api/v1/workspaces/{workspace}/reachability:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [reachability]
+      operationId: getReachabilityMatrix
+      summary: Source x target matrix with the latest result per pair.
+      description: >-
+        Workspace-wide: requires an unscoped membership. A pair without a result has not been
+        probed yet. `probe_unreachable` means the worker could not reach the source host, which is
+        distinct from a failed check.
+      x-acp-permission: reachability.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/ReachabilityMatrix'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/reachability/config:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [reachability]
+      operationId: getReachabilityConfig
+      x-acp-permission: reachability.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/ReachabilityConfig'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    put:
+      tags: [reachability]
+      operationId: setReachabilityConfig
+      summary: Replace the probe configuration (interval 0 = scheduler off).
+      x-acp-permission: reachability.write
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ReachabilityConfigInput'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/ReachabilityConfig'}}}}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/reachability/sources:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [reachability]
+      operationId: listReachabilitySources
+      x-acp-permission: reachability.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/ReachabilitySource'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      tags: [reachability]
+      operationId: createReachabilitySource
+      summary: Make a host of the probe inventory a probe source.
+      x-acp-permission: reachability.write
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ReachabilitySourceInput'}}}}
+      responses:
+        '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/ReachabilitySource'}}}}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/reachability/sources/{id}:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    delete:
+      tags: [reachability]
+      operationId: deleteReachabilitySource
+      x-acp-permission: reachability.write
+      security: *mutating
+      responses:
+        '204': {$ref: '#/components/responses/NoContent'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/reachability/targets:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    get:
+      tags: [reachability]
+      operationId: listReachabilityTargets
+      x-acp-permission: reachability.read
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/ReachabilityTarget'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      tags: [reachability]
+      operationId: createReachabilityTarget
+      x-acp-permission: reachability.write
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ReachabilityTargetInput'}}}}
+      responses:
+        '201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/ReachabilityTarget'}}}}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/reachability/targets/{id}:
+    parameters: [{$ref: '#/components/parameters/Workspace'}, {$ref: '#/components/parameters/Id'}]
+    put:
+      tags: [reachability]
+      operationId: updateReachabilityTarget
+      x-acp-permission: reachability.write
+      security: *mutating
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ReachabilityTargetInput'}}}}
+      responses:
+        '200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/ReachabilityTarget'}}}}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      tags: [reachability]
+      operationId: deleteReachabilityTarget
+      x-acp-permission: reachability.write
+      security: *mutating
+      responses:
+        '204': {$ref: '#/components/responses/NoContent'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/v1/workspaces/{workspace}/reachability/run:
+    parameters: [{$ref: '#/components/parameters/Workspace'}]
+    post:
+      tags: [reachability]
+      operationId: runReachabilityProbe
+      summary: Start a probe run now (built-in playbook, no template).
+      description: >-
+        Returns the queued run. 409 when a probe run is already queued or running.
+      x-acp-permission: reachability.run
+      security: *mutating
+      responses:
+        '202': {description: Accepted, content: {application/json: {schema: {$ref: '#/components/schemas/Run'}}}}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        default: {$ref: '#/components/responses/Error'}
   /api/v1/workspaces/{workspace}/notifications/channels:
     parameters: [{$ref: '#/components/parameters/Workspace'}]
     get:
@@ -1483,6 +1606,86 @@ components:
       content: {application/json: {schema: {$ref: '#/components/schemas/ErrorBody'}}}
     NoContent: {description: No content}
   schemas:
+    ReachabilityConfig:
+      type: object
+      required: [inventory_id, ssh_secret_id, interval_seconds, next_run_at, last_run_at]
+      properties:
+        inventory_id: {type: [string, 'null'], format: uuid}
+        ssh_secret_id: {type: [string, 'null'], format: uuid}
+        interval_seconds: {type: integer, description: '0 = scheduler off, otherwise 60-86400.'}
+        next_run_at: {type: [string, 'null'], format: date-time}
+        last_run_at: {type: [string, 'null'], format: date-time}
+    ReachabilityConfigInput:
+      type: object
+      required: [interval_seconds]
+      additionalProperties: false
+      properties:
+        inventory_id: {type: [string, 'null'], format: uuid}
+        ssh_secret_id: {type: [string, 'null'], format: uuid}
+        interval_seconds: {type: integer, minimum: 0, maximum: 86400}
+    ReachabilitySource:
+      type: object
+      required: [id, host_id, host_name, created_at]
+      properties:
+        id: {type: string, format: uuid}
+        host_id: {type: string, format: uuid}
+        host_name: {type: string}
+        created_at: {type: string, format: date-time}
+    ReachabilitySourceInput:
+      type: object
+      required: [host_id]
+      additionalProperties: false
+      properties:
+        host_id: {type: string, format: uuid}
+    ReachabilityCheck:
+      type: string
+      enum: [icmp, tcp, dns]
+    ReachabilityTarget:
+      type: object
+      required: [id, name, address, check, port, dns_name, enabled, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        address: {type: string}
+        check: {$ref: '#/components/schemas/ReachabilityCheck'}
+        port: {type: [integer, 'null']}
+        dns_name: {type: string}
+        enabled: {type: boolean}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    ReachabilityTargetInput:
+      type: object
+      required: [name, address, check]
+      additionalProperties: false
+      properties:
+        name: {type: string}
+        address: {type: string, description: Host name or IP address; informational for dns checks.}
+        check: {$ref: '#/components/schemas/ReachabilityCheck'}
+        port: {type: [integer, 'null'], minimum: 1, maximum: 65535, description: Required for tcp.}
+        dns_name: {type: string, description: Name resolved on the source host; required for dns.}
+        enabled: {type: boolean}
+    ReachabilityStatus:
+      type: string
+      enum: [ok, failed, probe_unreachable]
+    ReachabilityResult:
+      type: object
+      required: [source_id, target_id, status, latency_ms, detail, run_id, checked_at]
+      properties:
+        source_id: {type: string, format: uuid}
+        target_id: {type: string, format: uuid}
+        status: {$ref: '#/components/schemas/ReachabilityStatus'}
+        latency_ms: {type: [integer, 'null']}
+        detail: {type: string}
+        run_id: {type: [string, 'null'], format: uuid}
+        checked_at: {type: string, format: date-time}
+    ReachabilityMatrix:
+      type: object
+      required: [config, sources, targets, results]
+      properties:
+        config: {$ref: '#/components/schemas/ReachabilityConfig'}
+        sources: {type: array, items: {$ref: '#/components/schemas/ReachabilitySource'}}
+        targets: {type: array, items: {$ref: '#/components/schemas/ReachabilityTarget'}}
+        results: {type: array, items: {$ref: '#/components/schemas/ReachabilityResult'}}
     ErrorBody:
       type: object
       description: Error envelope. `code` is a stable machine-readable value (open set, e.g. not_found, conflict, invalid, bad_request, version_conflict, git_conflict).

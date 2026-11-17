@@ -55,6 +55,7 @@ type routerOpts struct {
 	fleetAdd      FleetAdder
 	groupRules    GroupRulesAPI
 	remediation   RemediationAPI
+	reachability  ReachabilityAPI
 	stream        *runStream
 	publicURL     string
 
@@ -128,6 +129,9 @@ func Router(log *slog.Logger, db Pinger, static fs.FS, opts ...Option) http.Hand
 		}
 		if ro.schedules != nil {
 			scheduleRoutes(r, ro.az, ro.store, ro.schedules, hookLim, ro.publicURL, log)
+		}
+		if ro.reachability != nil {
+			reachabilityRoutes(r, ro.az, ro.store, ro.reachability, log)
 		}
 		if ro.inventories != nil {
 			inventoryRoutes(r, ro.az, ro.store, ro.inventories, log)

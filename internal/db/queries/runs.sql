@@ -21,9 +21,15 @@ SET status = 'running', worker_id = $1, lease_id = gen_random_uuid(),
     claimed_at = now(), started_at = now(), last_heartbeat_at = now()
 WHERE runs.id = (
     SELECT r.id FROM runs r
-    JOIN templates t ON t.id = r.template_id
+    LEFT JOIN templates t ON t.id = r.template_id
     WHERE r.status = 'queued'
-      AND (SELECT count(*) FROM runs x WHERE x.template_id = r.template_id AND x.status = 'running') < t.max_concurrent
+      AND (
+        -- Built-in runs (probe) have no template: one at a time per workspace.
+        (r.template_id IS NULL AND r.params->>'builtin' = 'probe'
+          AND NOT EXISTS (SELECT 1 FROM runs x WHERE x.workspace_id = r.workspace_id AND x.params->>'builtin' = 'probe' AND x.status = 'running'))
+        OR (t.id IS NOT NULL
+          AND (SELECT count(*) FROM runs x WHERE x.template_id = r.template_id AND x.status = 'running') < t.max_concurrent)
+      )
     ORDER BY r.created_at, r.id
     LIMIT 1
     FOR UPDATE OF r SKIP LOCKED
@@ -135,6 +141,7 @@ SELECT * FROM runs WHERE id = $1 AND lease_id = $2 AND status = 'running';
 -- cancel flag with its next heartbeat).
 UPDATE runs SET cancel_requested_at = now()
 WHERE status = 'running' AND template_id IS NULL AND cancel_requested_at IS NULL
+  AND COALESCE(params->>'builtin', '') = ''
 RETURNING id;
 
 -- name: MarkRunHostEvent :exec

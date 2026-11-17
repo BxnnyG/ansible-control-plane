@@ -1,0 +1,87 @@
+---
+# SPDX-License-Identifier: AGPL-3.0-only
+# ACP built-in reachability probe (ADR-0022, NET-1).
+#
+# Runs on the probe source hosts (--limit) and checks every entry of
+# acp_probe_targets from there. Each target is a dict with id, address, check
+# (icmp|tcp|dns), port and dns_name; all values are validated by the app. The
+# results are published with set_stats under the single key acp_probe, keyed
+# by target id: {status: ok|failed, latency_ms: int|null, detail: str}. A failed
+# check never fails the play; an unreachable source shows up as an unreachable
+# host and is handled by the app.
+- name: ACP reachability probe
+  hosts: all
+  gather_facts: false
+  vars:
+    acp_probe_targets: []
+    acp_probe_timeout: 3
+  tasks:
+    - name: ICMP checks
+      ansible.builtin.command:
+        argv: ["ping", "-c", "1", "-W", "{{ acp_probe_timeout }}", "--", "{{ item.address }}"]
+      loop: "{{ acp_probe_targets | selectattr('check', 'equalto', 'icmp') | list }}"
+      loop_control:
+        label: "{{ item.id }}"
+      register: acp_icmp
+      changed_when: false
+      ignore_errors: true
+
+    - name: TCP checks
+      ansible.builtin.wait_for:
+        host: "{{ item.address }}"
+        port: "{{ item.port | int }}"
+        connect_timeout: "{{ acp_probe_timeout }}"
+        timeout: "{{ acp_probe_timeout }}"
+        state: started
+      loop: "{{ acp_probe_targets | selectattr('check', 'equalto', 'tcp') | list }}"
+      loop_control:
+        label: "{{ item.id }}"
+      register: acp_tcp
+      changed_when: false
+      ignore_errors: true
+
+    - name: DNS checks
+      ansible.builtin.command:
+        argv: ["getent", "hosts", "{{ item.dns_name }}"]
+      loop: "{{ acp_probe_targets | selectattr('check', 'equalto', 'dns') | list }}"
+      loop_control:
+        label: "{{ item.id }}"
+      register: acp_dns
+      changed_when: false
+      ignore_errors: true
+
+    - name: Build result document
+      ansible.builtin.set_fact:
+        acp_probe_doc: >-
+          {%- set out = {} -%}
+          {%- for r in (acp_icmp.results | default([])) -%}
+          {%- set m = (r.stdout | default('')) | regex_search('time[=<]([0-9.]+)', '\\1') -%}
+          {%- set _ = out.update({r.item.id: {
+            'status': 'failed' if (r.failed | default(false)) else 'ok',
+            'latency_ms': (m[0] | float | round | int) if (m and not (r.failed | default(false))) else None,
+            'detail': '' if not (r.failed | default(false)) else ((r.stderr | default('')) ~ ' ' ~ (r.stdout | default('')) ~ ' ' ~ (r.msg | default(''))) | trim | truncate(190, True, '')
+          }}) -%}
+          {%- endfor -%}
+          {%- for r in (acp_tcp.results | default([])) -%}
+          {%- set _ = out.update({r.item.id: {
+            'status': 'failed' if (r.failed | default(false)) else 'ok',
+            'latency_ms': None,
+            'detail': '' if not (r.failed | default(false)) else (r.msg | default('connect failed')) | string | trim | truncate(190, True, '')
+          }}) -%}
+          {%- endfor -%}
+          {%- for r in (acp_dns.results | default([])) -%}
+          {%- set secs = (r.delta | default('0:00:00')).split(':')[-1] | float -%}
+          {%- set _ = out.update({r.item.id: {
+            'status': 'failed' if (r.failed | default(false)) else 'ok',
+            'latency_ms': None if (r.failed | default(false)) else (secs * 1000) | round | int,
+            'detail': '' if not (r.failed | default(false)) else ((r.stderr | default('')) ~ ' ' ~ (r.stdout | default('')) ~ ' ' ~ (r.msg | default('name not found'))) | trim | truncate(190, True, '')
+          }}) -%}
+          {%- endfor -%}
+          {{ out | to_json }}
+
+    - name: Publish results
+      ansible.builtin.set_stats:
+        per_host: true
+        aggregate: false
+        data:
+          acp_probe: "{{ acp_probe_doc | from_json }}"
