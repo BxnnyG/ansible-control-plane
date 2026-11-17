@@ -18,6 +18,8 @@ Four features are in scope, in this order:
 
 Connector consequences: the OPNsense connector gains read-only collection of routes, gateway status, WireGuard peers/status, overlay interface status and alias contents (GET only via `internal/connectors/httpx`, verified against the installed versions, sanitized fixtures).
 
+Access path (decided 2026-11-17): all router data comes from the OPNsense connector over the REST API with a dedicated API user per instance whose privileges cover only the needed status/diagnostics pages (no GUI-wide or shell rights). The connector also collects system status (uptime, firmware version, gateway status) for the overview. Reading via Ansible over SSH is rejected: OPNsense SSH access is effectively root, so a key in the worker would grant full control of the firewall for a read-only use case. NET-4 remediation templates use a separate API key with write privileges, stored as an Ansible vault/ACP secret and used only by those templates, never by the connector.
+
 ## Rejected
 - Editing firewall rules or aliases in ACP: duplicates the router GUIs, breaks the read-only connector rule; writes go through Ansible from Git.
 - Dynamic group aliases (identity → IP): belongs in a plugin on each router so firewalls do not depend on a single ACP host.
