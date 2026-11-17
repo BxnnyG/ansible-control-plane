@@ -163,6 +163,13 @@ Scopes: a membership grants a role either workspace-wide or restricted to a set 
 - **FLEET-6** Remediation rules: alert type/label/service → template; fix button runs with `--limit` host, group or network; optional check run first.
 - **FLEET-7** Bulk actions on a network/selection (check run, fact gathering, reachability check), permission- and scope-checked.
 
+### Network diagnostics (NET, planned, [ADR-0022](docs/adr/0022-network-diagnostics.md))
+- **NET-1** Reachability matrix: probe sources × targets (ICMP, TCP, DNS) on a schedule; "probe unreachable" distinct from "check failed".
+- **NET-2** Site network overview: interfaces/VLANs, gateways, routes, WireGuard and overlay interface status per site from the OPNsense connector.
+- **NET-3** Path diagnosis: traceroute + DNS from a source host, hops annotated with OPNsense routes, gateway and WireGuard status; no firewall rule evaluation.
+- **NET-4** Desired/actual drift for aliases, static routes and WireGuard tunnels: YAML in Git vs. OPNsense connector; remediation only by starting a template.
+- Out of scope: firewall rule editing, identity-based aliases, NetBird connector, clustering.
+
 ### Migration (MIG)
 - ✅ **MIG-1** CLI `acp migrate semaphore` reading via API and/or directly from the Semaphore DB (MySQL/MariaDB, Postgres, BoltDB) read-only.
 - ✅ **MIG-2** Mandatory backup check before reading (refuses to run without a backup path).
@@ -234,6 +241,8 @@ Stack decisions are recorded in `docs/adr/`.
 | M8 ✅ | Hardening: security review, job process isolation (ADR-0020), worker egress allowlist, backup/restore, OpenAPI spec, docs, release `v1.0.0` |
 
 Execution order (decided 2026-11-05): M4 → M7 → M5 → M6 → M8. Migration comes first because real runs need the migrated SSH keys and ACP should replace Semaphore in daily use before connectors add value. Milestone numbers stay unchanged so branches and tags remain stable.
+
+Next (scope accepted 2026-11-17, not started): network diagnostics NET-1 → NET-2 → NET-3 → NET-4 (ADR-0022).
 
 ### Known limitations and v1.x candidates
 
