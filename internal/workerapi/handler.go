@@ -29,6 +29,7 @@ import (
 	"github.com/BxnnyG/ansible-control-plane/internal/db"
 	"github.com/BxnnyG/ansible-control-plane/internal/db/dbgen"
 	"github.com/BxnnyG/ansible-control-plane/internal/metrics"
+	"github.com/BxnnyG/ansible-control-plane/internal/reachability"
 	"github.com/BxnnyG/ansible-control-plane/internal/runmask"
 	"github.com/BxnnyG/ansible-control-plane/internal/runproto"
 	"github.com/BxnnyG/ansible-control-plane/internal/runs"
@@ -277,11 +278,15 @@ func (h *Handler) events(w http.ResponseWriter, req *http.Request) {
 	}
 	// A batch whose chunks are all known is a retry: its events were counted
 	// already (the live counters add up, so replaying them would double them).
+	var ig *reachability.Ingestor
+	if fresh && len(in.Events) > 0 {
+		ig = h.probeIngestor(run)
+	}
 	for _, raw := range in.Events {
 		if !fresh {
 			break
 		}
-		if err := h.applyEvent(ctx, run.ID, raw); err != nil {
+		if err := h.applyEvent(ctx, run.ID, ig, raw); err != nil {
 			h.internalErr(w, "apply event", err)
 			return
 		}
@@ -322,7 +327,13 @@ func clip(s string, n int) string {
 
 // applyEvent turns a callback event into per-host results. Malformed events
 // are ignored: they must not break the run.
-func (h *Handler) applyEvent(ctx context.Context, run uuid.UUID, raw json.RawMessage) error {
+//
+// ig is non-nil only for built-in probe runs: only then probe_result events
+// are evaluated (they are never emitted for other runs, and ignored if they
+// were), and unreachable source hosts mark their targets probe_unreachable.
+// The stats event precedes the probe results of a run, and the final flush of
+// the worker delivers all events before it calls finish.
+func (h *Handler) applyEvent(ctx context.Context, run uuid.UUID, ig *reachability.Ingestor, raw json.RawMessage) error {
 	var e runproto.Event
 	if json.Unmarshal(raw, &e) != nil {
 		return nil
@@ -349,9 +360,38 @@ func (h *Handler) applyEvent(ctx context.Context, run uuid.UUID, raw json.RawMes
 			if err != nil {
 				return err
 			}
+			if ig != nil && s["unreachable"] > 0 {
+				if err := ig.MarkUnreachable(ctx, host); err != nil {
+					return err
+				}
+			}
 		}
+	case runproto.EventProbeResult:
+		if ig == nil || e.Host == "" {
+			return nil
+		}
+		err := ig.StoreHost(ctx, e.Host, e.Results)
+		if errors.Is(err, reachability.ErrPayload) {
+			h.o.Log.Warn("probe result rejected", "run", run, "host", clip(e.Host, maxHostLen), "error", err)
+			return nil
+		}
+		return err
 	}
 	return nil
+}
+
+// probeIngestor returns the probe result sink of a built-in probe run, or nil
+// for every other run.
+func (h *Handler) probeIngestor(run dbgen.Run) *reachability.Ingestor {
+	p, err := runs.DecodeParams(run.Params)
+	if err != nil || p.Builtin != runproto.BuiltinProbe {
+		return nil
+	}
+	hosts := make(map[string]bool, len(p.Hosts))
+	for _, n := range p.Hosts {
+		hosts[n] = true
+	}
+	return &reachability.Ingestor{Q: h.q, RunID: run.ID, WorkspaceID: run.WorkspaceID, InventoryID: p.InventoryID, Hosts: hosts}
 }
 
 func (h *Handler) heartbeat(w http.ResponseWriter, req *http.Request) {
