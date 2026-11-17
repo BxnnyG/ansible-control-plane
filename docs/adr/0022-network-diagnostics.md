@@ -20,6 +20,12 @@ Connector consequences: the OPNsense connector gains read-only collection of rou
 
 Access path (decided 2026-11-17): all router data comes from the OPNsense connector over the REST API with a dedicated API user per instance whose privileges cover only the needed status/diagnostics pages (no GUI-wide or shell rights). The connector also collects system status (uptime, firmware version, gateway status) for the overview. Reading via Ansible over SSH is rejected: OPNsense SSH access is effectively root, so a key in the worker would grant full control of the firewall for a read-only use case. NET-4 remediation templates use a separate API key with write privileges, stored as an Ansible vault/ACP secret and used only by those templates, never by the connector.
 
+## NET-1 design (decided 2026-11-17)
+- **Built-in probe playbook.** ACP ships `probe.yml` in the worker image (next to the callback plugin), not in a Git project, so the result schema is versioned with ACP. Probe definitions (sources = inventory hosts, targets = address + check) live in the database; ACP enqueues a run of the built-in playbook with the targets as extra vars and `--limit` set to the sources, on its own interval.
+- **Result transport.** The playbook publishes results with `set_stats` (`per_host: true`) under the single key `acp_probe`. The callback forwards this key, and only for runs of the built-in probe source; for all other runs the no-payload rule of the callback stays unchanged. The app validates the payload against a fixed schema (bounded size, known fields only) before storing it.
+- **Storage.** Latest result per (source, target) with status (`ok`, `failed`, `probe_unreachable`), latency, short detail, run id and timestamp. A source host that is unreachable for the run marks all its targets `probe_unreachable`.
+- **Checks.** ICMP (`ping`), TCP (`wait_for` with timeout), DNS (resolve a name on the source host). No checks need privileges beyond a normal SSH user.
+
 ## Rejected
 - Editing firewall rules or aliases in ACP: duplicates the router GUIs, breaks the read-only connector rule; writes go through Ansible from Git.
 - Dynamic group aliases (identity → IP): belongs in a plugin on each router so firewalls do not depend on a single ACP host.
