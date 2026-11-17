@@ -310,6 +310,46 @@ type ProjectRevision struct {
 	Warnings  []byte
 }
 
+type ReachabilityConfig struct {
+	WorkspaceID     uuid.UUID
+	InventoryID     pgtype.UUID
+	SshSecretID     pgtype.UUID
+	IntervalSeconds int32
+	NextRunAt       pgtype.Timestamptz
+	LastRunAt       pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
+}
+
+type ReachabilityResult struct {
+	SourceID  uuid.UUID
+	TargetID  uuid.UUID
+	Status    string
+	LatencyMs pgtype.Int4
+	Detail    string
+	RunID     pgtype.UUID
+	CheckedAt pgtype.Timestamptz
+}
+
+type ReachabilitySource struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	HostID      uuid.UUID
+	CreatedAt   pgtype.Timestamptz
+}
+
+type ReachabilityTarget struct {
+	ID          uuid.UUID
+	WorkspaceID uuid.UUID
+	Name        string
+	Address     string
+	CheckType   string
+	Port        pgtype.Int4
+	DnsName     string
+	Enabled     bool
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type RemediationRule struct {
 	ID            uuid.UUID
 	WorkspaceID   uuid.UUID
