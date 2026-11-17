@@ -15,6 +15,7 @@ A self-hosted web platform to run, organize and monitor Ansible – Semaphore's 
 - Manual remediation: alert rules map to a template and limit; never automatic
 - Migration tool from Semaphore UI
 - Run notifications (webhook, Matrix, e-mail, Gotify, ntfy) for failed, recovered, drift and finished runs, configurable and testable in the UI with setup guides
+- Reachability matrix: scheduled ping, TCP and DNS probes from source hosts, with "probe unreachable" kept distinct from "check failed"
 - Operations: backup and restore, worker egress allowlist, Prometheus metrics, OpenAPI 3.1 spec
 
 ## Quickstart
@@ -62,6 +63,7 @@ group/host counts (never variable values). The project must be synced first.
 - [`docs/migration-from-semaphore.md`](docs/migration-from-semaphore.md) – migration from Semaphore UI
 - [`docs/projects-and-inventories.md`](docs/projects-and-inventories.md) – operator guide: projects, inventories, vault
 - [`docs/connectors-and-fleet.md`](docs/connectors-and-fleet.md) – operator guide: connectors, fleet, conflicts, network scopes, group rules
+- [`docs/reachability.md`](docs/reachability.md) – operator guide: reachability matrix (sources, targets, interval, statuses)
 - [`docs/notifications.md`](docs/notifications.md) – operator guide: run notification channels, rules, webhook format
 - [`docs/adr/`](docs/adr/) – architecture decision records
 
