@@ -18,6 +18,8 @@ const (
 	eventsFile   = "events.jsonl"
 	tmpSubdir    = "tmp"
 	defaultCbDir = "/usr/share/acp/ansible/callback_plugins"
+	// defaultBuiltinDir holds the playbooks of built-in runs (ADR-0022).
+	defaultBuiltinDir = "/usr/share/acp/ansible/builtin"
 )
 
 // validPlaybook rejects playbook paths that leave the project directory.
@@ -109,6 +111,12 @@ func buildEnv(sp runproto.Spec, dir string, base []string, collections, roles st
 	m["ANSIBLE_STDOUT_CALLBACK"] = "default"
 	m["ANSIBLE_FORCE_COLOR"] = "1"
 	m["ACP_EVENTS_FILE"] = filepath.Join(dir, eventsFile)
+	// Enforced last: only the worker decides that the callback forwards probe
+	// results; a template cannot set it, and a non-probe run never gets it.
+	delete(m, runproto.EnvProbeRun)
+	if sp.Builtin == runproto.BuiltinProbe {
+		m[runproto.EnvProbeRun] = "1"
+	}
 	m["ANSIBLE_LOCAL_TEMP"] = filepath.Join(tmp, "local")
 	m["ANSIBLE_REMOTE_TEMP"] = filepath.Join(tmp, "remote")
 	m["TMPDIR"] = tmp
@@ -137,4 +145,28 @@ func buildEnv(sp runproto.Spec, dir string, base []string, collections, roles st
 func writeInventoryScript(dir string) error {
 	body := "#!/bin/sh\nexec cat '" + strings.ReplaceAll(filepath.Join(dir, runproto.FileInventory), "'", `'\''`) + "'\n"
 	return os.WriteFile(filepath.Join(dir, inventorySh), []byte(body), 0o700) //nolint:gosec // must be executable
+}
+
+// builtinPlaybooks maps the allowed Spec.Builtin values to the playbook file
+// of the worker image. The bundle never chooses a path.
+var builtinPlaybooks = map[string]string{runproto.BuiltinProbe: "probe.yml"}
+
+// installBuiltin copies the playbook of a built-in run from the worker image
+// into the (otherwise empty) project directory.
+func installBuiltin(project, builtinDir string, sp runproto.Spec) error {
+	file, ok := builtinPlaybooks[sp.Builtin]
+	if !ok {
+		return fmt.Errorf("unknown built-in run source %q", sp.Builtin)
+	}
+	if sp.Playbook != file {
+		return fmt.Errorf("built-in run %q must use playbook %q", sp.Builtin, file)
+	}
+	b, err := os.ReadFile(filepath.Join(builtinDir, file)) //nolint:gosec // fixed name from the allowlist above
+	if err != nil {
+		return fmt.Errorf("read built-in playbook: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(project, file), b, 0o600); err != nil {
+		return fmt.Errorf("install built-in playbook: %w", err)
+	}
+	return nil
 }

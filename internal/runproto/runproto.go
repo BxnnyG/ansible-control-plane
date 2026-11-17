@@ -13,6 +13,18 @@ const (
 	MaxClaimWait = 25 // seconds
 )
 
+// Built-in run sources (Spec.Builtin). A built-in run executes a playbook that
+// ships with the worker image instead of a Git project tree (ADR-0022).
+const (
+	BuiltinProbe = "probe"
+	// EventProbeResult is the callback event that carries the acp_probe
+	// results of one host; only emitted for built-in probe runs.
+	EventProbeResult = "probe_result"
+	// EnvProbeRun is set by the worker for built-in probe runs; the callback
+	// plugin forwards probe results only when it is "1".
+	EnvProbeRun = "ACP_PROBE_RUN"
+)
+
 // Names of the files inside the bundle (tar.gz).
 const (
 	FileSpec       = "spec.json"
@@ -42,6 +54,9 @@ type Spec struct {
 	RunID     string            `json:"run_id"`
 	Revision  string            `json:"revision"`
 	Playbook  string            `json:"playbook"`
+	// Builtin names a playbook of the worker image (BuiltinProbe). The project
+	// tree is empty then and Playbook is the file name copied from the image.
+	Builtin   string            `json:"builtin,omitempty"`
 	Limit     string            `json:"limit,omitempty"`
 	Tags      string            `json:"tags,omitempty"`
 	SkipTags  string            `json:"skip_tags,omitempty"`
@@ -87,4 +102,6 @@ type Event struct {
 	Task    string                    `json:"task"`
 	Ignored bool                      `json:"ignored"`
 	Hosts   map[string]map[string]int `json:"hosts"`
+	// Results is the raw acp_probe payload of a probe_result event.
+	Results json.RawMessage `json:"results"`
 }

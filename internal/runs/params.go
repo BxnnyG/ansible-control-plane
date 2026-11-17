@@ -46,6 +46,9 @@ const MaskedValue = "***"
 // edits of the template do not affect queued runs.
 type Params struct {
 	Playbook        string         `json:"playbook"`
+	// Builtin is set for runs of a playbook shipped with the worker image
+	// (runproto.BuiltinProbe); such runs have no template and no project.
+	Builtin         string         `json:"builtin,omitempty"`
 	ProjectID       uuid.UUID      `json:"project_id"`
 	ProjectRevision string         `json:"project_revision"`
 	InventoryID     uuid.UUID      `json:"inventory_id"`

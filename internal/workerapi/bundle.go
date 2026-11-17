@@ -162,7 +162,7 @@ func spec(run dbgen.Run, p runs.Params, c *credentials) (runproto.Spec, error) {
 		}
 	}
 	s := runproto.Spec{
-		RunID: run.ID.String(), Revision: p.ProjectRevision, Playbook: p.Playbook, Limit: p.Limit, Tags: p.Tags,
+		RunID: run.ID.String(), Revision: p.ProjectRevision, Playbook: p.Playbook, Builtin: p.Builtin, Limit: p.Limit, Tags: p.Tags,
 		SkipTags: p.SkipTags, Check: p.Check, Diff: p.Diff, Verbosity: p.Verbosity, Env: env,
 		SSHKey: c.sshKey != nil, Become: c.becomePass != nil, Mask: c.mask,
 	}
@@ -235,8 +235,10 @@ func (b *Builder) Build(ctx context.Context, run dbgen.Run, w io.Writer) (maskVa
 			return nil, fmt.Errorf("write bundle: %w", err)
 		}
 	}
-	if err := b.copyTree(ctx, run, p, tw); err != nil {
-		return nil, err
+	if p.Builtin == "" { // built-in runs use the playbook of the worker image
+		if err := b.copyTree(ctx, run, p, tw); err != nil {
+			return nil, err
+		}
 	}
 	if err := tw.Close(); err != nil {
 		return nil, fmt.Errorf("write bundle: %w", err)
