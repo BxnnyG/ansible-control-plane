@@ -282,7 +282,9 @@
                   class="underline decoration-border-strong underline-offset-2 hover:decoration-current"
                   href="/runs/{r.id}">{r.template_name}</a
                 >
-                <div class="font-mono text-xs text-muted">{r.params.playbook}</div>
+                {#if r.params.playbook}<div class="font-mono text-xs text-muted">
+                    {r.params.playbook}
+                  </div>{/if}
               </td>
               <td class={td}>
                 {r.trigger}

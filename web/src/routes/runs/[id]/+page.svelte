@@ -167,7 +167,9 @@
           >
         </p>
       {/if}
-      <p class="font-mono text-xs text-muted">{cur.params.playbook}</p>
+      {#if cur.params.playbook}<p class="font-mono text-xs text-muted">
+          {cur.params.playbook}
+        </p>{/if}
     {/snippet}
     {#snippet actions()}
       {#if canRun && cur.template_id}
