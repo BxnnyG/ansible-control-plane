@@ -41,7 +41,7 @@
 - Checkmk 2.5 reachable (site/user in docs/local).
 
 ## Open / Next step
-- 2026-11-17: network diagnostics scope accepted (ADR-0022, PLAN NET-1..3): reachability matrix → path diagnosis → drift. Rejected: rule editing, identity aliases, NetBird connector, clustering. Nothing built yet; next: detailed design for NET-1.
+- 2026-11-17: network diagnostics scope accepted (ADR-0022, PLAN NET-1..4): reachability matrix → site network overview → path diagnosis → drift. Rejected: rule editing, identity aliases, NetBird connector, clustering. Nothing built yet; next: detailed design for NET-1.
 - M4 verification 2026-11-05 (branch feat/m4-runner, 45 commits): make test, full test-db, lint (0 issues), web lint/check/86 vitest/build, full-history gitleaks, branch-history infra scan – all green. Live: deployed, smoke template 'ping (M4 smoke)' runs end-to-end (auth fails until M7 keys).
 - M3 plan: (1) secrets API, (2) gitops package, (3) projects schema+API+sync+scan, (4) argument_specs → survey schema, (5) vault package + vault identities, (6) inventory schema+CRUD+render+import, (7) git-synced write-back, (8) ScopeResolver, (9) webhooks + scheduled sync, (10) UI pages.
 - M3 done: (1) secrets API (migration 00006 secret types+metadata; secrets.write admin/owner only; known gap: concurrent PUT not locked), (2) internal/gitops, (5a) internal/vault; Go tests install git+openssh via apk (Makefile, test-db.sh, CI). Commit 64aa7aa has trailers in subject – fix via squash-merge (no history rewrite).
