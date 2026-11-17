@@ -66,3 +66,4 @@ jobs:
       - uses: actions/checkout@v5
       - run: docker build -f Dockerfile -t acp-app:ci .
       - run: docker build -f Dockerfile.worker -t acp-worker:ci .
+      - run: ACP_WORKER_IMAGE=acp-worker:ci scripts/test-callback.sh
